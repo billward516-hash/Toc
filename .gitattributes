@@ -1,0 +1,2 @@
+# Timestamp tokens hash the exact bytes of each entry; no line-ending conversion.
+independence/entries/* -text

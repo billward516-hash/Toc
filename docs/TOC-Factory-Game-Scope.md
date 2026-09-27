@@ -268,10 +268,10 @@ Items 2, 3, and 5 are intentionally left for empirical tuning once the DES engin
 
 ### 12.1 Audience & Timeline
 
-- Primary audience for the first build: **a real class/training the author teaches** — not a personal/portfolio project. Real students, real stakes.
-- Timeline: **a hard date, on the order of weeks.** This is tight relative to the full Tiers 0–3 scope as specced (a DES engine with seeded PRNG and batch execution, four tiers of hand-tuned preset content, skill-tree UI, live T/I/OE-style dashboard, buffer-penetration meter, pop-up system, and — starting Tier 3 — multi-seed robustness scoring). See §12.6 for concrete cut candidates if the exact date lands on the short end of "weeks."
+- **Ownership:** a personal project, built on the author's own time and equipment through personal accounts. Provenance is recorded in `independence/` (see its README).
+- First intended use: **a real class/training the author teaches.** Real students, real stakes.
+- Timeline: **three weeks, 2026-09-27 to 2026-10-17**, worked outside employer hours only. That's tight for the full Tiers 0–3 scope as specced (a DES engine with seeded PRNG and batch execution, four tiers of hand-tuned preset content, skill-tree UI, live T/I/OE-style dashboard, buffer-penetration meter, pop-up system, and — starting Tier 3 — multi-seed robustness scoring), so §12.6's first two cuts apply by default. Week-by-week plan in §12.7.
 - Because real (likely under-18) students are involved, §8.3 applies: no server transmission of any learner-entered data in v1.
-- **Open:** the exact date/week-count isn't pinned down yet — needed to know how aggressively §12.6's cuts should be applied.
 
 ### 12.2 Technology Stack
 
@@ -294,7 +294,7 @@ Items 2, 3, and 5 are intentionally left for empirical tuning once the DES engin
 
 ### 12.6 Risks & Scope-Cutting Candidates (given a hard "weeks" deadline)
 
-If the exact date turns out to be on the short end of "weeks," these are the recommended cut candidates, in order (cut from the top first), before cutting any of Tiers 0–3's core lessons:
+Cut candidates, in order (cut from the top first), before cutting any of Tiers 0–3's core lessons. With three weeks of outside-work-hours time (§12.1), **cuts 1 and 2 apply by default**; 3 and 4 are held in reserve.
 
 1. Defer the **scrubbable timeline/rewind** (§4.4) to a post-deadline polish pass; ship with play/pause/speed-multiplier only. It's a diagnostic convenience, not load-bearing for the lesson itself.
 2. Defer the **"Show simulation log" toggle** (§4.5) — same reasoning, an advanced-user convenience.
@@ -302,4 +302,14 @@ If the exact date turns out to be on the short end of "weeks," these are the rec
 4. Treat Tier 3's **secondary metric (buffer/rope discipline, §5.3)** as a stretch goal — ship with the primary stability metric working, add the secondary scoring dimension if time allows.
 5. **Do not cut:** the DES engine itself, seeded PRNG/replay, the primary win-condition/scoring for each tier, or the pop-up explanations — these are the actual teaching mechanism (§1's "learning is more important than winning" principle), not polish.
 
-This section should be revisited once the exact class date is known.
+Revisit at each weekly checkpoint (§12.7).
+
+### 12.7 Three-Week Plan
+
+Each week closes with a `week` checkpoint entry in the independence log.
+
+| Week | Dates | Build | Done when |
+|---|---|---|---|
+| 1 | Sep 27 – Oct 3 | App scaffold (Vite, React, TypeScript); hosting chosen on a personal account, first deploy live; DES engine core (event queue, seeded PRNG, stations and queues, uniform/triangular cycle times, `runBatch`) with determinism tests; level schema and prerequisite graph; persistence interface | Tier 0 plays: the learner reads a factory and identifies the bottleneck |
+| 2 | Oct 4 – Oct 10 | SVG renderer with interpolation; play/pause/speed; allowed-changes controls; output and stability scoring with stars; pop-up triggers; skill-tree map; small T/I/OE-style dashboard; Tier 1–2 content | A learner can play Tiers 0–2 start to finish on a tablet |
+| 3 | Oct 11 – Oct 17 | Buffers and DBR (buffer-penetration meter, release/rope control); 3-seed evaluation for the third star; nickname entry; device QA; tuning from playtests | Tiers 0–3 play end to end on the class's devices, deployed, with a dry run done |
