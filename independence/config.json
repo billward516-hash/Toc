@@ -5,6 +5,6 @@
   "timeOff": [
     { "from": "2026-09-27", "to": "2026-10-03", "reason": "Vacation (PTO)" }
   ],
-  "defaultDevice": null,
+  "defaultDevice": "owner's personal iPad",
   "tsaUrl": "http://timestamp.digicert.com"
 }

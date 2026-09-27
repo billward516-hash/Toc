@@ -6,9 +6,9 @@ This repository is public. Identifying details (legal name, device serial number
 
 ## Standing declaration
 
-- **Owner:** GitHub account [`billward516-hash`](https://github.com/billward516-hash), a personal user account. This repository was created there on 2026-09-27 at 23:13:36 UTC.
-- **Claude:** my personal claude.ai account, paid personally *[owner to confirm]*. Code and documents here are produced with Claude Code under my direction. Commits are authored as `Claude <noreply@anthropic.com>` and carry a `Claude-Session:` link to the session in my account.
-- **Equipment:** personally owned devices only: *[owner to list, described generically]*. Code runs in Claude Code cloud sessions under my personal account, never on an employer machine.
+- **Owner:** GitHub account [`billward516-hash`](https://github.com/billward516-hash), a personal user account. The project began on 2026-09-27 with the scope document in `docs/`; this repository was created that day at 23:13:36 UTC.
+- **Claude:** my personal claude.ai account, which I pay for myself. Code and documents here are produced with Claude Code under my direction. Commits are authored as `Claude <noreply@anthropic.com>` and carry a `Claude-Session:` link to the session in my account.
+- **Equipment:** my personal iPad. Code runs in Claude Code cloud sessions under my personal account, never on an employer machine.
 - **Network:** home, cellular, or other non-employer networks, including while traveling; never an employer network, VPN, or remote desktop.
 - **Time:** outside my employer's working hours as set in [`config.json`](config.json), or during approved time off listed there under `timeOff`. Any other entry inside those hours is flagged automatically and must state a reason.
 - **Materials:** Theory of Constraints content from public sources and my own knowledge. No employer-owned materials, data, systems, email, storage, or software licenses.
