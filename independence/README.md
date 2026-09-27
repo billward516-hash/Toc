@@ -2,15 +2,15 @@
 
 A contemporaneous record showing that the TOC Factory Game is a personal project: built on my own time, with my own equipment, through my own personal accounts, and without employer resources or confidential information.
 
-This repository is public. Identifying details (legal name, device serial numbers, receipts, employment agreement) are kept in private records, not here.
+This repository is public. Identifying details (legal name, device serial numbers, receipts, employment agreement, time-off approvals, travel records) are kept in private records, not here.
 
 ## Standing declaration
 
 - **Owner:** GitHub account [`billward516-hash`](https://github.com/billward516-hash), a personal user account. This repository was created there on 2026-09-27 at 23:13:36 UTC.
 - **Claude:** my personal claude.ai account, paid personally *[owner to confirm]*. Code and documents here are produced with Claude Code under my direction. Commits are authored as `Claude <noreply@anthropic.com>` and carry a `Claude-Session:` link to the session in my account.
 - **Equipment:** personally owned devices only: *[owner to list, described generically]*. Code runs in Claude Code cloud sessions under my personal account, never on an employer machine.
-- **Network:** home or other personal networks; never employer Wi-Fi, VPN, or remote desktop.
-- **Time:** outside my employer's working hours, as set in [`config.json`](config.json). Entries made inside those hours are flagged automatically and must state a reason (PTO, holiday, unpaid break).
+- **Network:** home, cellular, or other non-employer networks, including while traveling; never an employer network, VPN, or remote desktop.
+- **Time:** outside my employer's working hours as set in [`config.json`](config.json), or during approved time off listed there under `timeOff`. Any other entry inside those hours is flagged automatically and must state a reason.
 - **Materials:** Theory of Constraints content from public sources and my own knowledge. No employer-owned materials, data, systems, email, storage, or software licenses.
 - **Decisions:** the design decisions are mine and are recorded in session-end entries, which also documents human authorship.
 
@@ -38,7 +38,7 @@ node scripts/log-session.mjs show > export.md       # one document: this declara
 
 Options: `--device="personal iPad"` overrides `defaultDevice`; `--reason="PTO day"` explains an entry made inside employer hours.
 
-Settings in `config.json`: `timezone` (an IANA name such as `America/Chicago`), `employerHours` (for example `{"days": [1, 2, 3, 4, 5], "start": "07:30", "end": "16:00"}`, with days as ISO weekdays where 1 is Monday), `defaultDevice`, and `tsaUrl`.
+Settings in `config.json`: `timezone` (the IANA zone your employer hours are defined in, such as `America/Phoenix`), `employerHours` (for example `{"days": [1, 2, 3, 4, 5], "start": "07:00", "end": "19:00"}`, with days as ISO weekdays where 1 is Monday), `timeOff` (approved time off, for example `[{"from": "2026-09-27", "to": "2026-10-03", "reason": "Vacation (PTO)"}]`), `defaultDevice`, and `tsaUrl`. Add time off before the work it covers.
 
 ## Weekly, outside the repo
 

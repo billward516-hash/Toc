@@ -50,7 +50,7 @@ function record() {
     `# ${TITLES[kind]} · ${iso.replace('T', ' ').replace('Z', ' UTC')} · ${week(local.date)}`,
     '',
     `- **Recorded (UTC):** ${iso}`,
-    `- **Local time:** ${localTime}`,
+    `- **${config.timezone ? `Time in ${config.timezone}` : 'Local time'}:** ${localTime}`,
     `- **Employer hours:** ${hours.line}`,
     `- **Where the work runs:** ${where()}`,
     ...(sessionId ? [`- **Claude session:** https://claude.ai/code/session_${sessionId.replace(/^cse_/, '')}`] : []),
@@ -98,7 +98,7 @@ function week(localDate) {
   return days < 0 ? 'before project start' : `Week ${Math.floor(days / 7) + 1}`;
 }
 
-function employerHours({ weekday, time }) {
+function employerHours({ date, weekday, time }) {
   const hours = config.employerHours;
   if (!hours || !config.timezone) {
     return { line: 'not configured (set timezone and employerHours in independence/config.json)' };
@@ -107,6 +107,8 @@ function employerHours({ weekday, time }) {
   if (!hours.days.includes(weekday) || time < hours.start || time >= hours.end) {
     return { line: `outside (${span})` };
   }
+  const off = (config.timeOff ?? []).find((t) => date >= t.from && date <= t.to);
+  if (off) return { line: `inside usual hours (${span}), on time off: ${off.reason}, ${off.from} to ${off.to}` };
   return {
     flagged: true,
     line: `FLAG, inside configured employer hours (${span}). Reason: ${flags.reason || 'not given; add a note entry'}`,
