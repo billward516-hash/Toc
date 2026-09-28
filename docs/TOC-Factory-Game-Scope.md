@@ -31,6 +31,12 @@ The following 24 principles form the instructional core (numbering preserved fro
 
 **Product Mix:** 28 (throughput-per-constraint-unit over margin), 29 (cost-based mix decisions are often wrong)
 
+*Added 2026-09-28 at the owner's request (§3.6), numbered after the original list:*
+
+**Disruptions & Recovery:** 36 (keep enough materials on hand to ride out a late delivery), 37 (scrap after the constraint wastes the constraint's time; catch defects before it), 38 (a change in the product mix can move the constraint), 39 (changing priorities at the constraint costs output; let the rope and buffer set the order)
+
+**Demand & Forecasting:** 40 (forecasts are always wrong), 41 (make what customers take, not what the forecast says), 42 (forecast the total, and decide the details as late as possible)
+
 *Explicitly out of scope for v1:* TOC Thinking Processes tools (evaporating cloud, current reality tree, etc. — principles 34–35). These are conceptually part of TOC but don't map to a factory-floor simulation; a future dialogue/decision-tree game mode could address them separately.
 
 ---
@@ -48,11 +54,15 @@ The following 24 principles form the instructional core (numbering preserved fro
 | 4 | Batch size & flow | 20, 21, 22, 23 | Output (primary), stability (secondary), setup-loss/OE proxy (tertiary) |
 | 5 | Elevation, constraint migration, policy constraints | 26, 27, 31, 32, 33 | Output (primary), stability (secondary), investment efficiency (tertiary) |
 | 6 | Product mix & revenue decisions | 28, 29 | Revenue/profit T−OE (primary), output (secondary), inventory carrying cost (tertiary) |
+| 7 | When things break: long breakdowns, late materials, poor yield | 4, 17, 19, 36, 37 | Output every day (primary), then inventory or cost (secondary, tertiary) |
+| 8 | Changing orders: mix changes, priority changes, rush orders | 38, 39, 18, 22 | Output every day (primary), rush orders on time or steadiness (secondary) |
+| 9 | Forecasts & demand | 40, 41, 42 | Sales (primary), waste and lost sales (secondary, tertiary) |
+| 10 | Everyday problems: absences, overtime, rework, maintenance, power cuts, setup scrap | 4, 5, 17, 22, 37 | Output every day (primary), then cost or steadiness |
 
 ### 3.2 Sequencing & Branching
 
 - **Tiers 0–3 are a mandatory linear sequence.** Each tier's mental model depends on the prior one (reading the sim → improvement procedure → variability → buffering against variability).
-- **Tiers 4, 5, and 6 unlock in parallel once Tier 3 is complete** (skill-branching, not forced sequence). A learner or instructor can choose emphasis — e.g., go straight to Tier 6 for a product-mix-focused session.
+- **Tiers 4, 5, and 6 unlock in parallel once Tier 3 is complete** (skill-branching, not forced sequence). A learner or instructor can choose emphasis — e.g., go straight to Tier 6 for a product-mix-focused session. Tiers 7–10 (§3.6) join them the same way.
 - Because Tiers 4–6 are independently reachable, each must stand alone pedagogically. Any level that assumes a concept from a *sibling* branch (not an ancestor) needs a light recap pop-up rather than assuming prior exposure.
 - Level data model requires explicit prerequisites (a dependency graph), not a simple linear index: `level.requires = ['tier3-buffers']` rather than `level.order = 4`.
 - A visual skill-tree/progress-map screen is a required UI surface (node states: locked / unlocked / completed / starred).
@@ -85,6 +95,28 @@ Each level consists of three authored parts:
   - **Tier 4 (batch size & flow) → candle workshop** (chosen 2026-09-28: the print shop went to Tier 5 and the bakery is Tier 6's). Switching scents means cleaning the melting pot, a legible stand-in for setup time.
   - **Tier 5 (elevation, constraint migration, policy) → print shop** (buying a new press is a literal "elevate the constraint"). Used by Tier 5's first level (§4.7).
 - This is a larger art/content workload than a single global theme, but it's sequenced so the extra cost lands *after* the MVP (Tiers 0–3), not before it. See §12.3.
+
+### 3.6 Adverse Events, Forecasting, and Everyday Problems (added 2026-09-28)
+
+The owner asked for features showing how adverse events affect the plan (prolonged equipment downtime, late delivery of direct materials, priority and mix changes, poor yield), other common factory problems for later modules, and the effect of poor forecasting, with no limit on the number of levels. Each problem either has to be solved (a plan level) or at least has its impact demonstrated (a prediction level: watch a normal day, predict what the disruption does, then watch it happen).
+
+**Engine features.** Each draws from its own seeded stream, so existing levels replay identically and a given day's disruptions strike at the same moments whatever the player's plan (as jams do, §4.7).
+- *Long breakdowns:* a station stops once, at a set or random time, for a long stretch, on top of any short jams.
+- *Late materials:* the first station needs direct materials from a stockroom. Deliveries are due at set times, and each can arrive late by a random amount; with the stockroom empty, the line waits.
+- *Poor yield:* a station can make defects at some rate, and an inspecting station scraps the defective units it finds. A defect made early but found late has used every station in between, the constraint included.
+- *Mix and priority changes:* the order pattern can switch at a set time, and a station's product priorities can change during the shift.
+- *Rush orders:* extra orders arrive mid-shift and can jump the queue at chosen stations; their ship times are measured against a due time.
+- *Storefront:* finished goods go on a shelf; customers arrive through the day, with demand that swings from day to day; each either buys or leaves (a lost sale); what's left at closing is waste for perishable goods. The line can bake to a planned quantity (the forecast) or replenish what customers take.
+
+**Scoring.** New levels use a general goal of per-day bars (shipped, steady, average stock on hand, scrap, lead time, rush orders on time, sales, waste, lost sales, spending), judged on the level's own day plus fresh days (7 or 10 in all, §5.4). Each star needs one more bar met on every day. Levers include a general option lever whose choices change the factory (a repair order, a safety stock, where to inspect), each optionally with a price.
+
+**Modules** (unlocked after Tier 3, each standing alone, §3.2):
+- **Tier 7, When things break** (the robot factory from Tiers 0–3, with its rope tied to Paint): which machine the one repair crew fixes first after two long breakdowns (the one that starves the constraint; downstream stops are absorbed); a long breakdown at the constraint itself (prediction: every minute is lost for good); how much plastic to keep for a late truck (principle 36); where scrap costs the most (prediction: after the constraint, principle 37); where to catch defects (before the constraint); and a bad day with several problems at once, where only the fixes that protect the constraint pay.
+- **Tier 8, Changing orders** (the robot factory with two robot models): a mix change that moves the constraint (prediction, principle 38); re-tying the rope when the mix changes; hourly priority changes at a constraint that has changeovers (principle 39); and a rush order sent through the rope rather than expedited everywhere.
+- **Tier 9, Forecasts & demand** (the bakery's shop counter): baking to a forecast when demand swings (prediction: waste on slow days, lost sales on busy ones, principle 40); baking to the forecast, more, less, or replenishing what sold (principle 41); sizing the replenishment shelf; and forecasting total cupcakes but frosting flavors to order (principle 42).
+- **Tier 10, Everyday problems:** an absent operator (cover the constraint first), overtime (it only pays at the constraint), rework loops that return work to the constraint, when to schedule maintenance, a plant-wide power cut, and scrap after changeovers.
+
+As-built details, calibration, and deviations go in §4.7 as each module is built.
 
 ---
 
