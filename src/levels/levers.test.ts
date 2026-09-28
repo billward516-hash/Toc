@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
-import { allPlans, applyLevers, leverValues, planCost, valueLabel } from './levers.ts'
+import { allPlans, applyLevers, leverValues, overBudget, planCost, valueLabel } from './levers.ts'
 import type { Lever } from './types.ts'
 
 const lunch = [{ from: 240, to: 300 }]
@@ -122,6 +122,12 @@ describe('machine rules and purchases', () => {
     expect(valueLabel(shopLevers[1], 'press', shop)).toBe('A press, $9,000')
     expect(planCost(shopLevers, { rule: 'both', buy: 'press' })).toBe(9000)
     expect(planCost(shopLevers, { rule: 'both', buy: 'none' })).toBe(0)
+  })
+
+  it('counts how far a plan goes over the budget, if there is one', () => {
+    expect(overBudget(shopLevers, { rule: 'both', buy: 'press' }, 5000)).toBe(4000)
+    expect(overBudget(shopLevers, { rule: 'both', buy: 'press' }, 9000)).toBe(0)
+    expect(overBudget(shopLevers, { rule: 'both', buy: 'press' })).toBe(0)
   })
 })
 

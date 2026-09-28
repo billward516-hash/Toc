@@ -46,7 +46,8 @@ export type Goal =
   // Elevating the constraint, judged on the level's own day and `freshDays` more (spec §5.4). One star:
   // at least `target` shipped every day. Two: also steady every day (no pile of `pileLimit` or more for
   // at least `minSteady` of the shift). Three: also at least `minGainPer1000` more shipped on the
-  // level's own day for every $1,000 spent; a free plan always clears it.
+  // level's own day for every $1,000 spent; a free plan always clears it. With a `budget`, a plan that
+  // costs more can't run.
   | {
       kind: 'elevate'
       target: number
@@ -54,6 +55,7 @@ export type Goal =
       minSteady: number
       minGainPer1000: number
       freshDays: number
+      budget?: number
       prompt: string
     }
 

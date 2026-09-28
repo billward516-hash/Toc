@@ -14,7 +14,7 @@ import {
   type Investment,
   type ProfitScore,
 } from '../levels/graph.ts'
-import { applyLevers, leverValues, planCost, valueLabel } from '../levels/levers.ts'
+import { applyLevers, leverValues, overBudget, planCost, valueLabel } from '../levels/levers.ts'
 import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
 import type { Choices, Goal, Lever } from '../levels/types.ts'
@@ -58,7 +58,9 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const snapshot = useMemo(() => snapshotAt(shown.result, playback.t), [shown.result, playback.t])
   const values = goalValues(goal, baseline, run?.result)
   const stars = maxStars(level)
-  const ready = levers.every((lever) => choices[lever.id] !== undefined)
+  const budget = goal.kind === 'elevate' ? goal.budget : undefined
+  const over = overBudget(levers, choices, budget)
+  const ready = levers.every((lever) => choices[lever.id] !== undefined) && over === 0
   const windows = breakWindows(model)
   const showResult = run !== null && playback.finished && !dismissed
   const popup = run ? feedbackForRun(level, run.met, run.plan) : undefined
@@ -147,7 +149,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   <i className="swatch dot resting" /> On break
                 </span>
               )}
-              {jams && (
+              {model.stations.some((s) => s.jams) && (
                 <span>
                   <i className="swatch dot jammed" /> Jammed
                 </span>
@@ -237,6 +239,14 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   </div>
                 </fieldset>
               ))}
+              {budget !== undefined && (
+                <p className={`budget${over > 0 ? ' over' : ''}`}>
+                  <Icon name="money" />{' '}
+                  {over > 0
+                    ? `Your plan costs ${dollars(planCost(levers, choices))}: ${dollars(over)} over your ${dollars(budget)} budget.`
+                    : `Your plan costs ${dollars(planCost(levers, choices))} of your ${dollars(budget)} budget.`}
+                </p>
+              )}
               <button className="btn primary big" disabled={!ready} onClick={runPlan}>
                 Run the shift with my plan <Icon name="play" />
               </button>
@@ -409,7 +419,7 @@ function planningHint(goal: PlanGoal, baseline: SimResult): string {
       return `Today the buffer is healthy ${percent(today.healthy)} of the shift, with ${tenths(today.avgWip)} robots on the floor on average.`
     }
     case 'elevate':
-      return `Today the shop ships ${baseline.output} a shift, and it's steady ${percent(steadyShare(baseline, goal.pileLimit))} of the time. Your plan runs for ${goal.freshDays + 1} days.`
+      return `Today the shop ships ${baseline.output} a shift, and it's steady ${percent(steadyShare(baseline, goal.pileLimit))} of the time. Your plan runs for ${goal.freshDays + 1} days.${goal.budget === undefined ? '' : ` You can spend up to ${dollars(goal.budget)}.`}`
     case 'flow':
       return `Today the workshop ships ${baseline.output} a shift, each about ${minutes(baseline.avgLeadTime)} from order to shipping.`
     case 'profit': {

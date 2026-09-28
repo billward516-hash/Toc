@@ -369,6 +369,7 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
           problems.push('an elevate goal needs 0 < minSteady <= 1 and pileLimit >= 1')
         }
         if (!(goal.minGainPer1000 >= 0)) problems.push('an elevate goal needs minGainPer1000 >= 0')
+        if (goal.budget !== undefined && !(goal.budget > 0)) problems.push('a budget must be positive')
         if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 1)) problems.push('an elevate goal needs at least one fresh day')
       }
       if (goal.kind === 'buffer') {

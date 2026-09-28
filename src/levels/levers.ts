@@ -131,6 +131,11 @@ export function planCost(levers: Lever[], choices: Choices): number {
   }, 0)
 }
 
+// How far a plan goes over the level's budget; nothing when it fits, or when there is no budget.
+export function overBudget(levers: Lever[], choices: Choices, budget?: number): number {
+  return budget === undefined ? 0 : Math.max(0, planCost(levers, choices) - budget)
+}
+
 // Every complete plan a player could make.
 export function allPlans(levers: Lever[]): Choices[] {
   return levers.reduce<Choices[]>(

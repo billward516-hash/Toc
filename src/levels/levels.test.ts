@@ -4,7 +4,7 @@ import { capacity } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
 import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, starsFor, validateLevels } from './graph.ts'
-import { allPlans, applyLevers, planCost, steadyTwin } from './levers.ts'
+import { allPlans, applyLevers, overBudget, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
 import { principleNames } from './principles.ts'
@@ -183,7 +183,8 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer' || l.goal.kind === '
 describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 'profit'))('$goal.kind level $id', (level) => {
   if (level.goal.kind !== 'elevate' && level.goal.kind !== 'profit') return
   const { goal, model, levers } = level
-  const plans = allPlans(levers)
+  // A plan over the level's budget can't run.
+  const plans = allPlans(levers).filter((plan) => overBudget(levers, plan, goal.kind === 'elevate' ? goal.budget : undefined) === 0)
   const run = (plan: Choices, seed: number) => simulate(applyLevers(model, levers, plan), seed)
   const baseline = simulate(model, level.seed)
   const weeks = Array.from({ length: 30 }, (_, w) => Array.from({ length: goal.freshDays }, (_, d) => 1000 + w * goal.freshDays + d))

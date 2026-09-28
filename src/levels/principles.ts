@@ -20,4 +20,6 @@ export const principleNames: Record<number, string> = {
   27: 'A rule can be the constraint',
   28: 'Rank products by what they earn per minute of the constraint',
   29: 'Cost reports can point the wrong way',
+  31: 'There is always a next constraint',
+  33: 'Balance the flow, not the capacity',
 }
