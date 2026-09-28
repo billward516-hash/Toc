@@ -2,6 +2,13 @@
 
 Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-Scope.md`.
 
+## Development
+
+- `npm run dev`, `npm test`, `npm run lint`, `npm run build` (type-checks, then builds to `dist/`).
+- `src/engine/` is the framework-free, deterministic simulator; keep it free of React and of `Math.random`.
+- Level content lives in `src/levels/`. `levels.test.ts` checks every level still teaches its lesson across many seeds, so run the tests after tuning any level.
+- Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
+
 ## Independence log (every session)
 
 This project must stay provably personal: the owner's own time, equipment, and accounts. See `independence/README.md`.

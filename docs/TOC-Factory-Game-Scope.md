@@ -120,6 +120,15 @@ Chosen over fixed-tick simulation specifically because TOC's core lessons (queue
 - **React** for UI/state management (skill-tree map, live dashboard, pop-up queue, scrubbable timeline, multi-seed result views) — chosen over vanilla JS/TS for the amount of cross-cutting UI state this app carries, and over Vue/Svelte for ecosystem breadth (animation/drag-interaction libraries needed for station drag-adjust and the Tier 5–6 routing editor).
 - The simulation engine (§4.1–4.5) stays a plain, framework-agnostic TS/JS module that emits an event stream — consistent with the engine/rendering decoupling already required by §9, and keeps the engine independently testable and reusable if the frontend framework ever changes.
 
+### 4.7 Implementation Notes (Week 1)
+
+- **Compute, then play back.** Each run is computed in full (milliseconds at this scale) and the UI plays back its event log. Pause, speed, and "run to completion" are just a moving time cursor, which also makes the deferred scrubbable timeline (§12.6) cheap to add later.
+- **One random stream per source.** Each station and the release process draw from their own seeded stream, and times come from inverse-CDF sampling. Changing one station leaves every other station's draws untouched, so same-seed comparisons (Tiers 0–2) isolate the effect of the player's change.
+- **Same seed, same run, on every device.** Sampling uses only +, −, ×, ÷ and √, which are exact or correctly rounded in every browser, so a seed replays identically on an iPad or a Chromebook. Exponential and normal distributions (Tier 5+) need `log`/`exp`, which browsers may round differently in the last bit; handle that when they arrive.
+- **Linear lines for now.** Units flow through stations in order, with optional parallel servers per station. Routing, batching, setups, and downtime arrive with the tiers that need them.
+- **Release policies:** saturate (raw material always on hand, the "keep everyone busy" default of Tiers 0–2), interval (work arrives on a schedule), and rope (release only when work ahead of the constraint drops below the buffer, for Tier 3).
+- **Content is tested, not just authored.** Level tests check that each level produces its lesson across 31 seeds, e.g. in Tier 0 the answer is the slowest station and grows the biggest pile by the end of the shift.
+
 ---
 
 ## 5. Scoring System
@@ -201,6 +210,7 @@ Score labels evolve from generic game terms to formal TOC accounting vocabulary 
 
 - **Cartoon aesthetic**, implemented as stylized geometric/flat-color shapes with bold outlines (SVG/CSS-based — a Duolingo/Kahoot-like feel), not commissioned illustrated sprites. Chosen to avoid blocking engineering on an art pipeline, while still reading as bright, appealing, and age-appropriate for the target audience.
 - **Color is functional, not just decorative:** red = bottleneck/constraint, amber = building queue, green = flowing/healthy. Bright, appealing colors should be reconciled with this functional coding rather than working against it.
+- In Tier 0, where finding the constraint *is* the task, the red outline appears only after a correct answer, so color never gives the answer away.
 - Persistent buffer-penetration meter (green/yellow/red bands) is a core, always-visible UI element from Tier 3 onward.
 
 ---
