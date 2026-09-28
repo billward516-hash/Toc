@@ -1,6 +1,6 @@
 import type { SimResult } from '../engine/simulate.ts'
 import { steadyShare } from '../engine/timeline.ts'
-import { bufferScore } from './graph.ts'
+import { bufferScore, profitScore } from './graph.ts'
 import type { Goal } from './types.ts'
 
 // Named numbers a level's text can quote, such as {baseline} or {steadyPct}.
@@ -46,6 +46,23 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
         changeover: Math.round(run.stations.reduce((sum, s) => sum + s.changeoverTime, 0)),
         changeoverBefore: Math.round(baseline.stations.reduce((sum, s) => sum + s.changeoverTime, 0)),
       }
+    case 'profit': {
+      const before = profitScore(goal, baseline)
+      const after = profitScore(goal, run)
+      return {
+        target: goal.target,
+        expense: goal.expense,
+        profit: Math.round(after.profit),
+        profitBefore: Math.round(before.profit),
+        throughput: Math.round(after.throughput),
+        throughputBefore: Math.round(before.throughput),
+        inventory: Math.round(after.inventory),
+        maxInventory: goal.maxInventory,
+        gain: Math.round(after.profit - before.profit),
+        minShipped: goal.minShipped,
+        days: goal.freshDays + 1,
+      }
+    }
     case 'elevate':
       return {
         baseline: baseline.output,

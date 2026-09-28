@@ -80,6 +80,31 @@ const glyphs: Record<string, ReactNode> = {
       <circle cx={27} cy={13} r={2.5} />
     </>
   ),
+  // The bakery.
+  mix: (
+    <>
+      <path d="M31 3L23 15" />
+      <path d="M5 16h30a15 15 0 0 1-30 0z" />
+      <path d="M14 35h12" />
+    </>
+  ),
+  bake: (
+    <>
+      <rect x={5} y={5} width={30} height={30} rx={3} />
+      <path d="M5 13h30" />
+      <rect x={10} y={18} width={20} height={12} rx={2} />
+      <circle className="ink" cx={11} cy={9} r={1.5} />
+      <circle className="ink" cx={17} cy={9} r={1.5} />
+    </>
+  ),
+  decorate: (
+    <>
+      <path d="M7 21h26v13H7z" />
+      <path d="M7 25c3 3 5 3 6.5 0s3.5-3 6.5 0 5 3 6.5 0 3.5-3 6.5 0" />
+      <path d="M20 21v-8" />
+      <path d="M20 10c-2.5-2-2.5-4.5 0-6.5 2.5 2 2.5 4.5 0 6.5z" />
+    </>
+  ),
 }
 glyphs.pack = glyphs.box
 
@@ -146,6 +171,13 @@ const icons = {
     </>
   ),
   rope: <path d="M3 15c2.5-5 5 3 7.5-2s5 3 7.5-2M18 11l3-3" />,
+  sort: <path d="M4 6h16M4 12h11M4 18h6" />,
+  tag: (
+    <>
+      <path d="M3.5 12.5L12 4h8v8l-8.5 8.5z" />
+      <circle cx={16} cy={8} r={1.4} />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof icons

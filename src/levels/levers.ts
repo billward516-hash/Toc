@@ -10,6 +10,13 @@ export function applyLevers(model: FactoryModel, levers: Lever[], choices: Choic
     if (value === undefined) continue
     if (lever.kind === 'releasePace') release = { kind: 'interval', every: { kind: 'fixed', value: Number(value) } }
     if (lever.kind === 'ropeTo') release = { kind: 'rope', constraint: value, buffer: lever.length }
+    if (lever.kind === 'menu') {
+      const option = lever.options.find((o) => o.id === value)
+      if (option) {
+        mix = option.mix
+        release = { kind: 'interval', every: { kind: 'fixed', value: option.every } }
+      }
+    }
     if (lever.kind === 'lotSize' && release.kind === 'interval') {
       // Lots of n arrive n times as far apart, each lot all one product, taking the products in the mix's order.
       const n = Number(value)
@@ -47,6 +54,11 @@ function changeStation(station: Station, lever: Lever, choices: Choices): Statio
     if (!purchase || purchase.station !== station.id) return station
     return { ...station, machines: [...(station.machines ?? []), purchase.machine] }
   }
+  if (lever.kind === 'priority') {
+    const option = lever.options.find((o) => o.id === value)
+    if (!option || lever.station !== station.id) return station
+    return { ...station, priority: option.order }
+  }
   if (value !== station.id) return station
   switch (lever.kind) {
     case 'upgrade':
@@ -82,6 +94,9 @@ export function leverValues(lever: Lever): string[] {
     case 'lotSize':
     case 'transferSize':
       return lever.sizes.map(String)
+    case 'priority':
+    case 'menu':
+      return lever.options.map((o) => o.id)
     default:
       return lever.stations
   }
@@ -100,6 +115,9 @@ export function valueLabel(lever: Lever, value: string, model: FactoryModel): st
     case 'lotSize':
     case 'transferSize':
       return value === '1' ? 'One at a time' : `${value} at a time`
+    case 'priority':
+    case 'menu':
+      return lever.options.find((o) => o.id === value)?.label ?? value
     default:
       return model.stations.find((s) => s.id === value)?.name ?? value
   }

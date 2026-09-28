@@ -163,6 +163,65 @@ describe('batch levers', () => {
   })
 })
 
+describe('product mix levers', () => {
+  const bakery: FactoryModel = {
+    products: [
+      { id: 'cake', name: 'Cake' },
+      { id: 'cookie', name: 'Cookie' },
+    ],
+    mix: ['cake', 'cookie'],
+    stations: [
+      { id: 'mix', name: 'Mix', cycleTime: { kind: 'fixed', value: 1 } },
+      { id: 'bake', name: 'Bake', cycleTime: { kind: 'fixed', value: 2 } },
+    ],
+    release: { kind: 'interval', every: { kind: 'fixed', value: 3 } },
+    horizon: 480,
+  }
+  const mixLevers: Lever[] = [
+    {
+      id: 'first',
+      kind: 'priority',
+      label: 'Bake first',
+      station: 'bake',
+      options: [
+        { id: 'oldest', label: 'Oldest first' },
+        { id: 'cookies', label: 'Cookies first', order: ['cookie'] },
+      ],
+    },
+    {
+      id: 'menu',
+      kind: 'menu',
+      label: 'Sell',
+      options: [
+        { id: 'both', label: 'Both', mix: ['cake', 'cookie'], every: 3 },
+        { id: 'cookies', label: 'Cookies only', mix: ['cookie'], every: 1.5 },
+      ],
+    },
+  ]
+
+  it('sets the order only at the named station, and oldest first clears it', () => {
+    const changed = applyLevers(bakery, mixLevers, { first: 'cookies' })
+    expect(changed.stations[1].priority).toEqual(['cookie'])
+    expect(changed.stations[0]).toBe(bakery.stations[0])
+    expect(applyLevers(changed, mixLevers, { first: 'oldest' }).stations[1].priority).toBeUndefined()
+  })
+
+  it('sets what comes in, and how often, from the menu', () => {
+    const changed = applyLevers(bakery, mixLevers, { menu: 'cookies' })
+    expect(changed.mix).toEqual(['cookie'])
+    expect(changed.release).toEqual({ kind: 'interval', every: { kind: 'fixed', value: 1.5 } })
+    expect(changed.stations).toEqual(bakery.stations)
+  })
+
+  it('offers and labels each option', () => {
+    expect(leverValues(mixLevers[0])).toEqual(['oldest', 'cookies'])
+    expect(leverValues(mixLevers[1])).toEqual(['both', 'cookies'])
+    expect(valueLabel(mixLevers[0], 'cookies', bakery)).toBe('Cookies first')
+    expect(valueLabel(mixLevers[1], 'both', bakery)).toBe('Both')
+    expect(planCost(mixLevers, { first: 'cookies', menu: 'both' })).toBe(0)
+  })
+})
+
 describe('allPlans', () => {
   it('lists every combination of choices', () => {
     expect(allPlans(levers)).toEqual([

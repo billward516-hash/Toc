@@ -341,6 +341,46 @@ describe('changeovers, lots, and carts', () => {
   })
 })
 
+describe('priorities', () => {
+  // Orders for one cake and three cupcakes arrive faster than the oven can bake them all.
+  const bakery = (priority?: string[]): FactoryModel => ({
+    products: [
+      { id: 'cake', name: 'Cake' },
+      { id: 'cupcake', name: 'Cupcake' },
+    ],
+    mix: ['cake', 'cupcake', 'cupcake', 'cupcake'],
+    stations: [
+      { id: 'mix', name: 'Mix', cycleTime: fixed(0.5) },
+      { id: 'bake', name: 'Bake', cycleTime: fixed(2), times: { cake: fixed(10) }, priority },
+      { id: 'box', name: 'Box', cycleTime: fixed(0.5) },
+    ],
+    release: { kind: 'interval', every: fixed(1.5) },
+    horizon: 120,
+  })
+
+  it('works on the first-priority product whenever one is waiting', () => {
+    const result = simulate(bakery(['cupcake']), 1)
+    const starts = result.events.flatMap((e) => (e.type === 'start' && e.station === 1 ? [e] : []))
+    for (const start of starts) {
+      const waiting = snapshotAt(result, start.t - 1e-9).waiting[1]
+      if (waiting.some((job) => result.products![job] === 'cupcake')) expect(result.products![start.job]).toBe('cupcake')
+    }
+  })
+
+  it('counts what shipped of each product, and the priority changes the mix', () => {
+    const first = simulate(bakery(['cupcake']), 1)
+    const fifo = simulate(bakery(), 1)
+    const cakes = simulate(bakery(['cake']), 1)
+    for (const result of [first, fifo, cakes]) {
+      expect(Object.values(result.shippedBy!).reduce((a, b) => a + b, 0)).toBe(result.output)
+    }
+    expect(first.shippedBy!.cupcake).toBeGreaterThan(fifo.shippedBy!.cupcake)
+    expect(cakes.shippedBy!.cake).toBeGreaterThan(fifo.shippedBy!.cake)
+    expect(simulate(line([fixed(1)]), 1).shippedBy).toBeUndefined()
+    expect(validateModel(bakery(['pie']))).toContain('bake: priority names unknown product "pie"')
+  })
+})
+
 describe('runBatch', () => {
   it('runs one independent simulation per seed', () => {
     const results = runBatch(variable, [1, 2, 3])

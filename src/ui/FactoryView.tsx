@@ -82,6 +82,9 @@ export function FactoryView(props: FactoryViewProps) {
     all: (model.products ?? []).map((p) => p.id),
   }
   const binLeft = count * COLUMN + 14
+  // Three or more products need tighter lines to fit the bin.
+  const products = model.products ?? []
+  const many = products.length > 2
   return (
     <svg className="factory" viewBox={`0 ${top} ${width} ${height - top}`} role="group" aria-label="Factory floor">
       <rect className="conveyor" x={24} y={beltY} width={width - 48} height={14} rx={7} />
@@ -117,16 +120,23 @@ export function FactoryView(props: FactoryViewProps) {
         <rect className="bin" x={binLeft} y={BOX_TOP} width={BIN - 28} height={boxHeight} rx={24} />
         {snapshot.shippedBy ? (
           <>
-            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 38}>
+            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 32 : 38)}>
               Shipped
             </text>
-            <text className="bin-count compact" x={count * COLUMN + BIN / 2} y={BOX_TOP + 88}>
+            <text className="bin-count compact" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 76 : 88)}>
               {snapshot.shipped}
             </text>
-            {(model.products ?? []).map((product, k) => (
-              <g key={product.id} className="bin-product">
-                <rect x={binLeft + 22} y={BOX_TOP + 106 + k * 24} width={14} height={14} rx={3} style={{ fill: palette.color(product.id) }} />
-                <text x={binLeft + 44} y={BOX_TOP + 119 + k * 24}>
+            {products.map((product, k) => (
+              <g key={product.id} className={`bin-product${many ? ' tight' : ''}`}>
+                <rect
+                  x={binLeft + (many ? 16 : 22)}
+                  y={BOX_TOP + (many ? 88 + k * 20 : 106 + k * 24)}
+                  width={14}
+                  height={14}
+                  rx={3}
+                  style={{ fill: palette.color(product.id) }}
+                />
+                <text x={binLeft + (many ? 36 : 44)} y={BOX_TOP + (many ? 100 + k * 20 : 119 + k * 24)}>
                   {snapshot.shippedBy?.[product.id] ?? 0} {shortName(product.name)}
                 </text>
               </g>

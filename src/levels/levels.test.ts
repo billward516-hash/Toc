@@ -178,10 +178,10 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer' || l.goal.kind === '
   })
 })
 
-// Elevate levels judge every star across the level's own day and fresh days, so each plan is scored
-// over 30 stand-in weeks of fresh days, and the lesson must come out the same in every one.
-describe.each(levels.filter((l) => l.goal.kind === 'elevate'))('elevate level $id', (level) => {
-  if (level.goal.kind !== 'elevate') return
+// Elevate and profit levels judge every star across the level's own day and fresh days, so each plan
+// is scored over 30 stand-in weeks of fresh days, and the lesson must come out the same in every one.
+describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 'profit'))('$goal.kind level $id', (level) => {
+  if (level.goal.kind !== 'elevate' && level.goal.kind !== 'profit') return
   const { goal, model, levers } = level
   const plans = allPlans(levers)
   const run = (plan: Choices, seed: number) => simulate(applyLevers(model, levers, plan), seed)

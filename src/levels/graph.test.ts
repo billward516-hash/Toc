@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate } from '../engine/simulate.ts'
-import { bufferScore, feedbackFor, feedbackForRun, flowHolds, gainPer1000, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
+import { snapshotAt } from '../engine/timeline.ts'
+import {
+  bufferScore,
+  feedbackFor,
+  feedbackForRun,
+  flowHolds,
+  gainPer1000,
+  levelState,
+  maxStars,
+  profitScore,
+  profitSoFar,
+  starsFor,
+  validateLevels,
+} from './graph.ts'
 import type { Goal, Level } from './types.ts'
 
 const model: FactoryModel = {
@@ -153,6 +166,54 @@ describe('elevate stars', () => {
   })
 })
 
+describe('profit stars', () => {
+  // A widget ($10, $4 of materials) then a gadget ($3, $1) comes in every 10 minutes, and Paint takes
+  // 5: six ship in the hour, and the seventh comes in as the shift ends.
+  const shop: FactoryModel = {
+    products: [
+      { id: 'widget', name: 'Widget' },
+      { id: 'gadget', name: 'Gadget' },
+    ],
+    mix: ['widget', 'gadget'],
+    stations: [{ id: 'paint', name: 'Paint', cycleTime: { kind: 'fixed', value: 5 } }],
+    release: { kind: 'interval', every: { kind: 'fixed', value: 10 } },
+    horizon: 60,
+  }
+  const day = simulate(shop, 1)
+  const goal: Extract<Goal, { kind: 'profit' }> = {
+    kind: 'profit',
+    economics: { widget: { price: 10, materials: 4 }, gadget: { price: 3, materials: 1 } },
+    expense: 20,
+    target: 4,
+    minShipped: 6,
+    maxInventory: 1.25,
+    freshDays: 2,
+    prompt: 'What first?',
+  }
+
+  it('earns throughput only for what ships, and values inventory at material cost while it is on the floor', () => {
+    // Three widgets at $6 and three gadgets at $2; each spends 5 of the 60 minutes on the floor.
+    expect(profitScore(goal, day)).toEqual({ throughput: 24, profit: 4, shipped: 6, inventory: (3 * 4 * 5 + 3 * 1 * 5) / 60 })
+  })
+
+  it('keeps a live tally that ends at the day\'s score', () => {
+    // Halfway: a widget, a gadget, and a widget shipped, a gadget on the floor, and half the expense spent.
+    expect(profitSoFar(goal, day, snapshotAt(day, 30))).toEqual({ throughput: 14, profit: 4, inventory: 1, expense: 10 })
+    // At the end, the widget that just came in is all that's left on the floor.
+    const end = profitSoFar(goal, day, snapshotAt(day, 60))
+    expect(end).toEqual({ throughput: 24, profit: profitScore(goal, day).profit, inventory: 4, expense: 20 })
+  })
+
+  it('needs the profit on every day for one star, enough shipped for two, and little inventory for three', () => {
+    expect(starsFor(goal, day, [day, day])).toBe(3)
+    expect(starsFor(goal, day, [day])).toBe(0)
+    expect(starsFor({ ...goal, target: 5 }, day, [day, day])).toBe(0)
+    expect(starsFor({ ...goal, minShipped: 7 }, day, [day, day])).toBe(1)
+    expect(starsFor({ ...goal, maxInventory: 1.2 }, day, [day, day])).toBe(2)
+    expect(maxStars(planLevel({ goal }))).toBe(3)
+  })
+})
+
 describe('buffer stars', () => {
   // Cut feeds Paint every 2 minutes and Paint takes 5, so Paint's pile passes 5 at minute 20 and keeps growing.
   const flood = simulate(model, 1)
@@ -243,6 +304,48 @@ describe('validateLevels', () => {
       'level "unroped": popup for unknown lever "tool"',
       'level "unroped": popup for unknown lever "tool"',
       'level "unroped": popup for unknown lever "floater"',
+    ])
+  })
+
+  it('catches broken profit goals and product mix levers', () => {
+    const goal: Extract<Goal, { kind: 'profit' }> = {
+      kind: 'profit',
+      economics: { pie: { price: 5, materials: -1 } },
+      expense: -1,
+      target: 10,
+      minShipped: 1,
+      maxInventory: 0,
+      freshDays: 0,
+      prompt: 'What first?',
+    }
+    const popups: Level['popups'] = [
+      { trigger: { kind: 'ran', met: true }, title: 'Met', body: '' },
+      { trigger: { kind: 'ran', met: false }, title: 'Missed', body: '' },
+    ]
+    const problems = validateLevels([
+      planLevel({
+        model: { ...model, products: [{ id: 'cake', name: 'Cake' }], mix: ['cake'] },
+        goal,
+        levers: [
+          { id: 'first', kind: 'priority', label: 'First', station: 'oven', options: [{ id: 'pies', label: 'Pies', order: ['pie'] }] },
+          { id: 'menu', kind: 'menu', label: 'Sell', options: [{ id: 'nothing', label: 'Nothing', mix: [], every: 0 }] },
+        ],
+        popups,
+      }),
+      { ...planLevel({ goal: { ...goal, economics: {}, expense: 0, maxInventory: 1, freshDays: 1 }, levers: [{ id: 'menu', kind: 'menu', label: 'Sell', options: [] }], popups }), id: 'plain' },
+    ])
+    expect(problems).toEqual([
+      'level "plan": lever "first" orders an unknown station "oven"',
+      'level "plan": lever "first" names unknown product "pie"',
+      'level "plan": lever "menu" option "nothing" needs orders and a pace',
+      'level "plan": no price for product "cake"',
+      'level "plan": price for unknown product "pie"',
+      'level "plan": "pie" needs a price and ingredient cost of at least 0',
+      'level "plan": a profit goal needs an operating expense of at least 0',
+      'level "plan": a profit goal needs a positive maxInventory',
+      'level "plan": a profit goal needs at least one fresh day',
+      'level "plain": lever "menu" needs options',
+      'level "plain": a profit goal needs a line that makes products',
     ])
   })
 

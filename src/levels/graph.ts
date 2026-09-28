@@ -1,12 +1,13 @@
 import { validateModel } from '../engine/model.ts'
 import type { SimResult } from '../engine/simulate.ts'
-import { bufferShare, steadyShare } from '../engine/timeline.ts'
+import { bufferShare, steadyShare, type Snapshot } from '../engine/timeline.ts'
 import { leverValues } from './levers.ts'
 import type { Choices, Goal, Level, Popup } from './types.ts'
 
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
 type FlowGoal = Extract<Goal, { kind: 'flow' }>
+type ProfitGoal = Extract<Goal, { kind: 'profit' }>
 
 export type LevelState = 'locked' | 'unlocked' | 'completed'
 
@@ -26,6 +27,7 @@ export function maxStars(level: Level): number {
     case 'buffer':
     case 'elevate':
     case 'flow':
+    case 'profit':
       return 3
     default:
       return 0
@@ -44,9 +46,60 @@ export function goalMet(goal: Goal, result: SimResult): boolean {
       return result.output >= goal.minShipped && steadyShare(result, goal.pileLimit) >= goal.minSteady
     case 'buffer':
       return bufferScore(goal, result).healthy >= goal.minHealthy
+    case 'profit':
+      return profitScore(goal, result).profit >= goal.target
     default:
       return false
   }
+}
+
+export interface ProfitScore {
+  // Sales minus ingredients, for what shipped.
+  throughput: number
+  profit: number
+  shipped: number
+  // Average value of the work on the floor over the shift, at ingredient cost.
+  inventory: number
+}
+
+// Throughput accounting for one day: ingredients are paid for when an order is released, and
+// throughput is earned only when it ships.
+export function profitScore(goal: ProfitGoal, result: SimResult): ProfitScore {
+  const last = result.stations.length - 1
+  const materials = (job: number) => goal.economics[result.products?.[job] ?? '']?.materials ?? 0
+  let throughput = 0
+  let value = 0
+  let area = 0
+  let before = 0
+  for (const event of result.events) {
+    area += value * (event.t - before)
+    before = event.t
+    if (event.type === 'release') value += materials(event.job)
+    else if (event.type === 'finish' && event.station === last) {
+      const product = result.products?.[event.job] ?? ''
+      const economics = goal.economics[product]
+      if (economics) throughput += economics.price - economics.materials
+      value -= materials(event.job)
+    }
+  }
+  area += value * (result.horizon - before)
+  return { throughput, profit: throughput - goal.expense, shipped: result.output, inventory: area / result.horizon }
+}
+
+// The live dashboard at a moment in the shift: throughput earned by what has shipped so far, the
+// ingredients tied up in what's on the floor now, and the share of the shift's expense spent so far.
+export function profitSoFar(goal: ProfitGoal, result: SimResult, snapshot: Snapshot): Omit<ProfitScore, 'shipped'> & { expense: number } {
+  let throughput = 0
+  let inventory = 0
+  for (let job = 0; job < snapshot.released; job++) inventory += goal.economics[result.products?.[job] ?? '']?.materials ?? 0
+  for (const [product, count] of Object.entries(snapshot.shippedBy ?? {})) {
+    const economics = goal.economics[product]
+    if (!economics) continue
+    throughput += count * (economics.price - economics.materials)
+    inventory -= count * economics.materials
+  }
+  const expense = (goal.expense * Math.min(snapshot.t, result.horizon)) / result.horizon
+  return { throughput, profit: throughput - expense, inventory, expense }
 }
 
 // What a plan spent, and what the untouched factory shipped on the level's own day.
@@ -96,6 +149,13 @@ export function flowHolds(goal: FlowGoal, day: SimResult): boolean {
 }
 
 export function starsFor(goal: Goal, result: SimResult, freshDays: SimResult[] = [], investment?: Investment): number {
+  if (goal.kind === 'profit') {
+    if (freshDays.length < goal.freshDays) return 0
+    const days = [result, ...freshDays].map((day) => profitScore(goal, day))
+    if (!days.every((day) => day.profit >= goal.target)) return 0
+    if (!days.every((day) => day.shipped >= goal.minShipped)) return 1
+    return days.every((day) => day.inventory <= goal.maxInventory) ? 3 : 2
+  }
   if (goal.kind === 'flow') {
     if (!goalMet(goal, result)) return 0
     if (!flowHolds(goal, result)) return 1
@@ -216,6 +276,21 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
           for (const p of purchase.machine.products ?? []) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
         }
         break
+      case 'priority': {
+        if (!stationIds.has(lever.station)) problems.push(`lever "${lever.id}" orders an unknown station "${lever.station}"`)
+        if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
+        for (const option of lever.options) {
+          for (const p of option.order ?? []) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
+        }
+        break
+      }
+      case 'menu':
+        if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
+        for (const option of lever.options) {
+          if (option.mix.length === 0 || !(option.every > 0)) problems.push(`lever "${lever.id}" option "${option.id}" needs orders and a pace`)
+          for (const p of option.mix) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
+        }
+        break
       case 'lotSize':
       case 'transferSize':
         if (!lever.sizes.every((n) => Number.isInteger(n) && n >= 1)) problems.push(`lever "${lever.id}" needs positive whole sizes`)
@@ -267,9 +342,21 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     case 'steady':
     case 'buffer':
     case 'elevate':
-    case 'flow': {
+    case 'flow':
+    case 'profit': {
       if (goal.kind === 'steady' && !(goal.minSteady > 0 && goal.minSteady <= 1 && goal.pileLimit >= 1)) {
         problems.push('a steady goal needs 0 < minSteady <= 1 and pileLimit >= 1')
+      }
+      if (goal.kind === 'profit') {
+        if (productIds.size === 0) problems.push('a profit goal needs a line that makes products')
+        for (const p of productIds) if (!goal.economics[p]) problems.push(`no price for product "${p}"`)
+        for (const [p, e] of Object.entries(goal.economics)) {
+          if (!productIds.has(p)) problems.push(`price for unknown product "${p}"`)
+          if (!(e.price >= 0 && e.materials >= 0)) problems.push(`"${p}" needs a price and ingredient cost of at least 0`)
+        }
+        if (!(goal.expense >= 0)) problems.push('a profit goal needs an operating expense of at least 0')
+        if (!(goal.maxInventory > 0)) problems.push('a profit goal needs a positive maxInventory')
+        if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 1)) problems.push('a profit goal needs at least one fresh day')
       }
       if (goal.kind === 'flow') {
         if (!(goal.target > 0)) problems.push('a flow goal needs a positive target')

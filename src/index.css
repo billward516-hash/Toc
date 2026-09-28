@@ -356,6 +356,21 @@ button {
   font-weight: 900;
 }
 
+@media (max-width: 600px) {
+  .dashboard .stat {
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .dashboard dt {
+    font-size: 13px;
+  }
+
+  .dashboard dd {
+    font-size: 19px;
+  }
+}
+
 .viewing {
   align-self: flex-start;
   margin-bottom: -6px;
@@ -741,6 +756,10 @@ button {
   text-anchor: start;
 }
 
+.factory .bin-product.tight text {
+  font-size: 15px;
+}
+
 .factory .made {
   font-size: 21px;
   fill: var(--muted);
@@ -1088,6 +1107,21 @@ button {
 
 .result-stats.two {
   grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 600px) {
+  .result-stats {
+    gap: 6px;
+  }
+
+  .result-stats div {
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .result-stats span {
+    font-size: 13px;
+  }
 }
 
 .result-stats small {

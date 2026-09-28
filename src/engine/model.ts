@@ -13,6 +13,8 @@ export interface Station {
   changeover?: Dist
   // Finished units wait in a cart until this many are ready, or their lot is done, then move on together.
   transfer?: number
+  // Which products this station works on first; the oldest waiting job otherwise.
+  priority?: string[]
   breaks?: Break[]
   jams?: Jams
 }
@@ -138,6 +140,9 @@ export function validateModel(model: FactoryModel): string[] {
     for (const dist of station.jams ? [station.jams.every, station.jams.lasts] : []) {
       const jam = problemWith(dist)
       if (jam) problems.push(`${station.id}: jams: ${jam}`)
+    }
+    for (const product of station.priority ?? []) {
+      if (!productIds.has(product)) problems.push(`${station.id}: priority names unknown product "${product}"`)
     }
     const change = station.changeover && problemWith(station.changeover)
     if (change) problems.push(`${station.id}: changeover: ${change}`)

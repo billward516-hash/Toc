@@ -1,6 +1,6 @@
 import { sample } from './distributions.ts'
 import { EventQueue } from './eventQueue.ts'
-import { canRun, lotSize, machinesOf, onBreak, productOf, timeFor, validateModel, type FactoryModel } from './model.ts'
+import { canRun, lotSize, machinesOf, onBreak, productOf, timeFor, validateModel, type FactoryModel, type Machine } from './model.ts'
 import { stream } from './random.ts'
 
 export type SimEvent =
@@ -31,6 +31,8 @@ export interface SimResult {
   released: number
   // The product of each released unit, by job number, when the line makes several.
   products?: string[]
+  // Units shipped of each product, when the line makes several.
+  shippedBy?: Record<string, number>
   output: number
   avgWip: number
   avgLeadTime: number | null
@@ -102,14 +104,25 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     return job
   }
 
-  // Each free machine, in order, takes the oldest waiting job it can run. With saturate release the
+  // The waiting job a machine takes next: the oldest it can run, of the station's first-priority
+  // product when it has priorities.
+  const pick = (i: number, machine: Machine): number => {
+    const runnable = (job: number) => canRun(machine, productOf(model, job))
+    for (const product of stations[i].priority ?? []) {
+      const k = queues[i].findIndex((job) => productOf(model, job) === product && runnable(job))
+      if (k >= 0) return k
+    }
+    return queues[i].findIndex(runnable)
+  }
+
+  // Each free machine, in order, takes its pick of the waiting jobs. With saturate release the
   // first station never waits: it starts new work whenever a machine is free.
   const tryStart = (i: number) => {
     const station = stations[i]
     if (onBreak(station, now) || now < jammedUntil[i]) return
     machines[i].forEach((machine, m) => {
       if (holding[i][m] !== null) return
-      const k = queues[i].findIndex((waiting) => canRun(machine, productOf(model, waiting)))
+      const k = pick(i, machine)
       let job: number
       if (k >= 0) [job] = queues[i].splice(k, 1)
       else if (i === 0 && release.kind === 'saturate') job = newJob()
@@ -201,12 +214,19 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   advance(horizon)
 
   const shipped = completed[n - 1]
+  const shippedBy: Record<string, number> = {}
+  for (const event of events) {
+    if (event.type === 'finish' && event.station === n - 1 && model.mix) {
+      const product = products[event.job]
+      shippedBy[product] = (shippedBy[product] ?? 0) + 1
+    }
+  }
   return {
     seed,
     horizon,
     events,
     released: releasedAt.length,
-    ...(model.mix ? { products } : {}),
+    ...(model.mix ? { products, shippedBy } : {}),
     output: shipped,
     avgWip: wipArea / horizon,
     avgLeadTime: shipped > 0 ? leadTimeTotal / shipped : null,
