@@ -18,11 +18,14 @@ const BOX_HEIGHT = 150
 // A station with named machines lists them in rows under its name.
 const MACHINE_TOP = 58
 const MACHINE_ROW = 31
+// Room under the stations for carts of finished work.
+const CART_SPACE = 30
+const CART_BLOCK = 12
 // Room above the line for a rope.
 const ROPE_SPACE = 58
 const ACCENTS = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff']
 
-export type Badge = 'upgraded' | 'covered' | 'steadied' | 'maintained'
+export type Badge = 'upgraded' | 'covered' | 'steadied' | 'maintained' | 'quick'
 
 // The pile in front of `station` is a buffer, colored by whether it's running dry, healthy, or flooding.
 interface BufferBand {
@@ -65,7 +68,8 @@ export function FactoryView(props: FactoryViewProps) {
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
   const boxHeight = Math.max(BOX_HEIGHT, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
-  const height = BOX_TOP + boxHeight + 50
+  const cartSpace = model.stations.some((s, i) => (s.transfer ?? 1) > 1 && i < count - 1) ? CART_SPACE : 0
+  const height = BOX_TOP + boxHeight + cartSpace + 50
   const { release } = model
   const tiedTo = release.kind === 'rope' ? model.stations.findIndex((s) => s.id === release.constraint) : -1
   const top = tiedTo >= 0 ? -ROPE_SPACE : 0
@@ -91,8 +95,10 @@ export function FactoryView(props: FactoryViewProps) {
           x={i * COLUMN}
           station={station}
           boxHeight={boxHeight}
+          cartSpace={cartSpace}
           height={height}
           palette={palette}
+          cart={i < count - 1 && (station.transfer ?? 1) > 1 ? snapshot.carts[i] : null}
           accent={ACCENTS[i % ACCENTS.length]}
           waiting={snapshot.waiting[i]}
           working={snapshot.working[i]}
@@ -121,7 +127,7 @@ export function FactoryView(props: FactoryViewProps) {
               <g key={product.id} className="bin-product">
                 <rect x={binLeft + 22} y={BOX_TOP + 106 + k * 24} width={14} height={14} rx={3} style={{ fill: palette.color(product.id) }} />
                 <text x={binLeft + 44} y={BOX_TOP + 119 + k * 24}>
-                  {snapshot.shippedBy?.[product.id] ?? 0} {product.name.toLowerCase()}s
+                  {snapshot.shippedBy?.[product.id] ?? 0} {shortName(product.name)}
                 </text>
               </g>
             ))}
@@ -165,8 +171,11 @@ interface ColumnProps {
   x: number
   station: Station
   boxHeight: number
+  cartSpace: number
   height: number
   palette: Palette
+  // Finished work waiting in this station's cart, when it moves work in batches.
+  cart: number[] | null
   accent: string
   waiting: number[]
   working: ActiveJob[]
@@ -182,18 +191,19 @@ interface ColumnProps {
 }
 
 function StationColumn(props: ColumnProps) {
-  const { x, station, boxHeight, height, palette, accent, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
+  const { x, station, boxHeight, cartSpace, height, palette, cart, accent, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
   const { id, name, machines } = station
   const waiting = props.waiting.length
   const center = x + COLUMN / 2
   const pileLeft = center - PILE_WIDTH / 2
   const busy = working.length > 0
   const job = working[0]
-  const progress = job ? Math.min(1, (t - job.start) / (job.end - job.start)) : 0
+  const changing = job !== undefined && t < job.ready
+  const progress = job ? progressOf(job, t) : 0
   // A jam shows at once, even while the part in hand finishes; a break shows once the station stops.
-  const running = working.length > 1 ? `${working.length} working` : 'Working'
+  const running = changing ? 'Changeover' : working.length > 1 ? `${working.length} working` : 'Working'
   const status = stopped === 'jammed' ? 'Jammed' : busy ? running : stopped === 'break' ? 'On break' : 'Waiting'
-  const light = stopped === 'jammed' ? ' jammed' : busy ? ' on' : stopped === 'break' ? ' resting' : ''
+  const light = stopped === 'jammed' ? ' jammed' : changing ? ' changing' : busy ? ' on' : stopped === 'break' ? ' resting' : ''
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
   const extras = [
@@ -209,6 +219,8 @@ function StationColumn(props: ColumnProps) {
     badges.includes('covered') && 'works through breaks',
     badges.includes('steadied') && 'standard work',
     badges.includes('maintained') && 'maintained, no jams',
+    badges.includes('quick') && 'quick changeovers',
+    cart && `${cart.length} in the cart`,
   ].filter(Boolean)
   const countClass = zone ? ` zone-${zone}` : waiting >= buildingAt ? ' building' : ''
 
@@ -283,19 +295,21 @@ function StationColumn(props: ColumnProps) {
           <text className="station-name" x={center} y={BOX_TOP + 94}>
             {name}
           </text>
-          <circle className={`light${light}`} cx={center - 46} cy={BOX_TOP + 115} r={7} />
-          <text className="status" x={center - 32} y={BOX_TOP + 122}>
+          <circle className={`light${light}`} cx={center - 54} cy={BOX_TOP + 115} r={7} />
+          <text className={`status${status.length > 9 ? ' long' : ''}`} x={center - 41} y={BOX_TOP + 122}>
             {status}
           </text>
           <rect className="progress-track" x={center - 56} y={BOX_TOP + 132} width={112} height={8} rx={4} />
-          <rect className="progress-fill" x={center - 56} y={BOX_TOP + 132} width={112 * progress} height={8} rx={4} />
+          <rect className={`progress-fill${changing ? ' changing' : ''}`} x={center - 56} y={BOX_TOP + 132} width={112 * progress} height={8} rx={4} />
         </>
       )}
-      <text className="made" x={center} y={BOX_TOP + boxHeight + 34}>
+      {cart && <Cart x={center} y={BOX_TOP + boxHeight + 10} jobs={cart} palette={palette} />}
+      <text className="made" x={center} y={BOX_TOP + boxHeight + cartSpace + 34}>
         Made {made}
       </text>
       {badges.includes('covered') && <CornerBadge kind="covered" cx={x + 32} cy={BOX_TOP + 4} />}
       {badges.includes('maintained') && <CornerBadge kind="maintained" cx={x + 32} cy={BOX_TOP + 4} />}
+      {badges.includes('quick') && <CornerBadge kind="quick" cx={x + 32} cy={BOX_TOP + 4} />}
       {badges.includes('upgraded') && <CornerBadge kind="upgraded" cx={x + COLUMN - 32} cy={BOX_TOP + 4} />}
       {badges.includes('steadied') && <CornerBadge kind="steadied" cx={x + COLUMN - 32} cy={BOX_TOP + 4} />}
       {tag && (
@@ -320,10 +334,50 @@ interface MachineRowProps {
   palette: Palette
 }
 
+// A product's name short enough for the shipped bin: "posters" for Poster, "orange" for Orange blossom.
+function shortName(name: string): string {
+  const words = name.toLowerCase().split(' ')
+  return words.length > 1 ? words[0] : `${words[0]}s`
+}
+
+// How far along a job is: its changeover first, if it has one, then the work itself.
+function progressOf(job: ActiveJob, t: number): number {
+  if (t < job.ready) return (t - job.start) / (job.ready - job.start)
+  return Math.min(1, (t - job.ready) / (job.end - job.ready))
+}
+
+// Finished work waiting to move on together, drawn as a row of small blocks in a cart.
+function Cart({ x, y, jobs, palette }: { x: number; y: number; jobs: number[]; palette: Palette }) {
+  const shown = jobs.slice(0, 10)
+  const width = 10 * CART_BLOCK + 9 * 3
+  const left = x - width / 2
+  return (
+    <g className="cart" aria-hidden="true">
+      <rect className="cart-tray" x={left - 6} y={y - 4} width={width + 12} height={CART_BLOCK + 8} rx={6} />
+      {shown.map((job, k) => {
+        const color = jobColor(palette, job)
+        return (
+          <rect
+            key={job}
+            className="part"
+            style={color ? { fill: color } : undefined}
+            x={left + k * (CART_BLOCK + 3)}
+            y={y}
+            width={CART_BLOCK}
+            height={CART_BLOCK}
+            rx={3}
+          />
+        )
+      })}
+    </g>
+  )
+}
+
 // One machine: its light, its name, the products it may run, and the job it's working on.
 function MachineRow({ x, y, machine, job, t, stopped, palette }: MachineRowProps) {
-  const progress = job ? Math.min(1, (t - job.start) / (job.end - job.start)) : 0
-  const light = stopped === 'jammed' ? ' jammed' : job ? ' on' : stopped === 'break' ? ' resting' : ''
+  const changing = job !== undefined && t < job.ready
+  const progress = job ? progressOf(job, t) : 0
+  const light = stopped === 'jammed' ? ' jammed' : changing ? ' changing' : job ? ' on' : stopped === 'break' ? ' resting' : ''
   const allowed = machine.products ?? palette.all
   const fill = job ? jobColor(palette, job.job) : undefined
   const barWidth = COLUMN - 68
@@ -346,7 +400,15 @@ function MachineRow({ x, y, machine, job, t, stopped, palette }: MachineRowProps
         />
       ))}
       <rect className="progress-track" x={x + 34} y={y + 21} width={barWidth} height={5} rx={2.5} />
-      <rect className="progress-fill" x={x + 34} y={y + 21} width={barWidth * progress} height={5} rx={2.5} style={fill ? { fill } : undefined} />
+      <rect
+        className={`progress-fill${changing ? ' changing' : ''}`}
+        x={x + 34}
+        y={y + 21}
+        width={barWidth * progress}
+        height={5}
+        rx={2.5}
+        style={fill && !changing ? { fill } : undefined}
+      />
     </g>
   )
 }
@@ -364,6 +426,7 @@ function CornerBadge({ kind, cx, cy }: { kind: Badge; cx: number; cy: number }) 
       )}
       {kind === 'steadied' && <path className="bars" d={`M${cx - 9} ${cy - 6}h18M${cx - 9} ${cy}h18M${cx - 9} ${cy + 6}h18`} />}
       {kind === 'maintained' && <path className="wrench" transform={`translate(${cx - 12} ${cy - 12})`} d={WRENCH} />}
+      {kind === 'quick' && <path className="swap" d={`M${cx - 9} ${cy - 4}h15l-4-4M${cx + 9} ${cy + 4}h-15l4 4`} />}
     </g>
   )
 }

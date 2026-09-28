@@ -59,6 +59,27 @@ const glyphs: Record<string, ReactNode> = {
       <path d="M15 25L30 6M25 25L10 6" />
     </>
   ),
+  // The candle workshop.
+  melt: (
+    <>
+      <path d="M8 9h24v12a5 5 0 0 1-5 5H13a5 5 0 0 1-5-5z" />
+      <path d="M4 12h4M32 12h4" />
+      <path d="M20 37c-4-2-4-6 0-9 4 3 4 7 0 9z" />
+    </>
+  ),
+  pour: (
+    <>
+      <path d="M11 8h15l-1.5 24a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3z" />
+      <path d="M26 10l6-4v6" />
+      <path d="M11 13c-5 0-5 9 0 9" />
+    </>
+  ),
+  label: (
+    <>
+      <path d="M6 20L19 7h14v14L20 34z" />
+      <circle cx={27} cy={13} r={2.5} />
+    </>
+  ),
 }
 glyphs.pack = glyphs.box
 
@@ -109,6 +130,15 @@ const icons = {
       <path d="M9 9h6M9 13h6M9 17h3" />
     </>
   ),
+  stack: <path d="M5 16h14v4H5zM5 10h14v4H5zM5 4h14v4H5z" />,
+  cart: (
+    <>
+      <path d="M3 5h3l2.5 10h10l2-7H7" />
+      <circle cx={10} cy={19} r={1.6} />
+      <circle cx={17} cy={19} r={1.6} />
+    </>
+  ),
+  swap: <path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5" />,
   money: (
     <>
       <circle cx={12} cy={12} r={8.5} />

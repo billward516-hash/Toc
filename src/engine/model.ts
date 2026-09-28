@@ -9,6 +9,10 @@ export interface Station {
   servers?: number
   // Named machines, each able to run only certain products. Used instead of `servers`.
   machines?: Machine[]
+  // Time a machine spends switching from one product to another before it can start the next.
+  changeover?: Dist
+  // Finished units wait in a cart until this many are ready, or their lot is done, then move on together.
+  transfer?: number
   breaks?: Break[]
   jams?: Jams
 }
@@ -73,7 +77,8 @@ export function capacity(station: Station, horizon: number): number {
 
 export type Release =
   | { kind: 'saturate' }
-  | { kind: 'interval'; every: Dist }
+  // Orders arrive on a schedule, `lot` units at a time (one by default).
+  | { kind: 'interval'; every: Dist; lot?: number }
   | { kind: 'rope'; constraint: string; buffer: number }
 
 // A linear line: units flow through the stations in array order. Times are in minutes.
@@ -134,15 +139,26 @@ export function validateModel(model: FactoryModel): string[] {
       const jam = problemWith(dist)
       if (jam) problems.push(`${station.id}: jams: ${jam}`)
     }
+    const change = station.changeover && problemWith(station.changeover)
+    if (change) problems.push(`${station.id}: changeover: ${change}`)
+    const transfer = station.transfer ?? 1
+    if (!Number.isInteger(transfer) || transfer < 1) problems.push(`${station.id}: transfer must be a positive integer`)
   }
   const { release } = model
   if (release.kind === 'interval') {
     const every = problemWith(release.every)
     if (every) problems.push(`release: ${every}`)
+    const lot = release.lot ?? 1
+    if (!Number.isInteger(lot) || lot < 1) problems.push('release: lot must be a positive integer')
   }
   if (release.kind === 'rope') {
     if (!ids.has(release.constraint)) problems.push(`rope: unknown constraint "${release.constraint}"`)
     if (!Number.isInteger(release.buffer) || release.buffer < 1) problems.push('rope: buffer must be a positive integer')
   }
   return problems
+}
+
+// Units per order: an interval release can bring several at once.
+export function lotSize(release: Release): number {
+  return release.kind === 'interval' ? (release.lot ?? 1) : 1
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Dist } from './distributions.ts'
 import { capacity, validateModel, type FactoryModel, type Release } from './model.ts'
 import { runBatch, simulate, type SimResult } from './simulate.ts'
-import { snapshotAt } from './timeline.ts'
+import { bufferZones, snapshotAt, steadyShare } from './timeline.ts'
 
 const fixed = (value: number): Dist => ({ kind: 'fixed', value })
 const uniform = (min: number, max: number): Dist => ({ kind: 'uniform', min, max })
@@ -262,6 +262,82 @@ describe('products and machines', () => {
     expect(problems({ ...shop(['poster']), stations: shop(['poster']).stations.map((s, i) => (i === 1 ? { ...s, servers: 2 } : s)) })).toContain(
       'print: give machines or servers, not both',
     )
+  })
+})
+
+describe('changeovers, lots, and carts', () => {
+  // Orange and ocean candles alternate; Melt takes 2 minutes a candle and 3 to switch scents.
+  const workshop = (changes: Partial<FactoryModel> = {}, melt: Partial<FactoryModel['stations'][number]> = {}): FactoryModel => ({
+    products: [
+      { id: 'orange', name: 'Orange' },
+      { id: 'ocean', name: 'Ocean' },
+    ],
+    mix: ['orange', 'ocean'],
+    stations: [
+      { id: 'melt', name: 'Melt', cycleTime: fixed(2), changeover: fixed(3), ...melt },
+      { id: 'pack', name: 'Pack', cycleTime: fixed(1) },
+    ],
+    release: { kind: 'saturate' },
+    horizon: 60,
+    ...changes,
+  })
+  const starts = (result: SimResult, station: number) =>
+    result.events.flatMap((e) => (e.type === 'start' && e.station === station ? [e] : []))
+
+  it('spends a changeover whenever a machine switches products, and not otherwise', () => {
+    const alternating = simulate(workshop(), 1)
+    const [first, second] = starts(alternating, 0)
+    expect(first.ready).toBeUndefined()
+    expect(second.ready! - second.t).toBe(3)
+    expect(second.end - second.ready!).toBe(2)
+    // Every candle after the first costs 5 minutes: 12 finished in the hour, and 12 changeovers,
+    // the last from 57 to 60.
+    expect(alternating.stations[0].completed).toBe(12)
+    expect(alternating.stations[0].changeoverTime).toBe(36)
+    const runs = simulate(workshop({ mix: ['orange', 'orange', 'orange', 'orange', 'ocean', 'ocean', 'ocean', 'ocean'] }), 1)
+    expect(runs.stations[0].completed).toBeGreaterThan(alternating.stations[0].completed)
+    expect(simulate(workshop({}, { changeover: undefined }), 1).stations[0].changeoverTime).toBe(0)
+  })
+
+  it('brings a whole lot at each release', () => {
+    const result = simulate(workshop({ release: { kind: 'interval', every: fixed(10), lot: 3 } }), 1)
+    const releases = result.events.flatMap((e) => (e.type === 'release' ? [e.t] : []))
+    expect(releases.slice(0, 7)).toEqual([0, 0, 0, 10, 10, 10, 20])
+  })
+
+  it('moves finished work in carts: when full, or when the last unit of a lot is done', () => {
+    const carted = simulate(workshop({}, { transfer: 3, changeover: undefined }), 1)
+    const moves = carted.events.flatMap((e) => (e.type === 'move' ? [e] : []))
+    expect(moves.every((m) => m.jobs.length === 3)).toBe(true)
+    expect(carted.stations[0].transfer).toBe(3)
+    const lots = simulate(workshop({ release: { kind: 'interval', every: fixed(20), lot: 4 } }, { transfer: 10, changeover: undefined }), 1)
+    const lotMoves = lots.events.flatMap((e) => (e.type === 'move' ? [e.jobs] : []))
+    expect(lotMoves.slice(0, 2)).toEqual([
+      [0, 1, 2, 3],
+      [4, 5, 6, 7],
+    ])
+  })
+
+  it('accounts for every unit, carts included, and counts piles only once work arrives', () => {
+    const lots = { release: { kind: 'interval', every: fixed(9), lot: 4 } } as const
+    const carted = simulate(workshop(lots, { transfer: 4, changeover: undefined }), 2)
+    for (const t of [0, 7.5, 20, 41, 60]) {
+      const snap = snapshotAt(carted, t)
+      const held = [...snap.queues, ...snap.carts.map((c) => c.length), ...snap.working.map((w) => w.length)].reduce((a, b) => a + b, 0)
+      expect(held + snap.shipped).toBe(snap.released)
+    }
+    // Carted, Pack's pile jumps by a whole cart: 4 arrive, Pack starts one at once, and 3 wait.
+    // Moved one at a time, Pack never has more than one waiting.
+    const loose = simulate(workshop(lots, { changeover: undefined }), 2)
+    expect(bufferZones(carted, 1, 0, 2).some((z) => z.zone === 'flooding')).toBe(true)
+    expect(bufferZones(loose, 1, 0, 2).some((z) => z.zone === 'flooding')).toBe(false)
+    expect(steadyShare(carted, 3)).toBeLessThan(steadyShare(loose, 3))
+  })
+
+  it('rejects impossible settings', () => {
+    expect(validateModel(workshop({ release: { kind: 'interval', every: fixed(5), lot: 0 } }))).toContain('release: lot must be a positive integer')
+    expect(validateModel(workshop({}, { transfer: 1.5 }))).toContain('melt: transfer must be a positive integer')
+    expect(validateModel(workshop({}, { changeover: fixed(0) }))[0]).toMatch(/melt: changeover/)
   })
 })
 

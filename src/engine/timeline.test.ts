@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from './model.ts'
 import { simulate } from './simulate.ts'
-import { bufferShare, bufferZones, snapshotAt, steadyShare } from './timeline.ts'
+import { bufferShare, bufferZones, leadTimeSoFar, snapshotAt, steadyShare } from './timeline.ts'
 
 const model: FactoryModel = {
   stations: [
@@ -86,6 +86,18 @@ describe('snapshotAt', () => {
     const withoutJams = { ...run, events: run.events.filter((e) => e.type !== 'jam') }
     expect(steadyShare(run, 3)).toBe(steadyShare(withoutJams, 3))
     expect(bufferShare(run, 1, 2, 6)).toBe(bufferShare(withoutJams, 1, 2, 6))
+  })
+
+  it('averages lead time over what has shipped so far, matching the run at the end', () => {
+    expect(leadTimeSoFar(result)).toBeCloseTo(result.avgLeadTime!, 10)
+    expect(leadTimeSoFar(result, 0)).toBeNull()
+    const fixedLine: FactoryModel = {
+      ...model,
+      stations: [2, 5, 3].map((value, i) => ({ ...model.stations[i], cycleTime: { kind: 'fixed', value } })),
+      horizon: 100,
+    }
+    // The first robot is released at 0 and ships at 2 + 5 + 3 = 10.
+    expect(leadTimeSoFar(simulate(fixedLine, 1), 12)).toBe(10)
   })
 
   it('reports in-progress work with its start and finish times', () => {

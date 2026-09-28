@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
-import { bufferShare, bufferZones, snapshotAt, steadyShare, type ZoneSpan } from '../engine/timeline.ts'
-import { bufferScore, elevateScore, feedbackForRun, maxStars, starsFor, type Investment } from '../levels/graph.ts'
+import { bufferShare, bufferZones, leadTimeSoFar, snapshotAt, steadyShare, type ZoneSpan } from '../engine/timeline.ts'
+import { bufferScore, elevateScore, feedbackForRun, flowHolds, maxStars, starsFor, type Investment } from '../levels/graph.ts'
 import { applyLevers, leverValues, planCost, valueLabel } from '../levels/levers.ts'
 import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
@@ -16,9 +16,10 @@ import type { LevelFlowProps } from './types.ts'
 import { productColor } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
-type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' }>
+type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' }>
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
+type FlowGoal = Extract<Goal, { kind: 'flow' }>
 
 interface Run {
   plan: Choices
@@ -31,7 +32,7 @@ interface Run {
   stars: number
 }
 
-export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output' | 'steady' | 'buffer' | 'elevate'>) {
+export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output' | 'steady' | 'buffer' | 'elevate' | 'flow'>) {
   const { model, levers, seed } = level
   const baseline = useMemo(() => simulate(model, seed), [model, seed])
   const [speed, setSpeed] = useState(1)
@@ -62,11 +63,12 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
     stats.push({ label: 'Steady', value: `${Math.floor(100 * steadyShare(shown.result, goal.pileLimit, playback.t))}%` })
   }
   if (goal.kind === 'elevate') stats.push({ label: 'Spent', value: dollars(run?.investment.spend ?? 0) })
+  if (goal.kind === 'flow') stats.push({ label: 'Lead time', value: minutes(leadTimeSoFar(shown.result, playback.t)) })
   if (goal.kind === 'buffer') {
     stats.push({ label: 'Healthy', value: percent(bufferShare(shown.result, drum, goal.low, goal.high, playback.t)) })
   }
   stats.push({ label: goal.kind === 'buffer' ? 'On the floor' : 'In process', value: snapshot.released - snapshot.shipped })
-  if (goal.kind === 'output' || goal.kind === 'elevate') stats.push({ label: 'Goal', value: goal.target })
+  if (goal.kind === 'output' || goal.kind === 'elevate' || goal.kind === 'flow') stats.push({ label: 'Goal', value: goal.target })
 
   const start = () => {
     setBriefing(false)
@@ -77,7 +79,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const runPlan = () => {
     const planModel = applyLevers(model, levers, choices)
     const result = simulate(planModel, seed)
-    const days = goal.kind === 'buffer' || goal.kind === 'elevate' ? goal.freshDays : 0
+    const days = goal.kind === 'buffer' || goal.kind === 'elevate' || goal.kind === 'flow' ? goal.freshDays : 0
     const fresh = freshSeeds(days, seed).map((day) => simulate(planModel, day))
     const investment = { spend: planCost(levers, choices), baseline: baseline.output }
     const earned = starsFor(goal, result, fresh, investment)
@@ -136,6 +138,11 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
               {jams && (
                 <span>
                   <i className="swatch dot jammed" /> Jammed
+                </span>
+              )}
+              {model.stations.some((s) => s.changeover) && (
+                <span>
+                  <i className="swatch dot changing" /> Changeover
                 </span>
               )}
               {goal.kind === 'buffer' && (
@@ -197,6 +204,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
               <p className="hint">{planningHint(goal, baseline)}</p>
               {goal.kind === 'buffer' && <StarGoals goal={goal} />}
               {goal.kind === 'elevate' && <ElevateStarGoals goal={goal} />}
+              {goal.kind === 'flow' && <FlowStarGoals goal={goal} />}
               {levers.map((lever) => (
                 <fieldset key={lever.id} className="lever">
                   <legend>
@@ -271,6 +279,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           {stars > 0 && <Stars earned={run.stars} max={stars} />}
           {goal.kind === 'buffer' && <StarChecklist goal={goal} result={run.result} fresh={run.fresh} />}
           {goal.kind === 'elevate' && <ElevateChecklist goal={goal} result={run.result} fresh={run.fresh} investment={run.investment} />}
+          {goal.kind === 'flow' && <FlowChecklist goal={goal} result={run.result} fresh={run.fresh} />}
           {popup && <p>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</p>}
           {run.met &&
             level.principles.map((p) => (
@@ -295,6 +304,9 @@ const badgeLegend: Record<Lever['kind'], string | null> = {
   ropeLength: null,
   machineRule: null,
   buy: null,
+  lotSize: null,
+  quickChange: 'Quick changeovers',
+  transferSize: null,
 }
 
 const stationBadge: Partial<Record<Lever['kind'], Badge>> = {
@@ -302,6 +314,7 @@ const stationBadge: Partial<Record<Lever['kind'], Badge>> = {
   coverBreak: 'covered',
   steady: 'steadied',
   maintain: 'maintained',
+  quickChange: 'quick',
 }
 
 function leverIcon(lever: Lever): IconName {
@@ -322,6 +335,12 @@ function leverIcon(lever: Lever): IconName {
       return 'rule'
     case 'buy':
       return 'money'
+    case 'lotSize':
+      return 'stack'
+    case 'quickChange':
+      return 'swap'
+    case 'transferSize':
+      return 'cart'
   }
 }
 
@@ -353,6 +372,9 @@ function jamLog(model: FactoryModel, result: SimResult, zones: ZoneSpan[], t: nu
 
 const percent = (share: number) => `${Math.floor(100 * share)}%`
 const dollars = (amount: number) => `$${amount.toLocaleString('en-US')}`
+const minutes = (value: number | null) => (value === null ? '–' : `${Math.round(value)} min`)
+const wholeMinutes = (value: number | null) => (value === null ? '–' : Math.round(value))
+const changeoverMinutes = (result: SimResult) => result.stations.reduce((sum, s) => sum + s.changeoverTime, 0)
 
 function planningHint(goal: PlanGoal, baseline: SimResult): string {
   switch (goal.kind) {
@@ -366,6 +388,8 @@ function planningHint(goal: PlanGoal, baseline: SimResult): string {
     }
     case 'elevate':
       return `Today the shop ships ${baseline.output} a shift, and it's steady ${percent(steadyShare(baseline, goal.pileLimit))} of the time. Your plan runs for ${goal.freshDays + 1} days.`
+    case 'flow':
+      return `Today the workshop ships ${baseline.output} a shift, each about ${minutes(baseline.avgLeadTime)} from order to shipping.`
   }
 }
 
@@ -381,6 +405,8 @@ function outcomeText(goal: PlanGoal, result: SimResult): string {
     }
     case 'elevate':
       return `Shipped ${result.output} today, goal ${goal.target}.`
+    case 'flow':
+      return `Shipped ${result.output}, each about ${minutes(result.avgLeadTime)} from order to shipping.`
   }
 }
 
@@ -411,6 +437,12 @@ function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult, spe
         { label: 'Shipped', value: result.output, detail: `goal ${goal.target}` },
         { label: 'Before', value: baseline.output },
         { label: 'Spent', value: dollars(spend) },
+      ]
+    case 'flow':
+      return [
+        { label: 'Shipped', value: result.output, detail: `goal ${goal.target}` },
+        { label: 'Lead time, min', value: wholeMinutes(result.avgLeadTime), detail: `goal ${goal.maxLeadTime} or less` },
+        { label: 'Changeovers, min', value: wholeMinutes(changeoverMinutes(result)), detail: `before ${wholeMinutes(changeoverMinutes(baseline))}` },
       ]
   }
 }
@@ -530,6 +562,57 @@ function ElevateChecklist(props: { goal: ElevateGoal; result: SimResult; fresh: 
             <span>{percent(day.steady)} steady</span>
           </li>
         ))}
+      </ol>
+    </div>
+  )
+}
+
+// What each star asks of a flow plan, shown before the player plans.
+function FlowStarGoals({ goal }: { goal: FlowGoal }) {
+  return (
+    <ol className="star-goals">
+      <li>
+        <Stars earned={1} max={1} /> Ship at least {goal.target} a shift
+      </li>
+      <li>
+        <Stars earned={2} max={2} /> And get each order out in {goal.maxLeadTime} minutes or less, on average
+      </li>
+      <li>
+        <Stars earned={3} max={3} /> And both again on {goal.freshDays} more days you haven't seen
+      </li>
+    </ol>
+  )
+}
+
+// Each bar a flow plan cleared or missed, and the same plan on fresh days.
+function FlowChecklist({ goal, result, fresh }: { goal: FlowGoal; result: SimResult; fresh: SimResult[] }) {
+  const rows = [
+    { ok: result.output >= goal.target, text: `Shipped ${result.output} (goal: ${goal.target})` },
+    { ok: (result.avgLeadTime ?? Infinity) <= goal.maxLeadTime, text: `About ${minutes(result.avgLeadTime)} from order to shipping (goal: ${goal.maxLeadTime} min or less)` },
+  ]
+  return (
+    <div className="checklist">
+      <ul>
+        {rows.map((row) => (
+          <li key={row.text} className={row.ok ? 'ok' : 'miss'}>
+            <Icon name={row.ok ? 'check' : 'cross'} /> {row.text}
+          </li>
+        ))}
+      </ul>
+      <p className="days-title">The same plan on {fresh.length} more days:</p>
+      <ol className="days compact">
+        {fresh.map((day, i) => {
+          const ok = flowHolds(goal, day)
+          return (
+            <li key={i} className={ok ? 'ok' : 'miss'}>
+              <strong>
+                <Icon name={ok ? 'check' : 'cross'} /> Day {i + 2}
+              </strong>
+              <span>{day.output} shipped</span>
+              <span>{minutes(day.avgLeadTime)}</span>
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

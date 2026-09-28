@@ -35,6 +35,17 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
         wip: tenths(after.avgWip),
       }
     }
+    case 'flow':
+      return {
+        baseline: baseline.output,
+        target: goal.target,
+        maxLead: goal.maxLeadTime,
+        lead: Math.round(run.avgLeadTime ?? 0),
+        leadBefore: Math.round(baseline.avgLeadTime ?? 0),
+        freshDays: goal.freshDays,
+        changeover: Math.round(run.stations.reduce((sum, s) => sum + s.changeoverTime, 0)),
+        changeoverBefore: Math.round(baseline.stations.reduce((sum, s) => sum + s.changeoverTime, 0)),
+      }
     case 'elevate':
       return {
         baseline: baseline.output,

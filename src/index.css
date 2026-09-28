@@ -593,6 +593,10 @@ button {
   fill: var(--muted);
 }
 
+.factory .status.long {
+  font-size: 16px;
+}
+
 .factory .light {
   fill: #c3c7d6;
   stroke: var(--ink);
@@ -609,6 +613,36 @@ button {
 
 .factory .light.jammed {
   fill: var(--red);
+}
+
+.factory .light.changing {
+  fill: var(--amber);
+}
+
+.factory .progress-fill.changing {
+  fill: var(--amber);
+}
+
+.factory .cart-tray {
+  fill: #eee6d6;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+.factory .cart .part {
+  stroke-width: 2;
+}
+
+.factory .corner.quick .ring {
+  fill: var(--amber);
+}
+
+.factory .corner.quick .swap {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .factory .corner .ring {
@@ -784,6 +818,10 @@ button {
 
 .swatch.dot.jammed {
   background: var(--red);
+}
+
+.swatch.dot.changing {
+  background: var(--amber);
 }
 
 .swatch.zone {
@@ -1039,8 +1077,9 @@ button {
 }
 
 .result-stats strong {
-  font-size: 30px;
+  font-size: clamp(20px, 6vw, 30px);
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .result-stats div:first-child {
@@ -1162,7 +1201,8 @@ button {
 
 .days.compact li {
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .days.compact li strong {

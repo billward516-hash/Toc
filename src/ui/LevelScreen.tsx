@@ -21,6 +21,7 @@ export function LevelScreen({ level, ...flow }: LevelScreenProps) {
     case 'steady':
     case 'buffer':
     case 'elevate':
+    case 'flow':
       return <PlanTheShift level={level} goal={goal} {...flow} />
     case 'predict':
       return <PredictTheRun level={level} goal={goal} {...flow} />

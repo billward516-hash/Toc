@@ -1,16 +1,23 @@
 import { sample } from './distributions.ts'
 import { EventQueue } from './eventQueue.ts'
-import { canRun, machinesOf, onBreak, productOf, timeFor, validateModel, type FactoryModel } from './model.ts'
+import { canRun, lotSize, machinesOf, onBreak, productOf, timeFor, validateModel, type FactoryModel } from './model.ts'
 import { stream } from './random.ts'
 
 export type SimEvent =
   | { t: number; type: 'release'; job: number }
-  | { t: number; type: 'start'; job: number; station: number; machine: number; end: number }
+  // With a changeover, the machine starts working on the job at `ready`, not at `t`.
+  | { t: number; type: 'start'; job: number; station: number; machine: number; end: number; ready?: number }
   | { t: number; type: 'finish'; job: number; station: number }
+  // Finished units leaving a station's cart for the next station, when it moves work in batches.
+  | { t: number; type: 'move'; station: number; jobs: number[] }
   | { t: number; type: 'jam'; station: number; until: number }
 
 export interface StationStats {
   id: string
+  // Present when the station moves finished work on in batches of this size.
+  transfer?: number
+  // Minutes spent changing over between products.
+  changeoverTime: number
   completed: number
   utilization: number
   avgQueue: number
@@ -45,6 +52,8 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const cycleDraws = stations.map((s) => stream(seed, `cycle:${s.id}`))
   const jamDraws = stations.map((s) => stream(seed, `jam:${s.id}`))
   const releaseDraws = stream(seed, 'release')
+  const changeoverDraws = stations.map((s) => stream(seed, `changeover:${s.id}`))
+  const lot = lotSize(release)
   const constraint = release.kind === 'rope' ? stations.findIndex((s) => s.id === release.constraint) : -1
   const machines = stations.map(machinesOf)
 
@@ -52,6 +61,11 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   // The job each machine is working on, if any.
   const holding: (number | null)[][] = machines.map((ms) => ms.map(() => null))
   const products: string[] = []
+  // The product each machine last ran, so switching costs a changeover.
+  const lastProduct: (string | undefined)[][] = machines.map((ms) => ms.map(() => undefined))
+  // Finished units waiting to move on together.
+  const carts: number[][] = stations.map(() => [])
+  const changeoverTime = stations.map(() => 0)
   const busy = stations.map(() => 0)
   const completed = stations.map(() => 0)
   const busyArea = stations.map(() => 0)
@@ -102,8 +116,13 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       else return
       holding[i][m] = job
       busy[i]++
-      const end = now + sample(timeFor(station, machine, productOf(model, job)), cycleDraws[i]())
-      events.push({ t: now, type: 'start', job, station: i, machine: m, end })
+      const product = productOf(model, job)
+      const switching = station.changeover && lastProduct[i][m] !== undefined && lastProduct[i][m] !== product
+      const ready = switching ? now + sample(station.changeover!, changeoverDraws[i]()) : now
+      if (switching) changeoverTime[i] += Math.min(ready, horizon) - now
+      lastProduct[i][m] = product
+      const end = ready + sample(timeFor(station, machine, product), cycleDraws[i]())
+      events.push({ t: now, type: 'start', job, station: i, machine: m, end, ...(switching ? { ready } : {}) })
       agenda.push(end, { kind: 'finish', station: i, machine: m, job })
     })
   }
@@ -134,7 +153,17 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     busy[i]--
     completed[i]++
     events.push({ t: now, type: 'finish', job, station: i })
-    if (i + 1 < n) {
+    const transfer = stations[i].transfer ?? 1
+    if (i + 1 < n && transfer > 1) {
+      // The cart leaves when it's full, or when the last unit of a multi-unit lot is done.
+      carts[i].push(job)
+      if (carts[i].length >= transfer || (lot > 1 && (job + 1) % lot === 0)) {
+        const jobs = carts[i]
+        carts[i] = []
+        events.push({ t: now, type: 'move', station: i, jobs })
+        for (const moving of jobs) arrive(i + 1, moving)
+      }
+    } else if (i + 1 < n) {
       arrive(i + 1, job)
     } else {
       wip--
@@ -165,7 +194,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     } else if (payload.kind === 'jam') {
       jam(payload.station)
     } else if (release.kind === 'interval') {
-      arrive(0, newJob())
+      for (let k = 0; k < lot; k++) arrive(0, newJob())
       agenda.push(now + sample(release.every, releaseDraws()), { kind: 'release' })
     }
   }
@@ -183,6 +212,8 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     avgLeadTime: shipped > 0 ? leadTimeTotal / shipped : null,
     stations: stations.map((station, i) => ({
       id: station.id,
+      ...((station.transfer ?? 1) > 1 && i + 1 < n ? { transfer: station.transfer } : {}),
+      changeoverTime: changeoverTime[i],
       completed: completed[i],
       utilization: busyArea[i] / (machines[i].length * horizon),
       avgQueue: queueArea[i] / horizon,

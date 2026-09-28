@@ -125,6 +125,44 @@ describe('machine rules and purchases', () => {
   })
 })
 
+describe('batch levers', () => {
+  const candles: FactoryModel = {
+    products: [
+      { id: 'orange', name: 'Orange' },
+      { id: 'ocean', name: 'Ocean' },
+    ],
+    mix: ['orange', 'ocean'],
+    stations: [
+      { id: 'melt', name: 'Melt', cycleTime: { kind: 'fixed', value: 3 }, changeover: { kind: 'fixed', value: 8 } },
+      { id: 'pack', name: 'Pack', cycleTime: { kind: 'fixed', value: 1 } },
+    ],
+    release: { kind: 'interval', every: { kind: 'fixed', value: 4 } },
+    horizon: 480,
+  }
+  const batchLevers: Lever[] = [
+    { id: 'lot', kind: 'lotSize', label: 'Lot', sizes: [1, 3] },
+    { id: 'crew', kind: 'quickChange', label: 'Crew', stations: ['melt'], factor: 0.25 },
+    { id: 'cart', kind: 'transferSize', label: 'Cart', sizes: [1, 5] },
+  ]
+
+  it('brings orders in lots of one product at the same average pace', () => {
+    const lots = applyLevers(candles, batchLevers, { lot: '3' })
+    expect(lots.release).toEqual({ kind: 'interval', every: { kind: 'fixed', value: 12 }, lot: 3 })
+    expect(lots.mix).toEqual(['orange', 'orange', 'orange', 'ocean', 'ocean', 'ocean'])
+    const back = applyLevers(lots, batchLevers, { lot: '1' })
+    expect(back.release).toEqual({ kind: 'interval', every: { kind: 'fixed', value: 4 }, lot: 1 })
+    expect(back.mix).toEqual(['orange', 'ocean'])
+  })
+
+  it('cuts changeovers where the crew works, and sets every cart size', () => {
+    const changed = applyLevers(candles, batchLevers, { crew: 'melt', cart: '5' })
+    expect(changed.stations[0].changeover).toEqual({ kind: 'fixed', value: 2 })
+    expect(changed.stations.map((s) => s.transfer)).toEqual([5, 5])
+    expect(valueLabel(batchLevers[2], '1', candles)).toBe('One at a time')
+    expect(valueLabel(batchLevers[0], '3', candles)).toBe('3 at a time')
+  })
+})
+
 describe('allPlans', () => {
   it('lists every combination of choices', () => {
     expect(allPlans(levers)).toEqual([

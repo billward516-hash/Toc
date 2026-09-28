@@ -4,20 +4,33 @@ import type { Choices, Lever } from './types.ts'
 
 export function applyLevers(model: FactoryModel, levers: Lever[], choices: Choices): FactoryModel {
   let release = model.release
+  let mix = model.mix
   for (const lever of levers) {
     const value = choices[lever.id]
     if (value === undefined) continue
     if (lever.kind === 'releasePace') release = { kind: 'interval', every: { kind: 'fixed', value: Number(value) } }
     if (lever.kind === 'ropeTo') release = { kind: 'rope', constraint: value, buffer: lever.length }
+    if (lever.kind === 'lotSize' && release.kind === 'interval') {
+      // Lots of n arrive n times as far apart, each lot all one product, taking the products in the mix's order.
+      const n = Number(value)
+      const lot = release.lot ?? 1
+      release = { ...release, every: scale(release.every, n / lot), lot: n }
+      mix = model.mix?.filter((_, i) => i % lot === 0).flatMap((product) => Array<string>(n).fill(product))
+    }
   }
   for (const lever of levers) {
     const value = choices[lever.id]
     if (lever.kind === 'ropeLength' && value !== undefined && release.kind === 'rope') release = { ...release, buffer: Number(value) }
   }
+  const transfer = levers.find((lever) => lever.kind === 'transferSize' && choices[lever.id] !== undefined)
   return {
     ...model,
     release,
-    stations: model.stations.map((station) => levers.reduce((changed, lever) => changeStation(changed, lever, choices), station)),
+    ...(mix ? { mix } : {}),
+    stations: model.stations.map((station) => {
+      const changed = levers.reduce((s, lever) => changeStation(s, lever, choices), station)
+      return transfer ? { ...changed, transfer: Number(choices[transfer.id]) } : changed
+    }),
   }
 }
 
@@ -44,6 +57,8 @@ function changeStation(station: Station, lever: Lever, choices: Choices): Statio
       return { ...station, jams: undefined }
     case 'steady':
       return { ...station, cycleTime: steadied(station.cycleTime) }
+    case 'quickChange':
+      return station.changeover ? { ...station, changeover: scale(station.changeover, lever.factor) } : station
     default:
       return station
   }
@@ -64,6 +79,9 @@ export function leverValues(lever: Lever): string[] {
       return lever.options.map((o) => o.id)
     case 'buy':
       return ['none', ...lever.options.map((o) => o.id)]
+    case 'lotSize':
+    case 'transferSize':
+      return lever.sizes.map(String)
     default:
       return lever.stations
   }
@@ -79,6 +97,9 @@ export function valueLabel(lever: Lever, value: string, model: FactoryModel): st
       return lever.options.find((o) => o.id === value)?.label ?? value
     case 'buy':
       return value === 'none' ? "Don't buy" : (lever.options.find((o) => o.id === value)?.label ?? value)
+    case 'lotSize':
+    case 'transferSize':
+      return value === '1' ? 'One at a time' : `${value} at a time`
     default:
       return model.stations.find((s) => s.id === value)?.name ?? value
   }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
-import { simulate } from '../engine/simulate.ts'
+import { simulate, type SimResult } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { bufferScore, feedbackForPrediction, feedbackForRun, goalMet, starsFor, validateLevels } from './graph.ts'
+import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, starsFor, validateLevels } from './graph.ts'
 import { allPlans, applyLevers, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
@@ -120,15 +120,16 @@ describe.each(levels.filter((l) => l.goal.kind === 'output' || l.goal.kind === '
   })
 })
 
-// Buffer levels grade the level's own day for the first two stars and fresh days for the third,
-// so the lesson must hold on nearly every day, not just the one the player watches.
-describe.each(levels.filter((l) => l.goal.kind === 'buffer'))('buffer level $id', (level) => {
-  if (level.goal.kind !== 'buffer') return
+// Buffer and flow levels grade the level's own day for the first two stars and fresh days for the
+// third, so the lesson must hold on nearly every day, not just the one the player watches.
+describe.each(levels.filter((l) => l.goal.kind === 'buffer' || l.goal.kind === 'flow'))('$goal.kind level $id', (level) => {
   const { goal, model, levers } = level
   const days = Array.from({ length: 100 }, (_, i) => i + 1)
   const run = (plan: Choices, seed: number) => simulate(applyLevers(model, levers, plan), seed)
   const plans = allPlans(levers)
-  const twoStars = (plan: Choices, seed: number) => bufferScore(goal, run(plan, seed)).both
+  const bothBars = (result: SimResult) =>
+    goal.kind === 'buffer' ? bufferScore(goal, result).both : goal.kind === 'flow' ? flowHolds(goal, result) : false
+  const twoStars = (plan: Choices, seed: number) => bothBars(run(plan, seed))
   const best = plans.filter((plan) => twoStars(plan, level.seed))
 
   it('misses the first star before any changes, on its own day and nearly every other', () => {
@@ -140,7 +141,7 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer'))('buffer level $id'
     expect(best).toHaveLength(1)
   })
 
-  it('keeps that plan healthy and lean on nearly every other day, so the third star is fair', () => {
+  it('keeps that plan clearing both bars on nearly every other day, so the third star is fair', () => {
     expect(days.filter((seed) => twoStars(best[0], seed)).length).toBeGreaterThanOrEqual(99)
   })
 
@@ -165,14 +166,14 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer'))('buffer level $id'
 
   it('has feedback for every plan, with every number filled in', () => {
     const baseline = simulate(model, level.seed)
-    expect(fillTemplate(level.briefing, model, snapshotAt(baseline, 0), goalValues(goal, baseline))).not.toMatch(/[{}]/)
-    expect(fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), goalValues(goal, baseline))).not.toMatch(/[{}]/)
+    const values = (result = baseline) => goalValues(goal, baseline, result)
+    expect(fillTemplate(level.briefing, model, snapshotAt(baseline, 0), values())).not.toMatch(/[{}]/)
+    if ('prompt' in goal) expect(fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values())).not.toMatch(/[{}]/)
     for (const plan of plans) {
       const result = run(plan, level.seed)
       const popup = feedbackForRun(level, goalMet(goal, result), plan)
       expect(popup, JSON.stringify(plan)).toBeDefined()
-      const text = fillTemplate(popup!.body, model, snapshotAt(result, result.horizon), goalValues(goal, baseline, result))
-      expect(text).not.toMatch(/[{}]/)
+      expect(fillTemplate(popup!.body, model, snapshotAt(result, result.horizon), values(result))).not.toMatch(/[{}]/)
     }
   })
 })

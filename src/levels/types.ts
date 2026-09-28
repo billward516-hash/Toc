@@ -25,6 +25,9 @@ export type Goal =
   // `minHealthy` of the shift. Two: also average work in process at or under `maxAvgWip`.
   // Three: both hold on `freshDays` more days the player hasn't seen.
   | { kind: 'buffer'; drum: string; low: number; high: number; minHealthy: number; maxAvgWip: number; freshDays: number; prompt: string }
+  // Batches and flow (spec §5.3–5.4). One star: at least `target` shipped. Two: also an average lead
+  // time (order in to shipped) of `maxLeadTime` minutes or less. Three: both again on `freshDays` more days.
+  | { kind: 'flow'; target: number; maxLeadTime: number; freshDays: number; prompt: string }
   // Elevating the constraint, judged on the level's own day and `freshDays` more (spec §5.4). One star:
   // at least `target` shipped every day. Two: also steady every day (no pile of `pileLimit` or more for
   // at least `minSteady` of the shift). Three: also at least `minGainPer1000` more shipped on the
@@ -52,6 +55,12 @@ export type Lever =
   | { id: string; kind: 'machineRule'; label: string; station: string; machine: string; options: RuleOption[] }
   // Buy one of these machines, or none.
   | { id: string; kind: 'buy'; label: string; options: Purchase[] }
+  // Orders arrive in lots of one product, the same number of units a shift on average.
+  | { id: string; kind: 'lotSize'; label: string; sizes: number[] }
+  // Cut the changeover time at one station.
+  | { id: string; kind: 'quickChange'; label: string; stations: string[]; factor: number }
+  // Every station sends finished work on this many at a time.
+  | { id: string; kind: 'transferSize'; label: string; sizes: number[] }
 
 export interface RuleOption {
   id: string

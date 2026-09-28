@@ -6,6 +6,7 @@ import type { Choices, Goal, Level, Popup } from './types.ts'
 
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
+type FlowGoal = Extract<Goal, { kind: 'flow' }>
 
 export type LevelState = 'locked' | 'unlocked' | 'completed'
 
@@ -24,6 +25,7 @@ export function maxStars(level: Level): number {
       return 1
     case 'buffer':
     case 'elevate':
+    case 'flow':
       return 3
     default:
       return 0
@@ -36,6 +38,7 @@ export function goalMet(goal: Goal, result: SimResult): boolean {
   switch (goal.kind) {
     case 'output':
     case 'elevate':
+    case 'flow':
       return result.output >= goal.target
     case 'steady':
       return result.output >= goal.minShipped && steadyShare(result, goal.pileLimit) >= goal.minSteady
@@ -87,7 +90,17 @@ export function bufferScore(goal: BufferGoal, result: SimResult): BufferScore {
 
 // Stars for a run. The third star on a buffer level needs `goal.freshDays` more days, each meeting
 // both bars. An elevate level judges every star across the level's own day and its fresh days.
+// A flow day clears both bars: enough shipped, and shipped quickly enough.
+export function flowHolds(goal: FlowGoal, day: SimResult): boolean {
+  return day.output >= goal.target && (day.avgLeadTime ?? Infinity) <= goal.maxLeadTime
+}
+
 export function starsFor(goal: Goal, result: SimResult, freshDays: SimResult[] = [], investment?: Investment): number {
+  if (goal.kind === 'flow') {
+    if (!goalMet(goal, result)) return 0
+    if (!flowHolds(goal, result)) return 1
+    return freshDays.length >= goal.freshDays && freshDays.every((day) => flowHolds(goal, day)) ? 3 : 2
+  }
   if (goal.kind === 'elevate') {
     if (freshDays.length < goal.freshDays) return 0
     const score = elevateScore(goal, result, freshDays, investment ?? { spend: 0, baseline: 0 })
@@ -203,7 +216,20 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
           for (const p of purchase.machine.products ?? []) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
         }
         break
+      case 'lotSize':
+      case 'transferSize':
+        if (!lever.sizes.every((n) => Number.isInteger(n) && n >= 1)) problems.push(`lever "${lever.id}" needs positive whole sizes`)
+        if (lever.kind === 'lotSize' && model.release.kind !== 'interval') problems.push(`lever "${lever.id}" needs orders on a schedule`)
+        break
       default:
+        if (lever.kind === 'quickChange') {
+          if (!(lever.factor > 0)) problems.push(`lever "${lever.id}" needs a positive factor`)
+          for (const s of lever.stations) {
+            if (stationIds.has(s) && !model.stations.find((st) => st.id === s)?.changeover) {
+              problems.push(`lever "${lever.id}" speeds changeovers at "${s}", which has none`)
+            }
+          }
+        }
         if (lever.kind === 'ropeTo' && !(Number.isInteger(lever.length) && lever.length >= 1)) {
           problems.push(`lever "${lever.id}" needs a positive whole length`)
         }
@@ -240,9 +266,15 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     case 'output':
     case 'steady':
     case 'buffer':
-    case 'elevate': {
+    case 'elevate':
+    case 'flow': {
       if (goal.kind === 'steady' && !(goal.minSteady > 0 && goal.minSteady <= 1 && goal.pileLimit >= 1)) {
         problems.push('a steady goal needs 0 < minSteady <= 1 and pileLimit >= 1')
+      }
+      if (goal.kind === 'flow') {
+        if (!(goal.target > 0)) problems.push('a flow goal needs a positive target')
+        if (!(goal.maxLeadTime > 0)) problems.push('a flow goal needs a positive maxLeadTime')
+        if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 1)) problems.push('a flow goal needs at least one fresh day')
       }
       if (goal.kind === 'elevate') {
         if (!(goal.target > 0)) problems.push('an elevate goal needs a positive target')

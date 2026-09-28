@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate } from '../engine/simulate.ts'
-import { bufferScore, feedbackFor, feedbackForRun, gainPer1000, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
+import { bufferScore, feedbackFor, feedbackForRun, flowHolds, gainPer1000, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
 import type { Goal, Level } from './types.ts'
 
 const model: FactoryModel = {
@@ -106,6 +106,21 @@ describe('maxStars', () => {
     expect(maxStars(level('a'))).toBe(0)
     expect(maxStars(planLevel())).toBe(1)
     expect(maxStars(planLevel({ goal: bufferGoal() }))).toBe(3)
+  })
+})
+
+describe('flow stars', () => {
+  // Paint ships 11 in the hour; the first robot takes 7 minutes and each one after waits longer.
+  const day = simulate(model, 1)
+  const goal: Extract<Goal, { kind: 'flow' }> = { kind: 'flow', target: 11, maxLeadTime: 1000, freshDays: 2, prompt: 'Lots?' }
+
+  it('needs the target for one star, a short enough lead time for two, and both on every fresh day for three', () => {
+    expect(starsFor(goal, day, [day, day])).toBe(3)
+    expect(starsFor(goal, day, [day])).toBe(2)
+    expect(starsFor({ ...goal, maxLeadTime: 5 }, day, [day, day])).toBe(1)
+    expect(starsFor({ ...goal, target: 12 }, day, [day, day])).toBe(0)
+    expect(flowHolds(goal, day)).toBe(true)
+    expect(maxStars(planLevel({ goal }))).toBe(3)
   })
 })
 
