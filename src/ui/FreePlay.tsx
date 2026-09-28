@@ -30,6 +30,7 @@ import { Icon } from './icons.tsx'
 import { PlaybackPanel, ScreenHeader, type Stat } from './parts.tsx'
 import { haltLabels } from './shiftEvents.ts'
 import { SimulationLog } from './SimLog.tsx'
+import { reveal, showFloor } from './scroll.ts'
 import { MINUTES_PER_SECOND, usePlayback, type Playback } from './usePlayback.ts'
 
 // One run of the player's line on one day, kept to compare later runs with.
@@ -141,14 +142,14 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
   // Run from the editor, then watch it on the floor.
   const runShift = () => {
     controls.restart()
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    showFloor()
   }
 
   // A station tapped on the floor opens its settings.
   const openStation = (id: string) => {
     const i = STEPS.findIndex((step) => step.id === id)
     setOpen(i)
-    requestAnimationFrame(() => rows.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+    reveal(rows.current[i])
   }
 
   const stats: Stat[] = [

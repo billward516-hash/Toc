@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { bufferShare, bufferZones, leadTimeSoFar, snapshotAt, steadyShare, type Snapshot, type ZoneSpan } from '../engine/timeline.ts'
@@ -30,6 +30,7 @@ import { SimulationLog } from './SimLog.tsx'
 import { DayDots, Explanation, JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor, productName } from './products.ts'
+import { reveal, showFloor } from './scroll.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
 type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' | 'profit' | 'bars' }>
@@ -64,6 +65,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
   const [briefing, setBriefing] = useState(true)
   const [choices, setChoices] = useState<Choices>({})
   const [dismissed, setDismissed] = useState(false)
+  const question = useRef<HTMLElement>(null)
 
   const snapshot = useMemo(() => snapshotAt(shown.result, playback.t), [shown.result, playback.t])
   const values = goalValues(goal, baseline, run?.result)
@@ -127,11 +129,13 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
     setRun({ plan: choices, model: planModel, result, fresh, investment, met, stars: earned })
     setDismissed(false)
     playback.restart()
+    showFloor()
   }
 
   const replan = () => {
     setRun(null)
     playback.rewind()
+    reveal(question.current)
   }
 
   return (
@@ -230,7 +234,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
           {level.tier >= 2 && <SimulationLog model={shown.model} result={shown.result} t={playback.t} unit={unit} />}
         </PlaybackPanel>
 
-        <section className="question card" aria-live="polite">
+        <section ref={question} className="question card" aria-live="polite">
           {run ? (
             <>
               <p className="prompt">Your plan</p>

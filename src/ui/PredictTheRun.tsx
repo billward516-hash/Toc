@@ -17,6 +17,7 @@ import { ShopDays } from './ShopDays.tsx'
 import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog } from './shiftEvents.ts'
 import { SimulationLog } from './SimLog.tsx'
 import type { LevelFlowProps } from './types.ts'
+import { showFloor } from './scroll.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
 // Watch one day, predict another, then watch it: a perfect-day twin and the real line by default, or
@@ -64,12 +65,16 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
     onRecord({ type: 'completed', levelId: level.id })
     setLocked(true)
     if (several) playback.rewind()
-    else playback.restart()
+    else {
+      playback.restart()
+      showFloor()
+    }
   }
 
   const watch = (day: number) => {
     setWatching(day)
     playback.restart()
+    showFloor()
   }
 
   const lookAround = () => {
