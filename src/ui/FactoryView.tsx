@@ -1,6 +1,7 @@
-import { onBreak, type FactoryModel } from '../engine/model.ts'
+import { onBreak, type FactoryModel, type Machine, type Station } from '../engine/model.ts'
 import type { ActiveJob, Snapshot, Zone } from '../engine/timeline.ts'
 import { StationGlyph, WRENCH } from './icons.tsx'
+import { productColor, productName } from './products.ts'
 
 const COLUMN = 200
 const BIN = 190
@@ -14,7 +15,9 @@ const PILE_HEIGHT = PILE_ROWS * BLOCK + (PILE_ROWS - 1) * GAP
 const PILE_BOTTOM = 160
 const BOX_TOP = PILE_BOTTOM + 42
 const BOX_HEIGHT = 150
-const HEIGHT = BOX_TOP + BOX_HEIGHT + 50
+// A station with named machines lists them in rows under its name.
+const MACHINE_TOP = 58
+const MACHINE_ROW = 31
 // Room above the line for a rope.
 const ROPE_SPACE = 58
 const ACCENTS = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff']
@@ -36,23 +39,47 @@ interface FactoryViewProps {
   badges?: Record<string, Badge[]>
   buildingAt?: number
   buffer?: BufferBand | null
+  // The product of each job, when the line makes several.
+  jobProducts?: string[]
   onSelect?: (stationId: string) => void
+}
+
+// How products look: which product each job is, and each product's color and name.
+interface Palette {
+  productOf: (job: number) => string | undefined
+  color: (product: string) => string
+  name: (product: string) => string
+  all: string[]
+}
+
+function jobColor(palette: Palette, job: number): string | undefined {
+  const product = palette.productOf(job)
+  return product === undefined ? undefined : palette.color(product)
 }
 
 const zoneLabel: Record<Zone, string> = { dry: 'running dry', healthy: 'healthy', flooding: 'flooding' }
 
 export function FactoryView(props: FactoryViewProps) {
-  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, onSelect } = props
+  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, onSelect } = props
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
+  const boxHeight = Math.max(BOX_HEIGHT, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
+  const height = BOX_TOP + boxHeight + 50
   const { release } = model
   const tiedTo = release.kind === 'rope' ? model.stations.findIndex((s) => s.id === release.constraint) : -1
   const top = tiedTo >= 0 ? -ROPE_SPACE : 0
   const zoneOf = (waiting: number): Zone | null =>
     buffer === null ? null : waiting < buffer.low ? 'dry' : waiting > buffer.high ? 'flooding' : 'healthy'
+  const palette: Palette = {
+    productOf: (job) => jobProducts?.[job],
+    color: (product) => productColor(model, product),
+    name: (product) => productName(model, product),
+    all: (model.products ?? []).map((p) => p.id),
+  }
+  const binLeft = count * COLUMN + 14
   return (
-    <svg className="factory" viewBox={`0 ${top} ${width} ${HEIGHT - top}`} role="group" aria-label="Factory floor">
+    <svg className="factory" viewBox={`0 ${top} ${width} ${height - top}`} role="group" aria-label="Factory floor">
       <rect className="conveyor" x={24} y={beltY} width={width - 48} height={14} rx={7} />
       {Array.from({ length: count }, (_, i) => (
         <path key={i} className="arrow" d={`M${(i + 1) * COLUMN - 7} ${beltY - 7}l12 14-12 14`} />
@@ -62,10 +89,12 @@ export function FactoryView(props: FactoryViewProps) {
         <StationColumn
           key={station.id}
           x={i * COLUMN}
-          id={station.id}
-          name={station.name}
+          station={station}
+          boxHeight={boxHeight}
+          height={height}
+          palette={palette}
           accent={ACCENTS[i % ACCENTS.length]}
-          waiting={snapshot.queues[i]}
+          waiting={snapshot.waiting[i]}
           working={snapshot.working[i]}
           made={snapshot.completed[i]}
           t={snapshot.t}
@@ -79,13 +108,34 @@ export function FactoryView(props: FactoryViewProps) {
         />
       ))}
       <g className="shipped" aria-label={`Shipped: ${snapshot.shipped}`}>
-        <rect className="bin" x={count * COLUMN + 14} y={BOX_TOP} width={BIN - 28} height={BOX_HEIGHT} rx={24} />
-        <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 44}>
-          Shipped
-        </text>
-        <text className="bin-count" x={count * COLUMN + BIN / 2} y={BOX_TOP + 112}>
-          {snapshot.shipped}
-        </text>
+        <rect className="bin" x={binLeft} y={BOX_TOP} width={BIN - 28} height={boxHeight} rx={24} />
+        {snapshot.shippedBy ? (
+          <>
+            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 38}>
+              Shipped
+            </text>
+            <text className="bin-count compact" x={count * COLUMN + BIN / 2} y={BOX_TOP + 88}>
+              {snapshot.shipped}
+            </text>
+            {(model.products ?? []).map((product, k) => (
+              <g key={product.id} className="bin-product">
+                <rect x={binLeft + 22} y={BOX_TOP + 106 + k * 24} width={14} height={14} rx={3} style={{ fill: palette.color(product.id) }} />
+                <text x={binLeft + 44} y={BOX_TOP + 119 + k * 24}>
+                  {snapshot.shippedBy?.[product.id] ?? 0} {product.name.toLowerCase()}s
+                </text>
+              </g>
+            ))}
+          </>
+        ) : (
+          <>
+            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 44}>
+              Shipped
+            </text>
+            <text className="bin-count" x={count * COLUMN + BIN / 2} y={BOX_TOP + 112}>
+              {snapshot.shipped}
+            </text>
+          </>
+        )}
       </g>
     </svg>
   )
@@ -113,10 +163,12 @@ function Rope({ tiedTo, length, name }: { tiedTo: number; length: number; name: 
 
 interface ColumnProps {
   x: number
-  id: string
-  name: string
+  station: Station
+  boxHeight: number
+  height: number
+  palette: Palette
   accent: string
-  waiting: number
+  waiting: number[]
   working: ActiveJob[]
   made: number
   t: number
@@ -130,10 +182,11 @@ interface ColumnProps {
 }
 
 function StationColumn(props: ColumnProps) {
-  const { x, id, name, accent, waiting, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
+  const { x, station, boxHeight, height, palette, accent, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
+  const { id, name, machines } = station
+  const waiting = props.waiting.length
   const center = x + COLUMN / 2
   const pileLeft = center - PILE_WIDTH / 2
-  const shown = Math.min(waiting, PILE_COLUMNS * PILE_ROWS)
   const busy = working.length > 0
   const job = working[0]
   const progress = job ? Math.min(1, (t - job.start) / (job.end - job.start)) : 0
@@ -144,6 +197,13 @@ function StationColumn(props: ColumnProps) {
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
   const extras = [
+    ...(machines ?? []).map((machine, m) => {
+      const job = working.find((w) => w.machine === m)
+      const allowed = machine.products ? `, ${machine.products.map((p) => `${palette.name(p)}s`).join(' and ').toLowerCase()} only` : ''
+      const product = job && palette.productOf(job.job)
+      const doing = job ? `working${product ? ` on a ${palette.name(product).toLowerCase()}` : ''}` : 'idle'
+      return `${machine.name}${allowed}: ${doing}`
+    }),
     zone && `buffer ${zoneLabel[zone]}`,
     badges.includes('upgraded') && 'upgraded',
     badges.includes('covered') && 'works through breaks',
@@ -167,7 +227,7 @@ function StationColumn(props: ColumnProps) {
         }
       }}
     >
-      <rect className="hit" x={x} y={0} width={COLUMN} height={HEIGHT} />
+      <rect className="hit" x={x} y={0} width={COLUMN} height={height} />
       <rect
         className={`waiting-area${zone ? ` zone-${zone}` : ''}`}
         x={pileLeft - 9}
@@ -176,12 +236,14 @@ function StationColumn(props: ColumnProps) {
         height={PILE_HEIGHT + 18}
         rx={14}
       />
-      {Array.from({ length: shown }, (_, k) => {
+      {props.waiting.slice(0, PILE_COLUMNS * PILE_ROWS).map((job, k) => {
         const row = Math.floor(k / PILE_COLUMNS)
+        const color = jobColor(palette, job)
         return (
           <rect
-            key={k}
+            key={job}
             className="part"
+            style={color ? { fill: color } : undefined}
             x={pileLeft + (k % PILE_COLUMNS) * (BLOCK + GAP)}
             y={PILE_BOTTOM - (row + 1) * BLOCK - row * GAP}
             width={BLOCK}
@@ -193,19 +255,43 @@ function StationColumn(props: ColumnProps) {
       <text className={`pile-count${countClass}`} x={center} y={PILE_BOTTOM + 26}>
         {waiting} waiting
       </text>
-      <rect className="station-box" x={x + 16} y={BOX_TOP} width={COLUMN - 32} height={BOX_HEIGHT} rx={24} />
-      <circle className="badge" cx={center} cy={BOX_TOP + 38} r={25} fill={accent} />
-      <StationGlyph kind={id} x={center} y={BOX_TOP + 38} size={34} />
-      <text className="station-name" x={center} y={BOX_TOP + 94}>
-        {name}
-      </text>
-      <circle className={`light${light}`} cx={center - 46} cy={BOX_TOP + 115} r={7} />
-      <text className="status" x={center - 32} y={BOX_TOP + 122}>
-        {status}
-      </text>
-      <rect className="progress-track" x={center - 56} y={BOX_TOP + 132} width={112} height={8} rx={4} />
-      <rect className="progress-fill" x={center - 56} y={BOX_TOP + 132} width={112 * progress} height={8} rx={4} />
-      <text className="made" x={center} y={BOX_TOP + BOX_HEIGHT + 34}>
+      <rect className="station-box" x={x + 16} y={BOX_TOP} width={COLUMN - 32} height={boxHeight} rx={24} />
+      {machines ? (
+        <>
+          <circle className="badge" cx={x + 46} cy={BOX_TOP + 30} r={19} fill={accent} />
+          <StationGlyph kind={id} x={x + 46} y={BOX_TOP + 30} size={26} />
+          <text className="station-name compact" x={x + 74} y={BOX_TOP + 39}>
+            {name}
+          </text>
+          {machines.map((machine, m) => (
+            <MachineRow
+              key={machine.name}
+              x={x}
+              y={BOX_TOP + MACHINE_TOP + m * MACHINE_ROW}
+              machine={machine}
+              job={working.find((w) => w.machine === m)}
+              t={t}
+              stopped={stopped}
+              palette={palette}
+            />
+          ))}
+        </>
+      ) : (
+        <>
+          <circle className="badge" cx={center} cy={BOX_TOP + 38} r={25} fill={accent} />
+          <StationGlyph kind={id} x={center} y={BOX_TOP + 38} size={34} />
+          <text className="station-name" x={center} y={BOX_TOP + 94}>
+            {name}
+          </text>
+          <circle className={`light${light}`} cx={center - 46} cy={BOX_TOP + 115} r={7} />
+          <text className="status" x={center - 32} y={BOX_TOP + 122}>
+            {status}
+          </text>
+          <rect className="progress-track" x={center - 56} y={BOX_TOP + 132} width={112} height={8} rx={4} />
+          <rect className="progress-fill" x={center - 56} y={BOX_TOP + 132} width={112 * progress} height={8} rx={4} />
+        </>
+      )}
+      <text className="made" x={center} y={BOX_TOP + boxHeight + 34}>
         Made {made}
       </text>
       {badges.includes('covered') && <CornerBadge kind="covered" cx={x + 32} cy={BOX_TOP + 4} />}
@@ -220,6 +306,47 @@ function StationColumn(props: ColumnProps) {
           </text>
         </g>
       )}
+    </g>
+  )
+}
+
+interface MachineRowProps {
+  x: number
+  y: number
+  machine: Machine
+  job: ActiveJob | undefined
+  t: number
+  stopped: 'jammed' | 'break' | null
+  palette: Palette
+}
+
+// One machine: its light, its name, the products it may run, and the job it's working on.
+function MachineRow({ x, y, machine, job, t, stopped, palette }: MachineRowProps) {
+  const progress = job ? Math.min(1, (t - job.start) / (job.end - job.start)) : 0
+  const light = stopped === 'jammed' ? ' jammed' : job ? ' on' : stopped === 'break' ? ' resting' : ''
+  const allowed = machine.products ?? palette.all
+  const fill = job ? jobColor(palette, job.job) : undefined
+  const barWidth = COLUMN - 68
+  return (
+    <g className="machine">
+      <circle className={`light${light}`} cx={x + 38} cy={y + 9} r={6} />
+      <text className="machine-name" x={x + 50} y={y + 15}>
+        {machine.name}
+      </text>
+      {allowed.map((product, k) => (
+        <rect
+          key={product}
+          className="product-dot"
+          x={x + COLUMN - 38 - (allowed.length - 1 - k) * 15}
+          y={y + 3}
+          width={12}
+          height={12}
+          rx={3}
+          style={{ fill: palette.color(product) }}
+        />
+      ))}
+      <rect className="progress-track" x={x + 34} y={y + 21} width={barWidth} height={5} rx={2.5} />
+      <rect className="progress-fill" x={x + 34} y={y + 21} width={barWidth * progress} height={5} rx={2.5} style={fill ? { fill } : undefined} />
     </g>
   )
 }

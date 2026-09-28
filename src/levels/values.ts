@@ -35,6 +35,17 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
         wip: tenths(after.avgWip),
       }
     }
+    case 'elevate':
+      return {
+        baseline: baseline.output,
+        target: goal.target,
+        gain: run.output - baseline.output,
+        limit: goal.pileLimit,
+        minSteadyPct: Math.round(goal.minSteady * 100),
+        steadyPct: Math.floor(100 * steadyShare(run, goal.pileLimit)),
+        days: goal.freshDays + 1,
+        minGain: goal.minGainPer1000,
+      }
     case 'identifyBottleneck':
       return {}
   }

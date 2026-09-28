@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
-import { allPlans, applyLevers } from './levers.ts'
+import { allPlans, applyLevers, leverValues, planCost, valueLabel } from './levers.ts'
 import type { Lever } from './types.ts'
 
 const lunch = [{ from: 240, to: 300 }]
@@ -68,6 +68,60 @@ describe('rope and maintenance levers', () => {
     const covered = applyLevers(jammy, [levers[1]], { floater: 'paint' })
     expect(covered.stations[1].breaks).toEqual([])
     expect(covered.stations[1].jams).toEqual(jammy.stations[1].jams)
+  })
+})
+
+describe('machine rules and purchases', () => {
+  const shop: FactoryModel = {
+    ...model,
+    products: [
+      { id: 'poster', name: 'Poster' },
+      { id: 'flyer', name: 'Flyer' },
+    ],
+    mix: ['poster', 'flyer'],
+    stations: [
+      model.stations[0],
+      { id: 'print', name: 'Print', cycleTime: { kind: 'fixed', value: 5 }, machines: [{ name: 'Big press', products: ['poster'] }, { name: 'Small press' }] },
+    ],
+  }
+  const shopLevers: Lever[] = [
+    {
+      id: 'rule',
+      kind: 'machineRule',
+      label: 'Big press may print',
+      station: 'print',
+      machine: 'Big press',
+      options: [
+        { id: 'posters', label: 'Posters only', products: ['poster'] },
+        { id: 'both', label: 'Anything' },
+      ],
+    },
+    {
+      id: 'buy',
+      kind: 'buy',
+      label: 'Buy',
+      options: [{ id: 'press', label: 'A press, $9,000', station: 'print', machine: { name: 'New press', products: ['flyer'] }, price: 9000 }],
+    },
+  ]
+
+  it('changes only the named machine, and adds a bought machine to its station', () => {
+    const changed = applyLevers(shop, shopLevers, { rule: 'both', buy: 'press' })
+    expect(changed.stations[1].machines).toEqual([
+      { name: 'Big press', products: undefined },
+      { name: 'Small press' },
+      { name: 'New press', products: ['flyer'] },
+    ])
+    expect(changed.stations[0]).toBe(shop.stations[0])
+    expect(applyLevers(shop, shopLevers, { rule: 'posters', buy: 'none' }).stations[1].machines).toEqual(shop.stations[1].machines)
+  })
+
+  it('offers each option, labels it, and counts what a plan spends', () => {
+    expect(leverValues(shopLevers[0])).toEqual(['posters', 'both'])
+    expect(leverValues(shopLevers[1])).toEqual(['none', 'press'])
+    expect(valueLabel(shopLevers[1], 'none', shop)).toBe("Don't buy")
+    expect(valueLabel(shopLevers[1], 'press', shop)).toBe('A press, $9,000')
+    expect(planCost(shopLevers, { rule: 'both', buy: 'press' })).toBe(9000)
+    expect(planCost(shopLevers, { rule: 'both', buy: 'none' })).toBe(0)
   })
 })
 

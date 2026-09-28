@@ -5,6 +5,7 @@ import { leverValues } from './levers.ts'
 import type { Choices, Goal, Level, Popup } from './types.ts'
 
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
+type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
 
 export type LevelState = 'locked' | 'unlocked' | 'completed'
 
@@ -14,23 +15,27 @@ export function levelState(level: Level, completed: ReadonlySet<string>): LevelS
 }
 
 // Tiers 1 and 2 score one metric each, so one star is the most they award. Buffer levels score
-// a healthy buffer, then low inventory, then both again on days the player hasn't seen.
+// a healthy buffer, then low inventory, then both again on days the player hasn't seen; elevate
+// levels score output, then steady flow, then money well spent.
 export function maxStars(level: Level): number {
   switch (level.goal.kind) {
     case 'output':
     case 'steady':
       return 1
     case 'buffer':
+    case 'elevate':
       return 3
     default:
       return 0
   }
 }
 
-// Whether a run earns the level's first star, which is what completes it.
+// Whether a run clears the level's first bar on its own day. For an elevate goal the first star also
+// needs every fresh day (see starsFor).
 export function goalMet(goal: Goal, result: SimResult): boolean {
   switch (goal.kind) {
     case 'output':
+    case 'elevate':
       return result.output >= goal.target
     case 'steady':
       return result.output >= goal.minShipped && steadyShare(result, goal.pileLimit) >= goal.minSteady
@@ -39,6 +44,31 @@ export function goalMet(goal: Goal, result: SimResult): boolean {
     default:
       return false
   }
+}
+
+// What a plan spent, and what the untouched factory shipped on the level's own day.
+export interface Investment {
+  spend: number
+  baseline: number
+}
+
+// More shipped on the level's own day for every $1,000 spent. Spending nothing always counts as worth it.
+export function gainPer1000(result: SimResult, { spend, baseline }: Investment): number {
+  return spend === 0 ? Infinity : (result.output - baseline) / (spend / 1000)
+}
+
+export interface ElevateScore {
+  // Each day, the level's own first: shipped at least the target, and steady enough.
+  days: { output: number; hit: boolean; steady: number; calm: boolean }[]
+  gain: number
+}
+
+export function elevateScore(goal: ElevateGoal, result: SimResult, freshDays: SimResult[], investment: Investment): ElevateScore {
+  const days = [result, ...freshDays].map((day) => {
+    const steady = steadyShare(day, goal.pileLimit)
+    return { output: day.output, hit: day.output >= goal.target, steady, calm: steady >= goal.minSteady }
+  })
+  return { days, gain: gainPer1000(result, investment) }
 }
 
 export interface BufferScore {
@@ -55,9 +85,16 @@ export function bufferScore(goal: BufferGoal, result: SimResult): BufferScore {
   return { healthy, avgWip: result.avgWip, both: healthy >= goal.minHealthy && result.avgWip <= goal.maxAvgWip }
 }
 
-// Stars for a run. The third star on a buffer level needs `goal.freshDays` more days, each
-// meeting both bars.
-export function starsFor(goal: Goal, result: SimResult, freshDays: SimResult[] = []): number {
+// Stars for a run. The third star on a buffer level needs `goal.freshDays` more days, each meeting
+// both bars. An elevate level judges every star across the level's own day and its fresh days.
+export function starsFor(goal: Goal, result: SimResult, freshDays: SimResult[] = [], investment?: Investment): number {
+  if (goal.kind === 'elevate') {
+    if (freshDays.length < goal.freshDays) return 0
+    const score = elevateScore(goal, result, freshDays, investment ?? { spend: 0, baseline: 0 })
+    if (!score.days.every((day) => day.hit)) return 0
+    if (!score.days.every((day) => day.calm)) return 1
+    return investment && score.gain >= goal.minGainPer1000 ? 3 : 2
+  }
   if (!goalMet(goal, result)) return 0
   if (goal.kind !== 'buffer') return 1
   if (!bufferScore(goal, result).both) return 1
@@ -130,6 +167,7 @@ export function validateLevels(levels: Level[]): string[] {
 function goalProblems({ goal, levers, popups, model }: Level): string[] {
   const problems: string[] = []
   const stationIds = new Set(model.stations.map((s) => s.id))
+  const productIds = new Set((model.products ?? []).map((p) => p.id))
   const leverIds = new Set<string>()
   for (const lever of levers) {
     if (leverIds.has(lever.id)) problems.push(`duplicate lever "${lever.id}"`)
@@ -142,6 +180,27 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
         if (!lever.lengths.every((n) => Number.isInteger(n) && n >= 1)) problems.push(`lever "${lever.id}" needs positive whole lengths`)
         if (model.release.kind !== 'rope' && !levers.some((l) => l.kind === 'ropeTo')) {
           problems.push(`lever "${lever.id}" sizes a rope the line doesn't have`)
+        }
+        break
+      case 'machineRule': {
+        const station = model.stations.find((s) => s.id === lever.station)
+        if (!station?.machines?.some((m) => m.name === lever.machine)) {
+          problems.push(`lever "${lever.id}" rules a machine the line doesn't have: ${lever.station}/${lever.machine}`)
+        }
+        if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
+        for (const option of lever.options) {
+          for (const p of option.products ?? []) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
+        }
+        break
+      }
+      case 'buy':
+        if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
+        for (const purchase of lever.options) {
+          if (!model.stations.find((s) => s.id === purchase.station)?.machines) {
+            problems.push(`lever "${lever.id}" buys for "${purchase.station}", which has no named machines`)
+          }
+          if (!(purchase.price > 0)) problems.push(`lever "${lever.id}" needs a positive price`)
+          for (const p of purchase.machine.products ?? []) if (!productIds.has(p)) problems.push(`lever "${lever.id}" names unknown product "${p}"`)
         }
         break
       default:
@@ -180,9 +239,18 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     }
     case 'output':
     case 'steady':
-    case 'buffer': {
+    case 'buffer':
+    case 'elevate': {
       if (goal.kind === 'steady' && !(goal.minSteady > 0 && goal.minSteady <= 1 && goal.pileLimit >= 1)) {
         problems.push('a steady goal needs 0 < minSteady <= 1 and pileLimit >= 1')
+      }
+      if (goal.kind === 'elevate') {
+        if (!(goal.target > 0)) problems.push('an elevate goal needs a positive target')
+        if (!(goal.minSteady > 0 && goal.minSteady <= 1 && goal.pileLimit >= 1)) {
+          problems.push('an elevate goal needs 0 < minSteady <= 1 and pileLimit >= 1')
+        }
+        if (!(goal.minGainPer1000 >= 0)) problems.push('an elevate goal needs minGainPer1000 >= 0')
+        if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 1)) problems.push('an elevate goal needs at least one fresh day')
       }
       if (goal.kind === 'buffer') {
         if (!stationIds.has(goal.drum)) problems.push(`drum "${goal.drum}" is not a station`)

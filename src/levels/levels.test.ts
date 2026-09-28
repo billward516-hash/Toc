@@ -3,8 +3,8 @@ import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
 import { simulate } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { bufferScore, feedbackForPrediction, feedbackForRun, goalMet, validateLevels } from './graph.ts'
-import { allPlans, applyLevers, steadyTwin } from './levers.ts'
+import { bufferScore, feedbackForPrediction, feedbackForRun, goalMet, starsFor, validateLevels } from './graph.ts'
+import { allPlans, applyLevers, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
 import { principleNames } from './principles.ts'
@@ -173,6 +173,65 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer'))('buffer level $id'
       expect(popup, JSON.stringify(plan)).toBeDefined()
       const text = fillTemplate(popup!.body, model, snapshotAt(result, result.horizon), goalValues(goal, baseline, result))
       expect(text).not.toMatch(/[{}]/)
+    }
+  })
+})
+
+// Elevate levels judge every star across the level's own day and fresh days, so each plan is scored
+// over 30 stand-in weeks of fresh days, and the lesson must come out the same in every one.
+describe.each(levels.filter((l) => l.goal.kind === 'elevate'))('elevate level $id', (level) => {
+  if (level.goal.kind !== 'elevate') return
+  const { goal, model, levers } = level
+  const plans = allPlans(levers)
+  const run = (plan: Choices, seed: number) => simulate(applyLevers(model, levers, plan), seed)
+  const baseline = simulate(model, level.seed)
+  const weeks = Array.from({ length: 30 }, (_, w) => Array.from({ length: goal.freshDays }, (_, d) => 1000 + w * goal.freshDays + d))
+  const starsIn = (plan: Choices, week: number[]) =>
+    starsFor(
+      goal,
+      run(plan, level.seed),
+      week.map((seed) => run(plan, seed)),
+      { spend: planCost(levers, plan), baseline: baseline.output },
+    )
+  const record = new Map(plans.map((plan) => [plan, weeks.map((week) => starsIn(plan, week))]))
+
+  it('earns no star before any changes', () => {
+    for (const week of weeks) {
+      const fresh = week.map((seed) => simulate(model, seed))
+      expect(starsFor(goal, baseline, fresh, { spend: 0, baseline: baseline.output })).toBe(0)
+    }
+  })
+
+  it('gives exactly one plan three stars, and it earns them every week', () => {
+    const best = plans.filter((plan) => record.get(plan)!.every((stars) => stars === 3))
+    expect(best).toHaveLength(1)
+    for (const plan of plans.filter((p) => p !== best[0])) {
+      expect(Math.max(...record.get(plan)!), JSON.stringify(plan)).toBeLessThan(3)
+    }
+  })
+
+  it('gives every plan the same stars every week, and fires the pop-ups written for it', () => {
+    for (const plan of plans) {
+      const stars = record.get(plan)!
+      expect(new Set(stars).size, JSON.stringify(plan)).toBe(1)
+    }
+    for (const { trigger, title } of level.popups) {
+      if (trigger.kind !== 'ran' || !trigger.choices) continue
+      for (const plan of plans.filter((p) => Object.entries(trigger.choices!).every(([k, v]) => p[k] === v))) {
+        expect(record.get(plan)![0] > 0, `${title}: ${JSON.stringify(plan)}`).toBe(trigger.met)
+      }
+    }
+  })
+
+  it('has feedback for every plan, with every number filled in', () => {
+    const values = (result = baseline) => goalValues(goal, baseline, result)
+    expect(fillTemplate(level.briefing, model, snapshotAt(baseline, 0), values())).not.toMatch(/[{}]/)
+    expect(fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values())).not.toMatch(/[{}]/)
+    for (const plan of plans) {
+      const result = run(plan, level.seed)
+      const popup = feedbackForRun(level, record.get(plan)![0] > 0, plan)
+      expect(popup, JSON.stringify(plan)).toBeDefined()
+      expect(fillTemplate(popup!.body, model, snapshotAt(result, result.horizon), values(result))).not.toMatch(/[{}]/)
     }
   })
 })

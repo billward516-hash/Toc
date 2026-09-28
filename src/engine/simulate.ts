@@ -1,11 +1,11 @@
 import { sample } from './distributions.ts'
 import { EventQueue } from './eventQueue.ts'
-import { onBreak, validateModel, type FactoryModel } from './model.ts'
+import { canRun, machinesOf, onBreak, productOf, timeFor, validateModel, type FactoryModel } from './model.ts'
 import { stream } from './random.ts'
 
 export type SimEvent =
   | { t: number; type: 'release'; job: number }
-  | { t: number; type: 'start'; job: number; station: number; end: number }
+  | { t: number; type: 'start'; job: number; station: number; machine: number; end: number }
   | { t: number; type: 'finish'; job: number; station: number }
   | { t: number; type: 'jam'; station: number; until: number }
 
@@ -22,6 +22,8 @@ export interface SimResult {
   horizon: number
   events: SimEvent[]
   released: number
+  // The product of each released unit, by job number, when the line makes several.
+  products?: string[]
   output: number
   avgWip: number
   avgLeadTime: number | null
@@ -30,7 +32,7 @@ export interface SimResult {
 
 type Pending =
   | { kind: 'release' }
-  | { kind: 'finish'; station: number; job: number }
+  | { kind: 'finish'; station: number; machine: number; job: number }
   | { kind: 'resume'; station: number }
   | { kind: 'jam'; station: number }
 
@@ -44,8 +46,12 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const jamDraws = stations.map((s) => stream(seed, `jam:${s.id}`))
   const releaseDraws = stream(seed, 'release')
   const constraint = release.kind === 'rope' ? stations.findIndex((s) => s.id === release.constraint) : -1
+  const machines = stations.map(machinesOf)
 
   const queues: number[][] = stations.map(() => [])
+  // The job each machine is working on, if any.
+  const holding: (number | null)[][] = machines.map((ms) => ms.map(() => null))
+  const products: string[] = []
   const busy = stations.map(() => 0)
   const completed = stations.map(() => 0)
   const busyArea = stations.map(() => 0)
@@ -74,26 +80,32 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const newJob = () => {
     const job = releasedAt.length
     releasedAt.push(now)
+    const product = productOf(model, job)
+    if (product !== undefined) products.push(product)
     wip++
     if (constraint >= 0) aheadOfConstraint++
     events.push({ t: now, type: 'release', job })
     return job
   }
 
+  // Each free machine, in order, takes the oldest waiting job it can run. With saturate release the
+  // first station never waits: it starts new work whenever a machine is free.
   const tryStart = (i: number) => {
     const station = stations[i]
     if (onBreak(station, now) || now < jammedUntil[i]) return
-    while (busy[i] < (station.servers ?? 1)) {
-      let job = queues[i].shift()
-      if (job === undefined) {
-        if (i > 0 || release.kind !== 'saturate') return
-        job = newJob()
-      }
+    machines[i].forEach((machine, m) => {
+      if (holding[i][m] !== null) return
+      const k = queues[i].findIndex((waiting) => canRun(machine, productOf(model, waiting)))
+      let job: number
+      if (k >= 0) [job] = queues[i].splice(k, 1)
+      else if (i === 0 && release.kind === 'saturate') job = newJob()
+      else return
+      holding[i][m] = job
       busy[i]++
-      const end = now + sample(station.cycleTime, cycleDraws[i]())
-      events.push({ t: now, type: 'start', job, station: i, end })
-      agenda.push(end, { kind: 'finish', station: i, job })
-    }
+      const end = now + sample(timeFor(station, machine, productOf(model, job)), cycleDraws[i]())
+      events.push({ t: now, type: 'start', job, station: i, machine: m, end })
+      agenda.push(end, { kind: 'finish', station: i, machine: m, job })
+    })
   }
 
   const arrive = (i: number, job: number) => {
@@ -117,7 +129,8 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     agenda.push(jammedUntil[i] + sample(jams.every, jamDraws[i]()), { kind: 'jam', station: i })
   }
 
-  const finish = (i: number, job: number) => {
+  const finish = (i: number, m: number, job: number) => {
+    holding[i][m] = null
     busy[i]--
     completed[i]++
     events.push({ t: now, type: 'finish', job, station: i })
@@ -146,7 +159,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     const { t, payload } = agenda.pop()!
     advance(t)
     if (payload.kind === 'finish') {
-      finish(payload.station, payload.job)
+      finish(payload.station, payload.machine, payload.job)
     } else if (payload.kind === 'resume') {
       tryStart(payload.station)
     } else if (payload.kind === 'jam') {
@@ -164,13 +177,14 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     horizon,
     events,
     released: releasedAt.length,
+    ...(model.mix ? { products } : {}),
     output: shipped,
     avgWip: wipArea / horizon,
     avgLeadTime: shipped > 0 ? leadTimeTotal / shipped : null,
     stations: stations.map((station, i) => ({
       id: station.id,
       completed: completed[i],
-      utilization: busyArea[i] / ((station.servers ?? 1) * horizon),
+      utilization: busyArea[i] / (machines[i].length * horizon),
       avgQueue: queueArea[i] / horizon,
       maxQueue: maxQueue[i],
     })),

@@ -22,7 +22,19 @@ export function applyLevers(model: FactoryModel, levers: Lever[], choices: Choic
 }
 
 function changeStation(station: Station, lever: Lever, choices: Choices): Station {
-  if (choices[lever.id] !== station.id) return station
+  const value = choices[lever.id]
+  if (lever.kind === 'machineRule') {
+    const option = lever.options.find((o) => o.id === value)
+    if (!option || lever.station !== station.id) return station
+    const machines = station.machines?.map((m) => (m.name === lever.machine ? { ...m, products: option.products } : m))
+    return { ...station, machines }
+  }
+  if (lever.kind === 'buy') {
+    const purchase = lever.options.find((o) => o.id === value)
+    if (!purchase || purchase.station !== station.id) return station
+    return { ...station, machines: [...(station.machines ?? []), purchase.machine] }
+  }
+  if (value !== station.id) return station
   switch (lever.kind) {
     case 'upgrade':
       return { ...station, cycleTime: scale(station.cycleTime, lever.factor) }
@@ -48,15 +60,36 @@ export function leverValues(lever: Lever): string[] {
       return lever.every.map(String)
     case 'ropeLength':
       return lever.lengths.map(String)
+    case 'machineRule':
+      return lever.options.map((o) => o.id)
+    case 'buy':
+      return ['none', ...lever.options.map((o) => o.id)]
     default:
       return lever.stations
   }
 }
 
 export function valueLabel(lever: Lever, value: string, model: FactoryModel): string {
-  if (lever.kind === 'releasePace') return `Every ${value} min`
-  if (lever.kind === 'ropeLength') return `${value} robots`
-  return model.stations.find((s) => s.id === value)?.name ?? value
+  switch (lever.kind) {
+    case 'releasePace':
+      return `Every ${value} min`
+    case 'ropeLength':
+      return `${value} robots`
+    case 'machineRule':
+      return lever.options.find((o) => o.id === value)?.label ?? value
+    case 'buy':
+      return value === 'none' ? "Don't buy" : (lever.options.find((o) => o.id === value)?.label ?? value)
+    default:
+      return model.stations.find((s) => s.id === value)?.name ?? value
+  }
+}
+
+// Money a plan spends on new machines.
+export function planCost(levers: Lever[], choices: Choices): number {
+  return levers.reduce((sum, lever) => {
+    if (lever.kind !== 'buy') return sum
+    return sum + (lever.options.find((o) => o.id === choices[lever.id])?.price ?? 0)
+  }, 0)
 }
 
 // Every complete plan a player could make.

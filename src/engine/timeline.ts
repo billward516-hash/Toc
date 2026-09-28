@@ -2,6 +2,7 @@ import type { SimResult } from './simulate.ts'
 
 export interface ActiveJob {
   job: number
+  machine: number
   start: number
   end: number
 }
@@ -10,21 +11,26 @@ export interface Snapshot {
   t: number
   released: number
   queues: number[]
+  // The jobs waiting at each station, oldest first.
+  waiting: number[][]
   working: ActiveJob[][]
   completed: number[]
   // Stations stopped by a jam at time t.
   jammed: boolean[]
   shipped: number
+  // Shipped units by product, when the line makes several.
+  shippedBy?: Record<string, number>
 }
 
 // The state of the line at time t, rebuilt from the event log. Replaying from zero keeps
 // playback, pausing, and rewinding trivially consistent; the logs are only a few thousand events.
 export function snapshotAt(result: SimResult, t: number): Snapshot {
   const n = result.stations.length
-  const queues = new Array<number>(n).fill(0)
+  const waiting: number[][] = Array.from({ length: n }, () => [])
   const completed = new Array<number>(n).fill(0)
   const working: ActiveJob[][] = Array.from({ length: n }, () => [])
   const jammedUntil = new Array<number>(n).fill(0)
+  const shippedBy: Record<string, number> | undefined = result.products ? {} : undefined
   let released = 0
 
   for (const event of result.events) {
@@ -32,12 +38,16 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
     switch (event.type) {
       case 'release':
         released++
-        queues[0]++
+        waiting[0].push(event.job)
         break
-      case 'start':
-        queues[event.station]--
-        working[event.station].push({ job: event.job, start: event.t, end: event.end })
+      case 'start': {
+        // Usually the oldest job, but a machine limited to certain products may skip ahead.
+        const queue = waiting[event.station]
+        const k = queue.indexOf(event.job)
+        if (k >= 0) queue.splice(k, 1)
+        working[event.station].push({ job: event.job, machine: event.machine, start: event.t, end: event.end })
         break
+      }
       case 'finish': {
         const active = working[event.station]
         active.splice(
@@ -45,7 +55,11 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
           1,
         )
         completed[event.station]++
-        if (event.station + 1 < n) queues[event.station + 1]++
+        if (event.station + 1 < n) waiting[event.station + 1].push(event.job)
+        else if (shippedBy && result.products) {
+          const product = result.products[event.job]
+          shippedBy[product] = (shippedBy[product] ?? 0) + 1
+        }
         break
       }
       case 'jam':
@@ -55,7 +69,8 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
   }
 
   const jammed = jammedUntil.map((until) => t < until)
-  return { t, released, queues, working, completed, jammed, shipped: completed[n - 1] }
+  const queues = waiting.map((queue) => queue.length)
+  return { t, released, queues, waiting, working, completed, jammed, shipped: completed[n - 1], ...(shippedBy ? { shippedBy } : {}) }
 }
 
 export type Zone = 'dry' | 'healthy' | 'flooding'

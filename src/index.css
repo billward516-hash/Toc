@@ -674,6 +674,39 @@ button {
   fill: var(--green);
 }
 
+.factory .station-name.compact {
+  font-size: 23px;
+  text-anchor: start;
+}
+
+.factory .machine-name {
+  font-size: 15px;
+  text-anchor: start;
+}
+
+.factory .machine .light {
+  stroke-width: 2.5;
+}
+
+.factory .product-dot {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.factory .bin-count.compact {
+  font-size: 44px;
+}
+
+.factory .bin-product rect {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.factory .bin-product text {
+  font-size: 18px;
+  text-anchor: start;
+}
+
 .factory .made {
   font-size: 21px;
   fill: var(--muted);
@@ -1120,6 +1153,20 @@ button {
   align-items: center;
   gap: 4px;
   font-size: 16px;
+}
+
+.days.compact {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+}
+
+.days.compact li {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.days.compact li strong {
+  font-size: 14px;
 }
 
 .days li.ok {

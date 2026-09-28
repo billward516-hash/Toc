@@ -12,4 +12,6 @@ export const principleNames: Record<number, string> = {
   17: 'A buffer protects the constraint from hiccups upstream',
   18: 'Release work only as fast as the constraint uses it',
   19: 'The buffer shows which problems cost output',
+  26: 'Sometimes the constraint is the market, not the factory',
+  27: 'A rule can be the constraint',
 }

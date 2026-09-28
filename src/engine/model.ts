@@ -4,9 +4,26 @@ export interface Station {
   id: string
   name: string
   cycleTime: Dist
+  // Times for particular products, in place of cycleTime.
+  times?: Record<string, Dist>
   servers?: number
+  // Named machines, each able to run only certain products. Used instead of `servers`.
+  machines?: Machine[]
   breaks?: Break[]
   jams?: Jams
+}
+
+// One machine at a station. It runs only `products` (every product when absent); its own `times`
+// come first, then the station's.
+export interface Machine {
+  name: string
+  products?: string[]
+  times?: Record<string, Dist>
+}
+
+export interface Product {
+  id: string
+  name: string
 }
 
 // A planned stop: the station finishes the part in hand, then starts nothing new until `to`.
@@ -22,16 +39,36 @@ export interface Jams {
   lasts: Dist
 }
 
+// A station's machines: its named ones, or `servers` identical machines that run everything.
+export function machinesOf(station: Station): Machine[] {
+  return station.machines ?? Array.from({ length: station.servers ?? 1 }, () => ({ name: station.name }))
+}
+
+export function canRun(machine: Machine, product: string | undefined): boolean {
+  return product === undefined || machine.products === undefined || machine.products.includes(product)
+}
+
+export function timeFor(station: Station, machine: Machine, product: string | undefined): Dist {
+  if (product === undefined) return station.cycleTime
+  return machine.times?.[product] ?? station.times?.[product] ?? station.cycleTime
+}
+
+// The product of the job-th unit released, when the line makes several.
+export function productOf(model: FactoryModel, job: number): string | undefined {
+  return model.mix?.[job % model.mix.length]
+}
+
 export function onBreak(station: Station, t: number): boolean {
   return station.breaks?.some((b) => t >= b.from && t < b.to) ?? false
 }
 
-// Units a station could finish in the horizon if it never ran out of work, counting jams at their average.
+// Units of a single product a station could finish in the horizon if it never ran out of work,
+// counting jams at their average.
 export function capacity(station: Station, horizon: number): number {
   const stopped = (station.breaks ?? []).reduce((sum, b) => sum + Math.max(0, Math.min(b.to, horizon) - b.from), 0)
   const { jams } = station
   const running = jams ? mean(jams.every) / (mean(jams.every) + mean(jams.lasts)) : 1
-  return ((horizon - stopped) * running * (station.servers ?? 1)) / mean(station.cycleTime)
+  return ((horizon - stopped) * running * machinesOf(station).length) / mean(station.cycleTime)
 }
 
 export type Release =
@@ -44,20 +81,52 @@ export interface FactoryModel {
   stations: Station[]
   release: Release
   horizon: number
+  // Several products share the line. New work follows `mix`, a repeating pattern of product ids.
+  products?: Product[]
+  mix?: string[]
 }
 
 export function validateModel(model: FactoryModel): string[] {
   const problems: string[] = []
   if (model.stations.length === 0) problems.push('the line has no stations')
   if (!(model.horizon > 0)) problems.push('horizon must be positive')
+  const productIds = new Set((model.products ?? []).map((p) => p.id))
+  if (productIds.size !== (model.products ?? []).length) problems.push('duplicate product id')
+  if (model.products && !model.mix?.length) problems.push('a line with products needs a mix')
+  if (model.mix && !model.products) problems.push('a mix needs products')
+  for (const id of model.mix ?? []) if (!productIds.has(id)) problems.push(`mix: unknown product "${id}"`)
+  const timesProblems = (where: string, times: Record<string, Dist> | undefined) => {
+    for (const [product, dist] of Object.entries(times ?? {})) {
+      if (!productIds.has(product)) problems.push(`${where}: times for unknown product "${product}"`)
+      const time = problemWith(dist)
+      if (time) problems.push(`${where}: ${product}: ${time}`)
+    }
+  }
   const ids = new Set<string>()
-  for (const station of model.stations) {
+  for (const [index, station] of model.stations.entries()) {
     if (ids.has(station.id)) problems.push(`duplicate station id "${station.id}"`)
     ids.add(station.id)
     const servers = station.servers ?? 1
     if (!Number.isInteger(servers) || servers < 1) problems.push(`${station.id}: servers must be a positive integer`)
+    if (station.machines && station.servers !== undefined) problems.push(`${station.id}: give machines or servers, not both`)
+    if (station.machines?.length === 0) problems.push(`${station.id}: needs at least one machine`)
     const cycle = problemWith(station.cycleTime)
     if (cycle) problems.push(`${station.id}: ${cycle}`)
+    timesProblems(station.id, station.times)
+    for (const machine of station.machines ?? []) {
+      const where = `${station.id}/${machine.name}`
+      for (const product of machine.products ?? []) {
+        if (!productIds.has(product)) problems.push(`${where}: unknown product "${product}"`)
+      }
+      timesProblems(where, machine.times)
+      if (index === 0 && model.release.kind === 'saturate' && machine.products) {
+        problems.push(`${where}: with saturate release, the first station's machines must run every product`)
+      }
+    }
+    // A product no machine here can run would wait forever.
+    for (const product of new Set(model.mix ?? [])) {
+      if (!machinesOf(station).some((m) => canRun(m, product))) problems.push(`${station.id}: no machine can run "${product}"`)
+    }
     for (const b of station.breaks ?? []) {
       if (!(b.from >= 0 && b.to > b.from)) problems.push(`${station.id}: a break must have 0 <= from < to`)
     }

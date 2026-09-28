@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate } from '../engine/simulate.ts'
-import { bufferScore, feedbackFor, feedbackForRun, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
+import { bufferScore, feedbackFor, feedbackForRun, gainPer1000, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
 import type { Goal, Level } from './types.ts'
 
 const model: FactoryModel = {
@@ -106,6 +106,35 @@ describe('maxStars', () => {
     expect(maxStars(level('a'))).toBe(0)
     expect(maxStars(planLevel())).toBe(1)
     expect(maxStars(planLevel({ goal: bufferGoal() }))).toBe(3)
+  })
+})
+
+describe('elevate stars', () => {
+  // Paint ships one robot every 5 minutes: 11 in the hour, and its pile passes 5 at minute 20.
+  const day = simulate(model, 1)
+  const goal: Extract<Goal, { kind: 'elevate' }> = {
+    kind: 'elevate',
+    target: 11,
+    pileLimit: 100,
+    minSteady: 0.9,
+    minGainPer1000: 2,
+    freshDays: 2,
+    prompt: 'What will you change?',
+  }
+  const free = { spend: 0, baseline: 5 }
+
+  it('needs the target on every day for one star, steady days for two, and money well spent for three', () => {
+    expect(starsFor(goal, day, [day, day], free)).toBe(3)
+    expect(starsFor(goal, day, [day], free)).toBe(0)
+    expect(starsFor({ ...goal, target: 12 }, day, [day, day], free)).toBe(0)
+    expect(starsFor({ ...goal, pileLimit: 5 }, day, [day, day], free)).toBe(1)
+    expect(starsFor(goal, day, [day, day], { spend: 3000, baseline: 5 })).toBe(3)
+    expect(starsFor(goal, day, [day, day], { spend: 4000, baseline: 5 })).toBe(2)
+  })
+
+  it('counts output gained per $1,000, and a free plan as always worth it', () => {
+    expect(gainPer1000(day, { spend: 3000, baseline: 5 })).toBe(2)
+    expect(gainPer1000(day, free)).toBe(Infinity)
   })
 })
 

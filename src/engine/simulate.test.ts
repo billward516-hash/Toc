@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Dist } from './distributions.ts'
-import { capacity, type FactoryModel, type Release } from './model.ts'
+import { capacity, validateModel, type FactoryModel, type Release } from './model.ts'
 import { runBatch, simulate, type SimResult } from './simulate.ts'
+import { snapshotAt } from './timeline.ts'
 
 const fixed = (value: number): Dist => ({ kind: 'fixed', value })
 const uniform = (min: number, max: number): Dist => ({ kind: 'uniform', min, max })
@@ -173,6 +174,94 @@ describe('jams', () => {
 
   it('rejects impossible jams', () => {
     expect(() => simulate(jammy(1, fixed(0), fixed(5)), 1)).toThrow(/jams/)
+  })
+})
+
+describe('products and machines', () => {
+  // Posters and flyers share a two-press print station; the big press is kept for posters.
+  const shop = (big: string[] | undefined, mix = ['poster', 'flyer', 'flyer']): FactoryModel => ({
+    products: [
+      { id: 'poster', name: 'Poster' },
+      { id: 'flyer', name: 'Flyer' },
+    ],
+    mix,
+    stations: [
+      { id: 'design', name: 'Design', cycleTime: fixed(2) },
+      {
+        id: 'print',
+        name: 'Print',
+        cycleTime: fixed(4),
+        times: { poster: fixed(5) },
+        machines: [
+          { name: 'Small press', products: ['flyer'], times: { flyer: fixed(6) } },
+          { name: 'Big press', products: big },
+        ],
+      },
+      { id: 'pack', name: 'Pack', cycleTime: fixed(1) },
+    ],
+    release: { kind: 'saturate' },
+    horizon: 120,
+  })
+  const startsAt = (result: SimResult, station: number) =>
+    result.events.flatMap((e) => (e.type === 'start' && e.station === station ? [e] : []))
+
+  it('labels released work with the mix, over and over', () => {
+    const result = simulate(shop(['poster']), 1)
+    expect(result.products?.slice(0, 7)).toEqual(['poster', 'flyer', 'flyer', 'poster', 'flyer', 'flyer', 'poster'])
+    expect(result.products).toHaveLength(result.released)
+    expect(simulate(line([fixed(1)]), 1).products).toBeUndefined()
+  })
+
+  it('runs each product only on machines allowed to run it, at that machine’s time', () => {
+    const result = simulate(shop(['poster']), 1)
+    for (const start of startsAt(result, 1)) {
+      const product = result.products![start.job]
+      expect(start.machine).toBe(product === 'poster' ? 1 : 0)
+      expect(start.end - start.t).toBe(product === 'poster' ? 5 : 6)
+    }
+  })
+
+  it('lets a free machine skip work it cannot run and take the oldest it can', () => {
+    const result = simulate(shop(['poster']), 1)
+    const skipped = startsAt(result, 1).find((start) => {
+      const before = snapshotAt(result, start.t - 1e-9).waiting[1]
+      return before.length > 1 && before[0] !== start.job
+    })
+    expect(skipped).toBeDefined()
+    expect(result.products![skipped!.job]).toBe('poster')
+  })
+
+  it('ships more when a machine may run more products', () => {
+    const ruled = simulate(shop(['poster']), 1)
+    const open = simulate(shop(undefined), 1)
+    expect(startsAt(open, 1).some((s) => s.machine === 1 && open.products![s.job] === 'flyer')).toBe(true)
+    expect(open.output).toBeGreaterThan(ruled.output)
+  })
+
+  it('keeps waiting and working work consistent in snapshots', () => {
+    const result = simulate(shop(['poster']), 1)
+    for (const t of [0, 10, 33.3, 60, 120]) {
+      const snap = snapshotAt(result, t)
+      expect(snap.waiting.map((q) => q.length)).toEqual(snap.queues)
+      for (const active of snap.working[1]) expect([0, 1]).toContain(active.machine)
+      const inProcess = snap.queues.reduce((a, b) => a + b, 0) + snap.working.reduce((a, w) => a + w.length, 0)
+      expect(inProcess + snap.shipped).toBe(snap.released)
+    }
+  })
+
+  it('rejects products that could never be made', () => {
+    const problems = (model: FactoryModel) => validateModel(model)
+    expect(problems({ ...shop(['poster']), mix: ['poster', 'banner'] })).toContain('mix: unknown product "banner"')
+    const noFlyers = shop(['poster'])
+    noFlyers.stations[1].machines = [{ name: 'Big press', products: ['poster'] }]
+    expect(problems(noFlyers)).toContain('print: no machine can run "flyer"')
+    const pickyStart = shop(['poster'])
+    pickyStart.stations[0].machines = [{ name: 'Poster desk', products: ['poster'] }, { name: 'Desk' }]
+    expect(problems(pickyStart)).toContain("design/Poster desk: with saturate release, the first station's machines must run every product")
+    expect(problems({ ...shop(['poster']), mix: undefined })).toContain('a line with products needs a mix')
+    expect(problems({ ...shop(['poster']), stations: shop(['poster']).stations.map((s, i) => (i === 1 ? { ...s, servers: 2 } : s)) })).toContain(
+      'print: give machines or servers, not both',
+    )
   })
 })
 

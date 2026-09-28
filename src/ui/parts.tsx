@@ -40,6 +40,8 @@ interface PlaybackPanelProps {
   onSpeed: (speed: number) => void
   horizon: number
   windows?: { from: number; to: number }[]
+  // Legend entries for waiting parts, in place of the plain "Part waiting".
+  parts?: ReactNode
   legend?: ReactNode
   // The buffer's history colors the shift clock as it plays: red running dry, green healthy, amber flooding.
   zones?: ZoneSpan[]
@@ -47,14 +49,16 @@ interface PlaybackPanelProps {
 }
 
 export function PlaybackPanel(props: PlaybackPanelProps) {
-  const { playback, speed, onSpeed, horizon, windows = [], legend, zones, children } = props
+  const { playback, speed, onSpeed, horizon, windows = [], parts, legend, zones, children } = props
   const at = (minutes: number) => `${(100 * minutes) / horizon}%`
   return (
     <div className="panel">
       <div className="legend" aria-hidden="true">
-        <span>
-          <i className="swatch" /> Part waiting
-        </span>
+        {parts ?? (
+          <span>
+            <i className="swatch" /> Part waiting
+          </span>
+        )}
         <span>
           <i className="swatch dot" /> Working
         </span>

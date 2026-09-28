@@ -38,7 +38,29 @@ const glyphs: Record<string, ReactNode> = {
       <path d="M17 15v8h6v-8" />
     </>
   ),
+  // The print shop.
+  design: (
+    <>
+      <path d="M8 32v-7L25 8l7 7-17 17z" />
+      <path d="M21 12l7 7" />
+    </>
+  ),
+  print: (
+    <>
+      <path d="M12 16V6h16v10" />
+      <path d="M5 16h30v13H5z" />
+      <path d="M12 24h16v10H12z" />
+    </>
+  ),
+  trim: (
+    <>
+      <circle cx={12} cy={29} r={5} />
+      <circle cx={28} cy={29} r={5} />
+      <path d="M15 25L30 6M25 25L10 6" />
+    </>
+  ),
 }
+glyphs.pack = glyphs.box
 
 export function StationGlyph({ kind, x, y, size }: { kind: string; x: number; y: number; size: number }) {
   return (
@@ -81,6 +103,18 @@ const icons = {
     </>
   ),
   wrench: <path d={WRENCH} />,
+  rule: (
+    <>
+      <rect x={5} y={3.5} width={14} height={17} rx={2} />
+      <path d="M9 9h6M9 13h6M9 17h3" />
+    </>
+  ),
+  money: (
+    <>
+      <circle cx={12} cy={12} r={8.5} />
+      <path d="M12 6.5v11M14.5 9.3c-.5-.7-1.4-1.1-2.5-1.1-1.4 0-2.5.8-2.5 1.9s1.1 1.6 2.5 1.9 2.5.8 2.5 1.9-1.1 1.9-2.5 1.9c-1.1 0-2-.4-2.5-1.1" />
+    </>
+  ),
   rope: <path d="M3 15c2.5-5 5 3 7.5-2s5 3 7.5-2M18 11l3-3" />,
 }
 

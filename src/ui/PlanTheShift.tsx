@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { bufferShare, bufferZones, snapshotAt, steadyShare, type ZoneSpan } from '../engine/timeline.ts'
-import { bufferScore, feedbackForRun, goalMet, maxStars, starsFor } from '../levels/graph.ts'
-import { applyLevers, leverValues, valueLabel } from '../levels/levers.ts'
+import { bufferScore, elevateScore, feedbackForRun, maxStars, starsFor, type Investment } from '../levels/graph.ts'
+import { applyLevers, leverValues, planCost, valueLabel } from '../levels/levers.ts'
 import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
 import type { Choices, Goal, Lever } from '../levels/types.ts'
@@ -13,22 +13,25 @@ import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
 import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
+import { productColor } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
-type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' }>
+type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' }>
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
+type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
 
 interface Run {
   plan: Choices
   model: FactoryModel
   result: SimResult
-  // The same plan on days the player hasn't seen, for a buffer level's third star.
+  // The same plan on days the player hasn't seen: a buffer level's third star, and every star of an elevate level.
   fresh: SimResult[]
+  investment: Investment
   met: boolean
   stars: number
 }
 
-export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output' | 'steady' | 'buffer'>) {
+export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output' | 'steady' | 'buffer' | 'elevate'>) {
   const { model, levers, seed } = level
   const baseline = useMemo(() => simulate(model, seed), [model, seed])
   const [speed, setSpeed] = useState(1)
@@ -46,7 +49,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const windows = breakWindows(model)
   const showResult = run !== null && playback.finished && !dismissed
   const popup = run ? feedbackForRun(level, run.met, run.plan) : undefined
-  const pileLimit = goal.kind === 'steady' ? goal.pileLimit : 5
+  const pileLimit = goal.kind === 'steady' || goal.kind === 'elevate' ? goal.pileLimit : 5
   const drum = goal.kind === 'buffer' ? model.stations.findIndex((s) => s.id === goal.drum) : -1
   const zones = useMemo(
     () => (goal.kind === 'buffer' ? bufferZones(shown.result, drum, goal.low, goal.high) : undefined),
@@ -55,14 +58,15 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
 
   const stats: Stat[] = [{ label: 'Shipped', value: snapshot.shipped }]
-  if (goal.kind === 'steady') {
+  if (goal.kind === 'steady' || goal.kind === 'elevate') {
     stats.push({ label: 'Steady', value: `${Math.floor(100 * steadyShare(shown.result, goal.pileLimit, playback.t))}%` })
   }
+  if (goal.kind === 'elevate') stats.push({ label: 'Spent', value: dollars(run?.investment.spend ?? 0) })
   if (goal.kind === 'buffer') {
     stats.push({ label: 'Healthy', value: percent(bufferShare(shown.result, drum, goal.low, goal.high, playback.t)) })
   }
   stats.push({ label: goal.kind === 'buffer' ? 'On the floor' : 'In process', value: snapshot.released - snapshot.shipped })
-  if (goal.kind === 'output') stats.push({ label: 'Goal', value: goal.target })
+  if (goal.kind === 'output' || goal.kind === 'elevate') stats.push({ label: 'Goal', value: goal.target })
 
   const start = () => {
     setBriefing(false)
@@ -73,12 +77,15 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const runPlan = () => {
     const planModel = applyLevers(model, levers, choices)
     const result = simulate(planModel, seed)
-    const fresh = goal.kind === 'buffer' ? freshSeeds(goal.freshDays, seed).map((day) => simulate(planModel, day)) : []
-    const met = goalMet(goal, result)
-    const earned = starsFor(goal, result, fresh)
+    const days = goal.kind === 'buffer' || goal.kind === 'elevate' ? goal.freshDays : 0
+    const fresh = freshSeeds(days, seed).map((day) => simulate(planModel, day))
+    const investment = { spend: planCost(levers, choices), baseline: baseline.output }
+    const earned = starsFor(goal, result, fresh, investment)
+    // Earning the first star is what completes a level.
+    const met = earned > 0
     onRecord({ type: 'ran', levelId: level.id, choices, shipped: result.output, met, stars: earned })
     if (met) onRecord({ type: 'completed', levelId: level.id })
-    setRun({ plan: choices, model: planModel, result, fresh, met, stars: earned })
+    setRun({ plan: choices, model: planModel, result, fresh, investment, met, stars: earned })
     setDismissed(false)
     playback.restart()
   }
@@ -101,6 +108,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           buildingAt={pileLimit}
           constraint={goal.kind === 'buffer' ? goal.drum : null}
           buffer={goal.kind === 'buffer' ? { station: goal.drum, low: goal.low, high: goal.high } : null}
+          jobProducts={shown.result.products}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
@@ -113,6 +121,11 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           horizon={model.horizon}
           windows={windows}
           zones={zones}
+          parts={model.products?.map((product) => (
+            <span key={product.id}>
+              <i className="swatch" style={{ background: productColor(model, product.id) }} /> {product.name}
+            </span>
+          ))}
           legend={
             <>
               {windows.length > 0 && (
@@ -180,9 +193,10 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
             </>
           ) : (
             <>
-              <p className="prompt">{goal.prompt}</p>
+              <p className="prompt">{fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values)}</p>
               <p className="hint">{planningHint(goal, baseline)}</p>
               {goal.kind === 'buffer' && <StarGoals goal={goal} />}
+              {goal.kind === 'elevate' && <ElevateStarGoals goal={goal} />}
               {levers.map((lever) => (
                 <fieldset key={lever.id} className="lever">
                   <legend>
@@ -246,7 +260,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           }
         >
           <div className="result-stats">
-            {resultStats(goal, run.result, baseline).map((stat) => (
+            {resultStats(goal, run.result, baseline, run.investment.spend).map((stat) => (
               <div key={stat.label}>
                 <span>{stat.label}</span>
                 <strong>{stat.value}</strong>
@@ -256,6 +270,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           </div>
           {stars > 0 && <Stars earned={run.stars} max={stars} />}
           {goal.kind === 'buffer' && <StarChecklist goal={goal} result={run.result} fresh={run.fresh} />}
+          {goal.kind === 'elevate' && <ElevateChecklist goal={goal} result={run.result} fresh={run.fresh} investment={run.investment} />}
           {popup && <p>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</p>}
           {run.met &&
             level.principles.map((p) => (
@@ -278,6 +293,8 @@ const badgeLegend: Record<Lever['kind'], string | null> = {
   releasePace: null,
   ropeTo: null,
   ropeLength: null,
+  machineRule: null,
+  buy: null,
 }
 
 const stationBadge: Partial<Record<Lever['kind'], Badge>> = {
@@ -301,6 +318,10 @@ function leverIcon(lever: Lever): IconName {
     case 'ropeTo':
     case 'ropeLength':
       return 'rope'
+    case 'machineRule':
+      return 'rule'
+    case 'buy':
+      return 'money'
   }
 }
 
@@ -331,6 +352,7 @@ function jamLog(model: FactoryModel, result: SimResult, zones: ZoneSpan[], t: nu
 }
 
 const percent = (share: number) => `${Math.floor(100 * share)}%`
+const dollars = (amount: number) => `$${amount.toLocaleString('en-US')}`
 
 function planningHint(goal: PlanGoal, baseline: SimResult): string {
   switch (goal.kind) {
@@ -342,6 +364,8 @@ function planningHint(goal: PlanGoal, baseline: SimResult): string {
       const today = bufferScore(goal, baseline)
       return `Today the buffer is healthy ${percent(today.healthy)} of the shift, with ${tenths(today.avgWip)} robots on the floor on average.`
     }
+    case 'elevate':
+      return `Today the shop ships ${baseline.output} a shift, and it's steady ${percent(steadyShare(baseline, goal.pileLimit))} of the time. Your plan runs for ${goal.freshDays + 1} days.`
   }
 }
 
@@ -355,10 +379,12 @@ function outcomeText(goal: PlanGoal, result: SimResult): string {
       const score = bufferScore(goal, result)
       return `Buffer healthy ${percent(score.healthy)} of the shift, ${tenths(score.avgWip)} on the floor on average.`
     }
+    case 'elevate':
+      return `Shipped ${result.output} today, goal ${goal.target}.`
   }
 }
 
-function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult): Stat[] {
+function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult, spend: number): Stat[] {
   switch (goal.kind) {
     case 'output':
       return [
@@ -380,6 +406,12 @@ function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult): St
         { label: 'Shipped', value: result.output, detail: `before ${baseline.output}` },
       ]
     }
+    case 'elevate':
+      return [
+        { label: 'Shipped', value: result.output, detail: `goal ${goal.target}` },
+        { label: 'Before', value: baseline.output },
+        { label: 'Spent', value: dollars(spend) },
+      ]
   }
 }
 
@@ -439,4 +471,66 @@ function breakWindows(model: FactoryModel) {
     for (const b of station.breaks ?? []) windows.set(`${b.from}-${b.to}`, b)
   }
   return [...windows.values()].sort((a, b) => a.from - b.from)
+}
+
+// What each star asks of an elevate plan, shown before the player plans.
+function ElevateStarGoals({ goal }: { goal: ElevateGoal }) {
+  const days = goal.freshDays + 1
+  return (
+    <ol className="star-goals">
+      <li>
+        <Stars earned={1} max={1} /> Ship at least {goal.target} a shift, on all {days} days
+      </li>
+      <li>
+        <Stars earned={2} max={2} /> And keep it steady: no pile of {goal.pileLimit} or more for {percent(goal.minSteady)} of each shift
+      </li>
+      <li>
+        <Stars earned={3} max={3} /> And spend wisely: at least {goal.minGainPer1000} more a shift for every $1,000
+      </li>
+    </ol>
+  )
+}
+
+// Each bar an elevate plan cleared or missed, day by day.
+function ElevateChecklist(props: { goal: ElevateGoal; result: SimResult; fresh: SimResult[]; investment: Investment }) {
+  const { goal, result, fresh, investment } = props
+  const score = elevateScore(goal, result, fresh, investment)
+  const hits = score.days.filter((day) => day.hit).length
+  const calm = score.days.filter((day) => day.calm).length
+  const total = score.days.length
+  const gained = result.output - investment.baseline
+  const rows = [
+    { ok: hits === total, text: `Shipped at least ${goal.target} on ${hits} of ${total} days` },
+    { ok: calm === total, text: `Steady on ${calm} of ${total} days` },
+    {
+      ok: score.gain >= goal.minGainPer1000,
+      text:
+        investment.spend === 0
+          ? `Spent nothing, and shipped ${gained} more than before`
+          : `Spent ${dollars(investment.spend)} for ${gained} more a shift: ${tenths(score.gain)} per $1,000 (goal: ${goal.minGainPer1000})`,
+    },
+  ]
+  return (
+    <div className="checklist">
+      <ul>
+        {rows.map((row) => (
+          <li key={row.text} className={row.ok ? 'ok' : 'miss'}>
+            <Icon name={row.ok ? 'check' : 'cross'} /> {row.text}
+          </li>
+        ))}
+      </ul>
+      <p className="days-title">Your plan, day by day (day 1 is the one you watched):</p>
+      <ol className="days compact">
+        {score.days.map((day, i) => (
+          <li key={i} className={day.hit && day.calm ? 'ok' : 'miss'}>
+            <strong>
+              <Icon name={day.hit && day.calm ? 'check' : 'cross'} /> Day {i + 1}
+            </strong>
+            <span>{day.output} shipped</span>
+            <span>{percent(day.steady)} steady</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
 }
