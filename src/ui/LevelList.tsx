@@ -3,6 +3,7 @@ import { levelState, maxStars, tierParents } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
 import type { Preferences } from '../progress/store.ts'
+import { FullScreenButton } from './FullScreen.tsx'
 import { Icon } from './icons.tsx'
 import { Stars } from './parts.tsx'
 
@@ -26,7 +27,10 @@ export function LevelList({ levels, tierNames, completed, stars, player, prefere
   return (
     <div className="screen home">
       <header className="hero">
-        <h1>TOC Factory</h1>
+        <div className="hero-top">
+          <h1>TOC Factory</h1>
+          <FullScreenButton />
+        </div>
         <p>
           Run a toy robot factory, a candle workshop, a print shop, and a bakery with its own shop. Find the step that holds
           everything back, make the whole line flow, and keep it flowing through breakdowns, late trucks, rush orders, and

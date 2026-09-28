@@ -46,7 +46,7 @@ button {
 }
 
 .screen {
-  max-width: 1160px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom))
     max(16px, env(safe-area-inset-left));
@@ -171,6 +171,14 @@ button {
 
 .hero {
   padding: 12px 4px 4px;
+}
+
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .hero h1 {

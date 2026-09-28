@@ -199,6 +199,9 @@ const icons = {
       <circle cx={16} cy={8} r={1.4} />
     </>
   ),
+  // Corners pointing out, to fill the screen; pointing in, to leave full screen.
+  expand: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />,
+  shrink: <path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" />,
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
   // A factory with a sawtooth roof and a chimney.
