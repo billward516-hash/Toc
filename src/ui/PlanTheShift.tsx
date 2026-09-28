@@ -125,6 +125,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           constraint={goal.kind === 'buffer' ? goal.drum : null}
           buffer={goal.kind === 'buffer' ? { station: goal.drum, low: goal.low, high: goal.high } : null}
           jobProducts={shown.result.products}
+          unit={level.unit}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>

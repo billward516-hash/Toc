@@ -16,23 +16,24 @@ const shop = (pace: Paces, every: number, jams?: Jams): FactoryModel => ({
     { id: 'design', name: 'Design', cycleTime: about(pace.design), machines: [{ name: 'Computer' }], jams },
     { id: 'print', name: 'Print', cycleTime: about(pace.print), machines: [{ name: 'Press' }] },
     { id: 'trim', name: 'Trim', cycleTime: about(pace.trim), machines: [{ name: 'Trimmer' }], jams },
-    { id: 'pack', name: 'Pack', cycleTime: about(pace.pack), machines: [{ name: 'Packing table' }], jams },
+    { id: 'pack', name: 'Pack', cycleTime: about(pace.pack), machines: [{ name: 'Table' }], jams },
   ],
   release: { kind: 'interval', every: { kind: 'fixed', value: every } },
   horizon: SHIFT,
 })
 
-const buy = (id: string, label: string, station: string, machine: string, price: number): Lever => ({
+// A second machine for a station: `thing` is what the button calls it, `machine` its short name on the floor.
+const buy = (id: string, label: string, station: string, thing: string, machine: string, price: number): Lever => ({
   id,
   kind: 'buy',
   label,
-  options: [{ id, label: `A second ${machine.toLowerCase()}, $${price.toLocaleString('en-US')}`, station, machine: { name: `New ${machine.toLowerCase()}` }, price }],
+  options: [{ id, label: `A second ${thing}, $${price.toLocaleString('en-US')}`, station, machine: { name: `New ${machine.toLowerCase()}` }, price }],
 })
 const purchases: Lever[] = [
-  buy('computer', 'Design', 'design', 'Computer', 6000),
-  buy('press', 'Print', 'print', 'Press', 20000),
-  buy('trimmer', 'Trim', 'trim', 'Trimmer', 8000),
-  buy('table', 'Pack', 'pack', 'Packing table', 4000),
+  buy('computer', 'Design', 'design', 'computer', 'Computer', 6000),
+  buy('press', 'Print', 'print', 'press', 'Press', 20000),
+  buy('trimmer', 'Trim', 'trim', 'trimmer', 'Trimmer', 8000),
+  buy('table', 'Pack', 'pack', 'packing table', 'Table', 4000),
 ]
 
 export const tier5: Level[] = [
@@ -167,11 +168,82 @@ export const tier5: Level[] = [
     ],
   },
   {
+    id: 'tier5-old-habits',
+    tier: 5,
+    title: 'Old habits',
+    principles: [32, 18],
+    requires: ['tier5-next-constraint'],
+    unit: 'orders',
+    briefing:
+      "Last year Pack was the shop's constraint, so the shop tied a rope to it: a new order starts only when fewer than 3 are on their way to Pack. It worked. Pack never ran out of work, and the floor stayed tidy. This spring the shop bought a second packing table. Orders are backed up for weeks, but the shop prints only {baseline} a shift, and it needs {target}.",
+    model: {
+      stations: [
+        { id: 'design', name: 'Design', cycleTime: about(1.5) },
+        { id: 'print', name: 'Print', cycleTime: about(3), machines: [{ name: 'Press' }] },
+        { id: 'trim', name: 'Trim', cycleTime: about(2.2) },
+        { id: 'pack', name: 'Pack', cycleTime: about(4), machines: [{ name: 'Table' }, { name: 'New table' }] },
+      ],
+      release: { kind: 'rope', constraint: 'pack', buffer: 3 },
+      horizon: SHIFT,
+    },
+    seed: 1,
+    goal: {
+      kind: 'elevate',
+      target: 150,
+      pileLimit: 5,
+      minSteady: 0.9,
+      minGainPer1000: 2,
+      freshDays: 6,
+      prompt: 'The shop needs {target} orders a shift. What will you change?',
+    },
+    levers: [
+      { id: 'rope', kind: 'ropeTo', label: 'Tie the rope to', stations: ['design', 'print', 'pack'], length: 3 },
+      buy('press', 'Print', 'print', 'press', 'Press', 20000),
+    ],
+    popups: [
+      {
+        trigger: { kind: 'ran', met: true, choices: { rope: 'print', press: 'none' } },
+        title: 'The rope follows the constraint',
+        body: 'Tied to Pack, the rope was exactly right while Pack was the constraint. The second table fixed Pack, and Print became the slowest step, but the rope stayed put. It kept counting every order already past Print, so Print kept running out of work. Tied to Print, it keeps work in front of Print all day: {shipped} printed instead of {baseline}, for free. When the constraint moves, the rules built around it have to move too. Otherwise the old rule becomes the new constraint.',
+      },
+      {
+        trigger: { kind: 'ran', met: false, choices: { rope: 'pack', press: 'press' } },
+        title: 'A press with nothing to print',
+        body: "The new press barely changed anything: {shipped} printed, {baseline} before. The rope still let only 3 orders onto the floor, wherever they were, so both presses spent much of the day waiting for work. Print wasn't short of presses. It was short of work, and the old rope was why.",
+      },
+      {
+        trigger: { kind: 'ran', met: false, choices: { rope: 'pack', press: 'none' } },
+        title: 'The same rope, the same shop',
+        body: 'The rope is still tied to Pack, and Pack has time to spare now, so the rope holds back the whole shop: Print kept running out of work, and the shop printed {shipped}. It needs {target}.',
+      },
+      {
+        trigger: { kind: 'ran', met: true, choices: { rope: 'design', press: 'none' } },
+        title: 'Enough, but flooded',
+        body: 'Tied to Design, the first station, the rope let work in as fast as Design could take it. The shop printed {shipped}, but orders piled up in front of Print all day, with {waiting:print} waiting there at the end of the shift: steady only {steadyPct}% of the time, and a longer wait for every order. A rope belongs on the constraint.',
+      },
+      {
+        trigger: { kind: 'ran', met: true, choices: { rope: 'design', press: 'press' } },
+        title: 'Enough, but flooded',
+        body: 'With two presses, Trim became the slowest step, and the rope tied to Design let work in as fast as Design could take it. The shop printed {shipped}, but orders piled up in front of Trim all day, with {waiting:trim} waiting there at the end of the shift. A rope belongs on the constraint, and re-tying it to Print would have met the goal for free.',
+      },
+      {
+        trigger: { kind: 'ran', met: true, choices: { rope: 'print', press: 'press' } },
+        title: 'The constraint moved again',
+        body: 'With two presses, Print outran Trim, and the rope tied to Print kept letting in work that Trim couldn\'t keep up with: {waiting:trim} orders waiting there at the end. The shop printed {shipped}, but it isn\'t steady, and moving the rope alone would have met the goal for free.',
+      },
+      {
+        trigger: { kind: 'ran', met: false },
+        title: 'Not there yet',
+        body: 'The shop printed {shipped}; it needs {target}. Watch the press: is it busy all day?',
+      },
+    ],
+  },
+  {
     id: 'tier5-balance-flow',
     tier: 5,
     title: 'Balance flow, not capacity',
     principles: [33, 15],
-    requires: ['tier5-next-constraint'],
+    requires: ['tier5-old-habits'],
     briefing:
       "A consultant visited last month. Design, Trim, and Pack each had a second machine that sat idle half the day, so the consultant sold them. Now every station works at the press's pace, about 20 orders an hour, and every machine is busy all day. Orders still come in every 3.1 minutes, about 155 a shift, but the shop prints only {baseline}, and it needs {target}. You have $20,000.",
     // Design, Trim, and Pack jam about every 50 minutes, for about 10.

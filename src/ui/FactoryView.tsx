@@ -44,6 +44,8 @@ interface FactoryViewProps {
   buffer?: BufferBand | null
   // The product of each job, when the line makes several.
   jobProducts?: string[]
+  // What one unit of work is called, plural.
+  unit?: string
   onSelect?: (stationId: string) => void
 }
 
@@ -63,7 +65,7 @@ function jobColor(palette: Palette, job: number): string | undefined {
 const zoneLabel: Record<Zone, string> = { dry: 'running dry', healthy: 'healthy', flooding: 'flooding' }
 
 export function FactoryView(props: FactoryViewProps) {
-  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, onSelect } = props
+  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', onSelect } = props
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
@@ -91,7 +93,7 @@ export function FactoryView(props: FactoryViewProps) {
       {Array.from({ length: count }, (_, i) => (
         <path key={i} className="arrow" d={`M${(i + 1) * COLUMN - 7} ${beltY - 7}l12 14-12 14`} />
       ))}
-      {release.kind === 'rope' && tiedTo >= 0 && <Rope tiedTo={tiedTo} length={release.buffer} name={model.stations[tiedTo].name} />}
+      {release.kind === 'rope' && tiedTo >= 0 && <Rope tiedTo={tiedTo} length={release.buffer} name={model.stations[tiedTo].name} unit={unit} />}
       {model.stations.map((station, i) => (
         <StationColumn
           key={station.id}
@@ -157,21 +159,21 @@ export function FactoryView(props: FactoryViewProps) {
   )
 }
 
-// A rope from the station it's tied to back to the start of the line: a new robot goes in only
+// A rope from the station it's tied to back to the start of the line: new work goes in only
 // when fewer than `length` are on their way to that station.
-function Rope({ tiedTo, length, name }: { tiedTo: number; length: number; name: string }) {
+function Rope({ tiedTo, length, name, unit }: { tiedTo: number; length: number; name: string; unit: string }) {
   const start = tiedTo * COLUMN + COLUMN / 2 + (tiedTo === 0 ? 50 : 0)
   const end = COLUMN / 2 - 50
   const high = -24
   const d = `M${start} 10V${high + 14}q0-14-14-14H${end + 14}q-14 0-14 14V30`
   return (
-    <g className="rope" role="img" aria-label={`Rope tied to ${name}: at most ${length} robots on their way to it`}>
+    <g className="rope" role="img" aria-label={`Rope tied to ${name}: at most ${length} ${unit} on their way to it`}>
       <path className="strand" d={d} />
       <path className="twist" d={d} />
       <path className="head" d={`M${end - 11} 24l11 14 11-14z`} />
       <circle className="knot" cx={start} cy={10} r={8} />
       <text x={(start + end) / 2} y={high - 12}>
-        Rope: {length} robots
+        Rope: {length} {unit}
       </text>
     </g>
   )

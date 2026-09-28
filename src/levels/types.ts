@@ -12,6 +12,8 @@ export interface Level {
   goal: Goal
   levers: Lever[]
   popups: Popup[]
+  // What one unit of work is called on screen, plural: "robots" unless the level says otherwise.
+  unit?: string
 }
 
 export type Goal =
