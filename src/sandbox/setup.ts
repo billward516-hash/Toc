@@ -177,24 +177,23 @@ export function releaseWords(release: SandboxRelease): string {
 }
 
 // What changed from one run's line to the next, a few words for each station or rule that changed:
-// "Paint: 3 min, 2 machines".
+// "Paint: 3 min, 2 machines", or "Every station: lots of variation" when all changed alike.
 export function describeChanges(before: SandboxSetup, after: SandboxSetup): string[] {
-  const changes: string[] = []
-  after.stations.forEach((station, i) => {
+  const kept = after.stations.slice(0, before.stations.length)
+  const edits = kept.map((station, i) => {
     const old = before.stations[i]
-    const name = STEPS[i].name
-    if (!old) {
-      changes.push(`Added ${name}: ${station.minutes} min`)
-      return
-    }
-    const parts = [
+    return [
       station.minutes !== old.minutes && `${station.minutes} min`,
       station.machines !== old.machines && machineWords(station.machines),
       station.variation !== old.variation && variationWords[station.variation],
       station.jams !== old.jams && (station.jams ? 'jams' : 'no jams'),
-    ].filter((part) => part !== false)
-    if (parts.length > 0) changes.push(`${name}: ${parts.join(', ')}`)
+    ]
+      .filter((part) => part !== false)
+      .join(', ')
   })
+  const alike = kept.length > 1 && edits[0] !== '' && edits.every((edit) => edit === edits[0])
+  const changes = alike ? [`Every station: ${edits[0]}`] : edits.flatMap((edit, i) => (edit ? [`${STEPS[i].name}: ${edit}`] : []))
+  for (let i = kept.length; i < after.stations.length; i++) changes.push(`Added ${STEPS[i].name}: ${after.stations[i].minutes} min`)
   for (let i = after.stations.length; i < before.stations.length; i++) changes.push(`Removed ${STEPS[i].name}`)
   if (!sameRelease(before.release, after.release)) changes.push(releaseWords(after.release))
   return changes

@@ -122,6 +122,14 @@ describe('changing the line', () => {
     expect(describeChanges(DEFAULT_SETUP, removeStation(DEFAULT_SETUP))).toEqual(['Removed Box'])
     expect(describeChanges(DEFAULT_SETUP, withRelease({ kind: 'rope', station: 2, length: 10 }))).toEqual(['A rope of 10 to Paint'])
     expect(describeChanges(withRelease({ kind: 'pace', every: 4 }), withRelease({ kind: 'pace', every: 4.5 }))).toEqual(['One robot every 4.5 min'])
+    const shaky = { ...DEFAULT_SETUP, stations: DEFAULT_SETUP.stations.map((s) => ({ ...s, variation: 'lots' as const })) }
+    expect(describeChanges(DEFAULT_SETUP, shaky)).toEqual(['Every station: lots of variation'])
+    expect(describeChanges(DEFAULT_SETUP, changeStation(shaky, 0, { variation: 'some' }))).toEqual([
+      'Mold: lots of variation',
+      'Paint: lots of variation',
+      'Assemble: lots of variation',
+      'Box: lots of variation',
+    ])
   })
 
   it('tells whether two lines are the same', () => {

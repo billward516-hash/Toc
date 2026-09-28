@@ -2254,3 +2254,52 @@ button {
     font-size: 13px;
   }
 }
+
+/* Things to try in free play, and the one being tried. */
+.things-to-try summary {
+  font-size: 19px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.things-to-try ol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.things-to-try li,
+.trying {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+}
+
+.things-to-try strong {
+  font-size: 17px;
+}
+
+.things-to-try p,
+.trying p {
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.trying {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+}
+
+.trying h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}

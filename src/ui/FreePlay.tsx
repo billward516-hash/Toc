@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { leadTimeSoFar, snapshotAt } from '../engine/timeline.ts'
 import { tenths } from '../levels/values.ts'
+import { EXPERIMENTS, type Experiment } from '../sandbox/experiments.ts'
 import {
   addStation,
   changeStation,
@@ -71,6 +72,9 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
   const [speed, setSpeed] = useState(1)
   // The station whose settings are open.
   const [open, setOpen] = useState<number | null>(null)
+  // The thing to try that the player picked, and whether the list of them is open.
+  const [trying, setTrying] = useState<Experiment | null>(null)
+  const [listOpen, setListOpen] = useState(true)
   const rows = useRef<(HTMLLIElement | null)[]>([])
   const model = useMemo(() => sandboxModel(setup), [setup])
   const result = useMemo(() => simulate(model, day), [model, day])
@@ -122,6 +126,13 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
     playback.rewind()
   }
 
+  const tryIt = (experiment: Experiment) => {
+    setTrying(experiment)
+    setListOpen(false)
+    setOpen(null)
+    change(experiment.setup)
+  }
+
   const changeDay = (next: number) => {
     setDay(next)
     playback.rewind()
@@ -170,8 +181,31 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
           ))}
         >
           <SimulationLog model={model} result={result} t={playback.t} unit="robots" />
+          {trying && (
+            <section className="trying" aria-label="What you're trying">
+              <h3>{trying.title}</h3>
+              <p>{trying.text}</p>
+              <button className="btn small" onClick={() => setTrying(null)}>
+                <Icon name="check" /> Done
+              </button>
+            </section>
+          )}
           {(done || earlier.length > 0) && <RunsTable current={done} earlier={earlier} />}
           {done && <StationTable run={done} />}
+          <details className="things-to-try" open={listOpen} onToggle={(event) => setListOpen(event.currentTarget.open)}>
+            <summary>Things to try</summary>
+            <ol>
+              {EXPERIMENTS.map((experiment) => (
+                <li key={experiment.id}>
+                  <strong>{experiment.title}</strong>
+                  <p>{experiment.text}</p>
+                  <button className="btn small" onClick={() => tryIt(experiment)}>
+                    Set it up <Icon name="next" />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </details>
         </PlaybackPanel>
 
         <section className="card sandbox" aria-label="Your line">
