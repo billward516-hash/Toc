@@ -3,7 +3,7 @@ import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, maxStars, secondDays, starsFor, validateLevels } from './graph.ts'
+import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, maxStars, rushOnTime, secondDays, starsFor, validateLevels } from './graph.ts'
 import { allPlans, applyChange, applyLevers, overBudget, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
@@ -288,6 +288,14 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
     const days = Array.from({ length: 100 }, (_, i) => lossOn(i + 1))
     expect(days.filter((loss) => loss >= 5).length).toBeGreaterThanOrEqual(95)
     expect(days.every((loss) => loss > 0)).toBe(true)
+  })
+
+  it.runIf(level.id === 'tier8-rush-order')('ships exactly as many on a rush-order day, with every rush robot out by 3:10, whatever the day', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      expect(lossOn(seed), `seed ${seed}`).toBe(0)
+      const rushDay = simulate(applyChange(level.model, goal.compare!.change), seed)
+      expect(rushOnTime(rushDay, 190), `seed ${seed}`).toBe(12)
+    }
   })
 
   it.runIf(level.id === 'tier10-power-cut')('loses only about 7 robots to a 30-minute power cut, whatever the day', () => {

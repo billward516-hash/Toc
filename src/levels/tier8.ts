@@ -226,4 +226,51 @@ export const tier8: Level[] = [
       },
     ],
   },
+  {
+    id: 'tier8-rush-order',
+    tier: 8,
+    title: 'The rush order',
+    principles: [16],
+    requires: ['tier8-hot-list'],
+    briefing: 'Back to one kind of robot, with the rope tied to Paint, 8 robots long. Watch a normal day.',
+    model: factory({}, {}),
+    seed: 1,
+    goal: {
+      kind: 'predict',
+      prompt:
+        'On the next day, a customer calls at 2:00 with a rush order: 12 more robots, needed by 5:00. They start at once, on top of the rope, and jump the queue at every station. How many robots will that day ship in all?',
+      options: [
+        { id: 'more', label: 'About 12 more' },
+        { id: 'same', label: 'About the same' },
+        { id: 'fewer', label: 'Fewer: the rush throws the factory off' },
+      ],
+      answer: 'same',
+      compare: {
+        first: 'A normal day',
+        second: 'The rush-order day',
+        change: {
+          stations: Object.fromEntries(['cut', 'mold', 'paint', 'assemble', 'box'].map((id) => [id, { expedite: true }])),
+          model: { rush: [{ at: 120, count: 12 }] },
+        },
+      },
+    },
+    levers: [],
+    popups: [
+      {
+        trigger: { kind: 'predicted', option: 'same' },
+        title: 'Rushed, not extra',
+        body: "The rush-order day shipped {second}, exactly as many as the normal day. The 12 rush robots jumped the queue and were all out by about 3:00, but Paint was already busy every minute, so they took the places of 12 robots that would have shipped today and will ship tomorrow instead. Rushing changes the order work goes out in, not how much goes out: only more time at the constraint does that.",
+      },
+      {
+        trigger: { kind: 'predicted', option: 'more' },
+        title: 'Not 12 more',
+        body: 'The rush-order day shipped {second}, exactly as many as the normal day. The rush robots went first, but Paint could only paint as fast as it always does, so 12 other robots will ship tomorrow instead.',
+      },
+      {
+        trigger: { kind: 'predicted', option: 'fewer' },
+        title: 'Not fewer either',
+        body: "The rush-order day shipped {second}, exactly as many as the normal day. Jumping the queue cost nothing here, because no station had to switch anything to let the rush robots through; it only changed which robots went first.",
+      },
+    ],
+  },
 ]

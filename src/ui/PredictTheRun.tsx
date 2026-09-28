@@ -117,11 +117,18 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
             </span>
           ))}
           legend={
-            haltLabels(shown.model).length > 0 && (
-              <span>
-                <i className="swatch dot jammed" /> {haltLabels(shown.model).map((label, k) => (k === 0 ? label : label.toLowerCase())).join(' or ')}
-              </span>
-            )
+            <>
+              {haltLabels(shown.model).length > 0 && (
+                <span>
+                  <i className="swatch dot jammed" /> {haltLabels(shown.model).map((label, k) => (k === 0 ? label : label.toLowerCase())).join(' or ')}
+                </span>
+              )}
+              {shown.model.rush?.length ? (
+                <span>
+                  <i className="swatch rush" /> Rush order
+                </span>
+              ) : null}
+            </>
           }
         >
           {hasDisruptions(shown.model) && <ShiftLog entries={shiftLog(shown.model, shown.result, playback.t, unit)} />}
