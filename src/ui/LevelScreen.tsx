@@ -19,6 +19,7 @@ export function LevelScreen({ level, ...flow }: LevelScreenProps) {
       return <FindTheConstraint level={level} goal={goal} {...flow} />
     case 'output':
     case 'steady':
+    case 'buffer':
       return <PlanTheShift level={level} goal={goal} {...flow} />
     case 'predict':
       return <PredictTheRun level={level} goal={goal} {...flow} />

@@ -21,15 +21,22 @@ export type Goal =
   | { kind: 'steady'; pileLimit: number; minSteady: number; minShipped: number; prompt: string }
   // Watch a steady twin of the line, predict how the real (varying) line compares, then run it.
   | { kind: 'predict'; prompt: string; options: { id: string; label: string }[]; answer: string }
+  // Drum-buffer-rope. One star: the pile in front of the drum stays within [low, high] for at least
+  // `minHealthy` of the shift. Two: also average work in process at or under `maxAvgWip`.
+  // Three: both hold on `freshDays` more days the player hasn't seen.
+  | { kind: 'buffer'; drum: string; low: number; high: number; minHealthy: number; maxAvgWip: number; freshDays: number; prompt: string }
 
 // The only changes a player may make in a level.
 export type Lever =
   | { id: string; kind: 'upgrade'; label: string; stations: string[]; factor: number }
   | { id: string; kind: 'coverBreak'; label: string; stations: string[] }
   | { id: string; kind: 'steady'; label: string; stations: string[] }
+  | { id: string; kind: 'maintain'; label: string; stations: string[] }
   | { id: string; kind: 'releasePace'; label: string; every: number[] }
+  | { id: string; kind: 'ropeTo'; label: string; stations: string[]; length: number }
+  | { id: string; kind: 'ropeLength'; label: string; lengths: number[] }
 
-// Lever id -> chosen value: a station id, or for releasePace the interval in minutes.
+// Lever id -> chosen value: a station id, or a number of minutes or robots.
 export type Choices = Record<string, string>
 
 export type Trigger =

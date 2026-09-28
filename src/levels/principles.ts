@@ -8,4 +8,8 @@ export const principleNames: Record<number, string> = {
   13: 'Delays pass down the line and add up',
   14: 'Variation piles up at the constraint',
   15: 'A perfectly balanced line ships less than its average',
+  16: 'The constraint sets the pace for the whole factory',
+  17: 'A buffer protects the constraint from hiccups upstream',
+  18: 'Release work only as fast as the constraint uses it',
+  19: 'The buffer shows which problems cost output',
 }

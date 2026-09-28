@@ -12,8 +12,9 @@ export function Dialog({ kicker, title, tone = 'info', children, actions }: Dial
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
+  // Focus the main action without scrolling to it, so a long dialog opens at its title.
   useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>('.dialog-actions button')?.focus()
+    ref.current?.querySelector<HTMLButtonElement>('.dialog-actions button')?.focus({ preventScroll: true })
   }, [])
 
   return (

@@ -6,6 +6,7 @@ export interface Station {
   cycleTime: Dist
   servers?: number
   breaks?: Break[]
+  jams?: Jams
 }
 
 // A planned stop: the station finishes the part in hand, then starts nothing new until `to`.
@@ -14,14 +15,23 @@ export interface Break {
   to: number
 }
 
+// Unplanned stops: the station runs for a time drawn from `every`, then jams for a time drawn from
+// `lasts` (finishing the part in hand, like a break), and so on. Each seed jams at different times.
+export interface Jams {
+  every: Dist
+  lasts: Dist
+}
+
 export function onBreak(station: Station, t: number): boolean {
   return station.breaks?.some((b) => t >= b.from && t < b.to) ?? false
 }
 
-// Units a station could finish in the horizon if it never ran out of work.
+// Units a station could finish in the horizon if it never ran out of work, counting jams at their average.
 export function capacity(station: Station, horizon: number): number {
   const stopped = (station.breaks ?? []).reduce((sum, b) => sum + Math.max(0, Math.min(b.to, horizon) - b.from), 0)
-  return ((horizon - stopped) * (station.servers ?? 1)) / mean(station.cycleTime)
+  const { jams } = station
+  const running = jams ? mean(jams.every) / (mean(jams.every) + mean(jams.lasts)) : 1
+  return ((horizon - stopped) * running * (station.servers ?? 1)) / mean(station.cycleTime)
 }
 
 export type Release =
@@ -50,6 +60,10 @@ export function validateModel(model: FactoryModel): string[] {
     if (cycle) problems.push(`${station.id}: ${cycle}`)
     for (const b of station.breaks ?? []) {
       if (!(b.from >= 0 && b.to > b.from)) problems.push(`${station.id}: a break must have 0 <= from < to`)
+    }
+    for (const dist of station.jams ? [station.jams.every, station.jams.lasts] : []) {
+      const jam = problemWith(dist)
+      if (jam) problems.push(`${station.id}: jams: ${jam}`)
     }
   }
   const { release } = model

@@ -38,6 +38,39 @@ describe('applyLevers', () => {
   })
 })
 
+describe('rope and maintenance levers', () => {
+  const jammy: FactoryModel = {
+    ...model,
+    stations: model.stations.map((s) => ({ ...s, jams: { every: { kind: 'fixed', value: 60 }, lasts: { kind: 'fixed', value: 10 } } })),
+  }
+  const rope: Lever[] = [
+    { id: 'tie', kind: 'ropeTo', label: 'Tie', stations: ['cut', 'paint'], length: 5 },
+    { id: 'length', kind: 'ropeLength', label: 'Length', lengths: [3, 8] },
+  ]
+
+  it('ties a rope of the lever length, then lets the length lever resize it', () => {
+    expect(applyLevers(model, rope.slice(0, 1), { tie: 'paint' }).release).toEqual({ kind: 'rope', constraint: 'paint', buffer: 5 })
+    expect(applyLevers(model, rope, { length: '8', tie: 'paint' }).release).toEqual({ kind: 'rope', constraint: 'paint', buffer: 8 })
+  })
+
+  it('resizes a rope the line already has, and leaves a line without one alone', () => {
+    const roped: FactoryModel = { ...model, release: { kind: 'rope', constraint: 'paint', buffer: 5 } }
+    expect(applyLevers(roped, rope.slice(1), { length: '3' }).release).toEqual({ kind: 'rope', constraint: 'paint', buffer: 3 })
+    expect(applyLevers(model, rope.slice(1), { length: '3' }).release).toEqual({ kind: 'saturate' })
+  })
+
+  it('stops jams only where maintenance goes, and never touches planned breaks', () => {
+    const fix: Lever = { id: 'fix', kind: 'maintain', label: 'Fix', stations: ['cut', 'paint'] }
+    const changed = applyLevers(jammy, [fix], { fix: 'paint' })
+    expect(changed.stations[1].jams).toBeUndefined()
+    expect(changed.stations[1].breaks).toEqual(lunch)
+    expect(changed.stations[0].jams).toEqual(jammy.stations[0].jams)
+    const covered = applyLevers(jammy, [levers[1]], { floater: 'paint' })
+    expect(covered.stations[1].breaks).toEqual([])
+    expect(covered.stations[1].jams).toEqual(jammy.stations[1].jams)
+  })
+})
+
 describe('allPlans', () => {
   it('lists every combination of choices', () => {
     expect(allPlans(levers)).toEqual([

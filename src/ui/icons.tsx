@@ -48,6 +48,9 @@ export function StationGlyph({ kind, x, y, size }: { kind: string; x: number; y:
   )
 }
 
+// An open-jawed wrench in a 24-unit box: the jaw's ring faces up and right, the handle runs down and left.
+export const WRENCH = 'M16.8 3.6A4.5 4.5 0 1 0 20.4 7.2M12.8 11.2L5 19'
+
 const icons = {
   play: <path d="M8 5v14l11-7z" fill="currentColor" />,
   pause: <path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" />,
@@ -66,6 +69,7 @@ const icons = {
     </>
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7" />,
+  cross: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   next: <path d="M9 5l7 7-7 7" />,
   star: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
   bolt: <path d="M13 3L6 13.5h5L10 21l7-10.5h-5z" />,
@@ -76,6 +80,8 @@ const icons = {
       <path d="M12 7.5V12l3 2" />
     </>
   ),
+  wrench: <path d={WRENCH} />,
+  rope: <path d="M3 15c2.5-5 5 3 7.5-2s5 3 7.5-2M18 11l3-3" />,
 }
 
 export type IconName = keyof typeof icons

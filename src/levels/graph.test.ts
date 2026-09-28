@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
-import { feedbackFor, feedbackForRun, levelState, maxStars, validateLevels } from './graph.ts'
-import type { Level } from './types.ts'
+import { simulate } from '../engine/simulate.ts'
+import { bufferScore, feedbackFor, feedbackForRun, levelState, maxStars, starsFor, validateLevels } from './graph.ts'
+import type { Goal, Level } from './types.ts'
 
 const model: FactoryModel = {
   stations: [
@@ -88,10 +89,51 @@ describe('feedbackForRun', () => {
   })
 })
 
+const bufferGoal = (changes: Partial<Extract<Goal, { kind: 'buffer' }>> = {}): Extract<Goal, { kind: 'buffer' }> => ({
+  kind: 'buffer',
+  drum: 'paint',
+  low: 0,
+  high: 100,
+  minHealthy: 0.9,
+  maxAvgWip: 100,
+  freshDays: 2,
+  prompt: 'How long a rope?',
+  ...changes,
+})
+
 describe('maxStars', () => {
-  it('awards no stars for spotting the constraint and one for an output target', () => {
+  it('awards no stars for spotting the constraint, one for an output target, and three for a buffer', () => {
     expect(maxStars(level('a'))).toBe(0)
     expect(maxStars(planLevel())).toBe(1)
+    expect(maxStars(planLevel({ goal: bufferGoal() }))).toBe(3)
+  })
+})
+
+describe('buffer stars', () => {
+  // Cut feeds Paint every 2 minutes and Paint takes 5, so Paint's pile passes 5 at minute 20 and keeps growing.
+  const flood = simulate(model, 1)
+  const roped = simulate({ ...model, release: { kind: 'rope', constraint: 'paint', buffer: 3 } }, 1)
+
+  it('measures the pile in front of the drum and the average inventory', () => {
+    const score = bufferScore(bufferGoal({ low: 0, high: 5 }), flood)
+    expect(score.healthy).toBeCloseTo(20 / 60, 10)
+    expect(score.avgWip).toBe(flood.avgWip)
+    expect(bufferScore(bufferGoal({ low: 0, high: 5 }), roped).healthy).toBe(1)
+  })
+
+  it('gives one star for a healthy buffer, two if inventory stays under the cap, three if both hold on every fresh day', () => {
+    const goal = bufferGoal({ high: 5, maxAvgWip: 3 })
+    expect(starsFor(goal, flood)).toBe(0)
+    expect(starsFor({ ...goal, maxAvgWip: 1 }, roped)).toBe(1)
+    expect(starsFor(goal, roped)).toBe(2)
+    expect(starsFor(goal, roped, [roped])).toBe(2)
+    expect(starsFor(goal, roped, [roped, flood])).toBe(2)
+    expect(starsFor(goal, roped, [roped, roped])).toBe(3)
+  })
+
+  it('gives one star at most for other goals', () => {
+    expect(starsFor({ kind: 'output', target: 5, prompt: '' }, flood, [flood, flood])).toBe(1)
+    expect(starsFor({ kind: 'output', target: 50, prompt: '' }, flood)).toBe(0)
   })
 })
 
@@ -113,6 +155,50 @@ describe('validateLevels', () => {
       'level "plan": popup for unknown lever "floater"',
       'level "plan": no popup for meeting the goal',
       'level "plan": no fallback popup for missing the goal',
+    ])
+  })
+
+  it('accepts well-formed rope levers and buffer goals', () => {
+    const roped = planLevel({
+      goal: bufferGoal(),
+      levers: [
+        { id: 'tie', kind: 'ropeTo', label: 'Tie', stations: ['cut', 'paint'], length: 4 },
+        { id: 'length', kind: 'ropeLength', label: 'Length', lengths: [2, 6] },
+      ],
+      popups: [
+        { trigger: { kind: 'ran', met: true, choices: { tie: 'paint', length: '6' } }, title: 'Met', body: '' },
+        { trigger: { kind: 'ran', met: false }, title: 'Missed', body: '' },
+      ],
+    })
+    expect(validateLevels([roped])).toEqual([])
+  })
+
+  it('catches broken buffer goals and rope levers', () => {
+    const problems = validateLevels([
+      planLevel({
+        goal: bufferGoal({ drum: 'glue', low: 5, high: 2, minHealthy: 0, maxAvgWip: 0, freshDays: 0 }),
+        levers: [
+          { id: 'tie', kind: 'ropeTo', label: 'Tie', stations: ['cut'], length: 0 },
+          { id: 'length', kind: 'ropeLength', label: 'Length', lengths: [0, 2.5] },
+        ],
+      }),
+      { ...planLevel({ goal: bufferGoal(), levers: [{ id: 'length', kind: 'ropeLength', label: 'Length', lengths: [4] }] }), id: 'unroped' },
+    ])
+    expect(problems).toEqual([
+      'level "plan": lever "tie" needs a positive whole length',
+      'level "plan": lever "length" needs positive whole lengths',
+      'level "plan": drum "glue" is not a station',
+      'level "plan": a buffer goal needs 0 <= low <= high',
+      'level "plan": a buffer goal needs 0 < minHealthy <= 1',
+      'level "plan": a buffer goal needs a positive maxAvgWip',
+      'level "plan": a buffer goal needs at least one fresh day',
+      'level "plan": popup for unknown lever "tool"',
+      'level "plan": popup for unknown lever "tool"',
+      'level "plan": popup for unknown lever "floater"',
+      `level "unroped": lever "length" sizes a rope the line doesn't have`,
+      'level "unroped": popup for unknown lever "tool"',
+      'level "unroped": popup for unknown lever "tool"',
+      'level "unroped": popup for unknown lever "floater"',
     ])
   })
 

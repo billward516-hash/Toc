@@ -443,6 +443,66 @@ button {
   fill: var(--amber-ink);
 }
 
+/* The drum's buffer: red running dry, green healthy, amber flooding. */
+.factory .waiting-area.zone-dry {
+  fill: #ffe4e4;
+  stroke: var(--red);
+  stroke-dasharray: none;
+}
+
+.factory .waiting-area.zone-healthy {
+  fill: #e2f6ea;
+  stroke: var(--green);
+  stroke-dasharray: none;
+}
+
+.factory .waiting-area.zone-flooding {
+  fill: #fff0d2;
+  stroke: var(--amber);
+  stroke-dasharray: none;
+}
+
+.factory .pile-count.zone-dry {
+  fill: var(--red);
+}
+
+.factory .pile-count.zone-healthy {
+  fill: var(--green-deep);
+}
+
+.factory .pile-count.zone-flooding {
+  fill: var(--amber-ink);
+}
+
+.factory .rope path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.factory .rope .strand {
+  stroke: var(--ink);
+  stroke-width: 11;
+}
+
+.factory .rope .twist {
+  stroke: #f0a13a;
+  stroke-width: 6;
+  stroke-dasharray: 9 5;
+}
+
+.factory .rope .head,
+.factory .rope .knot {
+  fill: #f0a13a;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.factory .rope text {
+  font-size: 21px;
+  fill: #9a5a00;
+}
+
 .factory .station-box {
   fill: #fff;
   stroke: var(--ink);
@@ -500,6 +560,10 @@ button {
   fill: #5c617e;
 }
 
+.factory .light.jammed {
+  fill: var(--red);
+}
+
 .factory .corner .ring {
   stroke: var(--ink);
   stroke-width: 3.5;
@@ -535,6 +599,17 @@ button {
   fill: #fff;
   stroke: var(--ink);
   stroke-width: 2.5;
+}
+
+.factory .corner.maintained .ring {
+  fill: #2ec5e6;
+}
+
+.factory .corner.maintained .wrench {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3.2;
+  stroke-linecap: round;
 }
 
 .factory .corner.covered .hands {
@@ -627,6 +702,33 @@ button {
   background: #5c617e;
 }
 
+.swatch.dot.jammed {
+  background: var(--red);
+}
+
+.swatch.zone {
+  border-radius: 4px;
+}
+
+.swatch.zone.dry {
+  background: #ffe4e4;
+  border-color: var(--red);
+}
+
+.swatch.zone.healthy {
+  background: #e2f6ea;
+  border-color: var(--green);
+}
+
+.swatch.zone.flooding {
+  background: #fff0d2;
+  border-color: var(--amber);
+}
+
+.legend .buffer-key {
+  flex-wrap: wrap;
+}
+
 .legend svg {
   width: 18px;
   height: 18px;
@@ -665,6 +767,86 @@ button {
 .clock-fill {
   height: 100%;
   background: var(--amber);
+}
+
+.clock-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.clock-zone.dry {
+  background: var(--red);
+}
+
+.clock-zone.healthy {
+  background: var(--green);
+}
+
+.clock-zone.flooding {
+  background: var(--amber);
+}
+
+.jam-log h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.jam-log h2 small {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.jam-log ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jam-log li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+}
+
+.jam-log li small {
+  color: var(--muted);
+}
+
+.jam-log .when {
+  color: var(--muted);
+}
+
+.jam-log li.dry {
+  background: #ffe4e4;
+  border-color: var(--red);
+}
+
+.jam-log li.dry .what {
+  color: var(--red);
+}
+
+.jam-log li.held {
+  background: #e2f6ea;
+  border-color: var(--green);
+}
+
+.jam-log li.held .what {
+  color: var(--green-deep);
 }
 
 .clock-window {
@@ -814,6 +996,91 @@ button {
 .star.on path {
   fill: #ffc233;
   stroke: var(--ink);
+}
+
+.star-goals,
+.checklist ul,
+.days {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 700;
+}
+
+.star-goals li,
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.star-goals .stars {
+  flex: none;
+  min-width: 72px;
+}
+
+.star-goals .star svg {
+  width: 20px;
+  height: 20px;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.checklist svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.checklist .ok svg {
+  color: var(--green-deep);
+}
+
+.checklist .miss svg {
+  color: var(--red);
+}
+
+.days-title {
+  font-weight: 800;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.days li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+}
+
+.days li strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+}
+
+.days li.ok {
+  background: #e2f6ea;
+}
+
+.days li.miss {
+  background: #ffe4e4;
 }
 
 .level-state .stars svg {

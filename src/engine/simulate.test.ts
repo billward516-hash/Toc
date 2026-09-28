@@ -134,6 +134,48 @@ describe('planned breaks', () => {
   })
 })
 
+describe('jams', () => {
+  const jammy = (station: number, every: Dist, lasts: Dist, cycles = [fixed(2), fixed(5), fixed(3)]) => {
+    const model = line(cycles, { kind: 'saturate' }, 100)
+    model.stations[station].jams = { every, lasts }
+    return model
+  }
+  const jamsAt = (result: SimResult, station: number) =>
+    result.events.flatMap((e) => (e.type === 'jam' && e.station === station ? [[e.t, e.until]] : []))
+
+  it('stops a station after it finishes the part in hand, and restarts it when cleared', () => {
+    const result = simulate(jammy(1, fixed(40), fixed(20)), 1)
+    // Jams from 40 to 60, and again at 100 as the shift ends: the same stop as a 40-60 break, so the same output.
+    expect(jamsAt(result, 1)).toEqual([
+      [40, 60],
+      [100, 120],
+    ])
+    const startsAtPaint = result.events.flatMap((e) => (e.type === 'start' && e.station === 1 ? [e.t] : []))
+    expect(startsAtPaint.some((t) => t >= 40 && t < 60)).toBe(false)
+    expect(startsAtPaint).toContain(60)
+    expect(result.output).toBe(15)
+  })
+
+  it('jams at the same moments whatever the rest of the line does, and differently on another day', () => {
+    const every = uniform(10, 30)
+    const lasts = uniform(2, 8)
+    const slow = simulate(jammy(1, every, lasts, [uniform(1, 3), triangular(2, 4, 7), uniform(2, 4)]), 5)
+    const fast = simulate(jammy(1, every, lasts, [uniform(0.5, 1), triangular(2, 4, 7), uniform(1, 2)]), 5)
+    expect(jamsAt(slow, 1).length).toBeGreaterThan(2)
+    expect(jamsAt(fast, 1)).toEqual(jamsAt(slow, 1))
+    expect(jamsAt(simulate(jammy(1, every, lasts), 6), 1)).not.toEqual(jamsAt(slow, 1))
+  })
+
+  it('counts jams at their average in capacity', () => {
+    const mold = { id: 'mold', name: 'Mold', cycleTime: fixed(2), jams: { every: fixed(30), lasts: uniform(5, 15) } }
+    expect(capacity(mold, 100)).toBe(37.5)
+  })
+
+  it('rejects impossible jams', () => {
+    expect(() => simulate(jammy(1, fixed(0), fixed(5)), 1)).toThrow(/jams/)
+  })
+})
+
 describe('runBatch', () => {
   it('runs one independent simulation per seed', () => {
     const results = runBatch(variable, [1, 2, 3])
