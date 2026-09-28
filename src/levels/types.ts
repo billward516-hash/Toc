@@ -98,6 +98,8 @@ export type OptionIcon = 'wrench' | 'truck' | 'stack' | 'bin' | 'rule' | 'clock'
 // One thing to measure each day, and the bar it must clear.
 export type Bar =
   | { metric: 'shipped'; min: number }
+  // Units shipped of one product.
+  | { metric: 'shippedOf'; product: string; min: number }
   // No station with `pileLimit` or more waiting for at least `min` of the shift.
   | { metric: 'steady'; min: number; pileLimit: number }
   // Average minutes from release to shipping.

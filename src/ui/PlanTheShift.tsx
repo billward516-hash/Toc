@@ -28,7 +28,7 @@ import { ShiftLog } from './ShiftLog.tsx'
 import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
 import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
-import { productColor } from './products.ts'
+import { productColor, productName } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
 type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' | 'profit' | 'bars' }>
@@ -75,7 +75,10 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
     [goal, shown.result, drum],
   )
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
-  const words: Words = { material: model.supply?.name ?? 'material' }
+  const words: Words = {
+    material: model.supply?.name ?? 'material',
+    products: (id) => `${productName(model, id).toLowerCase()}s`,
+  }
   const spend = run?.investment.spend ?? 0
   const context = { words, spend }
 

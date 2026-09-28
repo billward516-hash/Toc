@@ -27,6 +27,8 @@ export interface Station {
   inspects?: boolean
   // Rush orders jump the queue here.
   expedite?: boolean
+  // A machine keeps running the product it last ran while any is waiting, to save changeovers.
+  keepProduct?: boolean
 }
 
 // One machine at a station. It runs only `products` (every product when absent); its own `times`

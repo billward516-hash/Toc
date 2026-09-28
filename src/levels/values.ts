@@ -23,6 +23,11 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
       const values: Record<string, number> = { ...runFacts(baseline, run), days: goal.freshDays + 1 }
       for (const bar of goal.bars) {
         if (bar.metric === 'shipped') values.target = bar.min
+        if (bar.metric === 'shippedOf') {
+          values.minOf = bar.min
+          values.shippedOf = run.shippedBy?.[bar.product] ?? 0
+          values.shippedOfBefore = baseline.shippedBy?.[bar.product] ?? 0
+        }
         if (bar.metric === 'steady') {
           values.limit = bar.pileLimit
           values.minSteadyPct = Math.round(bar.min * 100)

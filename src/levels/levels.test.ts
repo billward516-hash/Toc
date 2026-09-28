@@ -46,8 +46,12 @@ describe.each(levels.filter((l) => l.goal.kind === 'identifyBottleneck'))('spot-
   const { goal } = level
   const answer = level.model.stations.findIndex((s) => s.id === goal.answer)
 
-  it('makes the answer the slowest station on average', () => {
-    const pace = level.model.stations.map((s) => mean(s.cycleTime) / (s.servers ?? 1))
+  it('makes the answer the slowest station on average, for the orders coming in by the end of the shift', () => {
+    const mix = level.model.mixChanges?.at(-1)?.mix ?? level.model.mix
+    const pace = level.model.stations.map((s) => {
+      const times = mix ? mix.map((p) => mean(s.times?.[p] ?? s.cycleTime)) : [mean(s.cycleTime)]
+      return times.reduce((a, b) => a + b, 0) / times.length / (s.servers ?? 1)
+    })
     expect(pace.indexOf(Math.max(...pace))).toBe(answer)
   })
 
@@ -272,6 +276,10 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
   it.runIf(level.id === 'tier7-constraint-down')('loses about 20 robots to a 90-minute breakdown at Paint, whatever the day', () => {
     for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeGreaterThanOrEqual(16)
     for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeLessThanOrEqual(26)
+  })
+
+  it.runIf(level.id === 'tier8-hot-list')('ships clearly fewer on a hot-list day, whatever the day', () => {
+    for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeGreaterThanOrEqual(10)
   })
 
   it.runIf(level.id === 'tier7-where-scrap-hurts')('ships clearly fewer with scrap after Paint on nearly every day', () => {

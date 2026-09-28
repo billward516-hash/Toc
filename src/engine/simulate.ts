@@ -157,8 +157,9 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   }
 
   // The waiting job a machine takes next: a rush order where the station expedites, then the oldest
-  // it can run of the station's first-priority product, then the oldest it can run.
-  const pick = (i: number, machine: Machine): number => {
+  // it can run of the station's first-priority product, then more of the product it last ran where
+  // the station keeps products together, then the oldest it can run.
+  const pick = (i: number, m: number, machine: Machine): number => {
     const runnable = (job: number) => canRun(machine, products[job])
     if (stations[i].expedite) {
       const k = queues[i].findIndex((job) => isRush[job] && runnable(job))
@@ -166,6 +167,10 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     }
     for (const product of priorityAt(i)) {
       const k = queues[i].findIndex((job) => products[job] === product && runnable(job))
+      if (k >= 0) return k
+    }
+    if (stations[i].keepProduct && lastProduct[i][m] !== undefined) {
+      const k = queues[i].findIndex((job) => products[job] === lastProduct[i][m] && runnable(job))
       if (k >= 0) return k
     }
     return queues[i].findIndex(runnable)
@@ -180,7 +185,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       if (holding[i][m] !== null) return
       // The first station needs material from the stockroom for every job it starts.
       if (i === 0 && stock <= 0) return
-      const k = pick(i, machine)
+      const k = pick(i, m, machine)
       let job: number
       if (k >= 0) [job] = queues[i].splice(k, 1)
       else if (i === 0 && release.kind === 'saturate') job = newJob()

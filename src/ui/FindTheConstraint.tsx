@@ -8,6 +8,9 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
 import { LevelHeader, PlaybackPanel } from './parts.tsx'
+import { productColor } from './products.ts'
+import { ShiftLog } from './ShiftLog.tsx'
+import { hasDisruptions, shiftLog } from './shiftEvents.ts'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
@@ -76,13 +79,27 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           snapshot={snapshot}
           selected={selected}
           constraint={solved ? goal.answer : null}
+          jobProducts={result.products}
+          unit={level.unit}
           onSelect={solved ? undefined : setSelected}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 
       <div className="dock">
-        <PlaybackPanel playback={playback} speed={speed} onSpeed={setSpeed} horizon={model.horizon} />
+        <PlaybackPanel
+          playback={playback}
+          speed={speed}
+          onSpeed={setSpeed}
+          horizon={model.horizon}
+          parts={model.products?.map((product) => (
+            <span key={product.id}>
+              <i className="swatch" style={{ background: productColor(model, product.id) }} /> {product.name}
+            </span>
+          ))}
+        >
+          {hasDisruptions(model) && <ShiftLog entries={shiftLog(model, result, playback.t, level.unit ?? 'robots')} />}
+        </PlaybackPanel>
 
         <section className="question card" aria-live="polite">
           {solved ? (

@@ -514,6 +514,15 @@ describe('changing orders', () => {
     expect(started.filter(([t]) => (t as number) >= 30).every(([, p]) => p === 'b')).toBe(true)
   })
 
+  it('keeps running the same product while any is waiting, where the station keeps products together', () => {
+    const colors = (keepProduct: boolean) =>
+      simulate(two({ release: { kind: 'interval', every: fixed(1) } }, { keepProduct, changeover: fixed(3) }), 1).stations[0].changeoverTime
+    // Alternating orders: a changeover before almost every job, or only when one product runs out
+    // (here once, at the start, before the queue builds up).
+    expect(colors(false)).toBeGreaterThanOrEqual(30)
+    expect(colors(true)).toBe(3)
+  })
+
   it('releases rush orders on top of the flow, and lets them jump the queue only where the station expedites', () => {
     const rush = (expedite: boolean) => simulate(two({ rush: [{ at: 10, count: 2, product: 'b' }] }, { expedite }), 1)
     const expedited = rush(true)

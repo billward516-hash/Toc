@@ -10,6 +10,7 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
 import { LevelHeader, PlaybackPanel } from './parts.tsx'
+import { productColor } from './products.ts'
 import { ShiftLog } from './ShiftLog.tsx'
 import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
 import type { LevelFlowProps } from './types.ts'
@@ -78,6 +79,11 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
           speed={speed}
           onSpeed={setSpeed}
           horizon={model.horizon}
+          parts={model.products?.map((product) => (
+            <span key={product.id}>
+              <i className="swatch" style={{ background: productColor(model, product.id) }} /> {product.name}
+            </span>
+          ))}
           legend={
             (breaksDown(shown.model) || shown.model.stations.some((s) => s.jams)) && (
               <span>

@@ -10,6 +10,8 @@ export type BarsGoal = Extract<Goal, { kind: 'bars' }>
 // Words for what a line makes and uses, for the texts below.
 export interface Words {
   material: string
+  // A product's name, plural and lower case: "deluxe robots".
+  products: (id: string) => string
 }
 
 const percent = (share: number) => `${Math.floor(100 * share)}%`
@@ -21,6 +23,8 @@ export function goalText(bar: Bar, words: Words): string {
   switch (bar.metric) {
     case 'shipped':
       return `Ship at least ${bar.min} a shift`
+    case 'shippedOf':
+      return `Ship at least ${bar.min} ${words.products(bar.product)} a shift`
     case 'steady':
       return `Keep it steady: no pile of ${bar.pileLimit} or more for ${percent(bar.min)} of the shift`
     case 'leadTime':
@@ -43,6 +47,8 @@ export function readingText(bar: Bar, reading: Reading, day: SimResult, words: W
   switch (bar.metric) {
     case 'shipped':
       return `${reading.value} shipped`
+    case 'shippedOf':
+      return `${reading.value} ${words.products(bar.product)}`
     case 'steady':
       return `${percent(reading.value)} steady`
     case 'leadTime':
@@ -66,6 +72,8 @@ export function rowText(bar: Bar, met: number, total: number, reading: Reading, 
   switch (bar.metric) {
     case 'shipped':
       return `Shipped at least ${bar.min} ${days}`
+    case 'shippedOf':
+      return `Shipped at least ${bar.min} ${words.products(bar.product)} ${days}`
     case 'steady':
       return `Steady ${days}`
     case 'leadTime':
@@ -87,6 +95,7 @@ export function rowText(bar: Bar, met: number, total: number, reading: Reading, 
 export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, words: Words, spend: number): Stat[] {
   const stats: Stat[] = [{ label: 'Shipped', value: snapshot.shipped }]
   for (const bar of goal.bars) {
+    if (bar.metric === 'shippedOf') stats.push({ label: capitalize(words.products(bar.product)), value: snapshot.shippedBy?.[bar.product] ?? 0 })
     if (bar.metric === 'steady') stats.push({ label: 'Steady', value: percent(steadyShare(result, bar.pileLimit, snapshot.t)) })
     if (bar.metric === 'stock') stats.push({ label: capitalize(words.material), value: snapshot.stock ?? 0 })
     if (bar.metric === 'scrapped') stats.push({ label: 'Scrapped', value: snapshot.scrapped.reduce((a, b) => a + b, 0) })
@@ -106,6 +115,7 @@ export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, 
 export function barsHint(goal: BarsGoal, baseline: SimResult, words: Words): string {
   const facts = [`Today the factory ships ${baseline.output} a shift`]
   for (const bar of goal.bars) {
+    if (bar.metric === 'shippedOf') facts.push(`${baseline.shippedBy?.[bar.product] ?? 0} of them ${words.products(bar.product)}`)
     if (bar.metric === 'steady') facts.push(`it's steady ${percent(steadyShare(baseline, bar.pileLimit))} of the time`)
     if (bar.metric === 'stock') facts.push(`it keeps about ${Math.round(baseline.supply?.avgStock ?? 0)} ${words.material} in the stockroom`)
     if (bar.metric === 'scrapped') facts.push(`it scraps ${baseline.scrapped ?? 0}`)
@@ -127,6 +137,8 @@ export function barsResultStats(goal: BarsGoal, result: SimResult, baseline: Sim
     switch (bar.metric) {
       case 'shipped':
         return { label: 'Shipped', value, detail: `goal ${bar.min}` }
+      case 'shippedOf':
+        return { label: capitalize(words.products(bar.product)), value, detail: `goal ${bar.min}` }
       case 'steady':
         return { label: 'Steady', value: percent(value), detail: `goal ${percent(bar.min)}` }
       case 'leadTime':

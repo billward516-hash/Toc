@@ -69,6 +69,10 @@ export function readBar(bar: Bar, day: SimResult, spend = 0): Reading {
   switch (bar.metric) {
     case 'shipped':
       return { value: day.output, met: day.output >= bar.min }
+    case 'shippedOf': {
+      const value = day.shippedBy?.[bar.product] ?? 0
+      return { value, met: value >= bar.min }
+    }
     case 'steady': {
       const value = steadyShare(day, bar.pileLimit)
       return { value, met: value >= bar.min }
@@ -441,6 +445,7 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
         for (const bar of goal.bars) {
           const problem = barProblem(bar)
           if (problem) problems.push(`bar "${bar.metric}": ${problem}`)
+          if (bar.metric === 'shippedOf' && !productIds.has(bar.product)) problems.push(`bar "shippedOf" names unknown product "${bar.product}"`)
         }
       }
       if (goal.kind === 'flow') {
@@ -486,6 +491,7 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
 function barProblem(bar: Bar): string | null {
   switch (bar.metric) {
     case 'shipped':
+    case 'shippedOf':
       return bar.min > 0 ? null : 'needs a positive minimum'
     case 'steady':
       return bar.min > 0 && bar.min <= 1 && bar.pileLimit >= 1 ? null : 'needs 0 < min <= 1 and pileLimit >= 1'
