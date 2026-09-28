@@ -399,6 +399,18 @@ describe('long breakdowns', () => {
     expect(result.output).toBeLessThan(simulate(line([fixed(2), fixed(3)]), 1).output - 8)
   })
 
+  it('stops several stations at the same moment in an incident', () => {
+    const surge: FactoryModel = {
+      ...line([fixed(2), fixed(3), fixed(1)]),
+      incidents: [{ at: uniform(10, 40), outages: [{ station: 's0', lasts: fixed(5) }, { station: 's2', lasts: fixed(15) }] }],
+    }
+    const stops = simulate(surge, 4).events.filter((e) => e.type === 'jam')
+    expect(stops).toHaveLength(2)
+    expect(stops[0].t).toBe(stops[1].t)
+    expect(stops.map((e) => e.type === 'jam' && e.until - e.t)).toEqual([5, 15])
+    expect(validateModel({ ...surge, incidents: [{ at: fixed(5), outages: [{ station: 'glue', lasts: fixed(5) }] }] })).toEqual(['incident: unknown station "glue"'])
+  })
+
   it('counts the breakdown in capacity', () => {
     expect(capacity(broken.stations[1], 100)).toBeCloseTo(70 / 3, 10)
   })

@@ -12,10 +12,19 @@ export interface LogEntry {
 
 export const clock = (minutes: number) => `${Math.floor(minutes / 60)}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`
 
+// Whether any station on the line can break down, on its own or in an incident.
+export function breaksDown(model: FactoryModel): boolean {
+  return Boolean(model.incidents?.length || model.stations.some((s) => s.outages?.length))
+}
+
 // Whether a line has anything for the shift log to report.
 export function hasDisruptions(model: FactoryModel): boolean {
   return Boolean(
-    model.supply || model.rush?.length || model.mixChanges?.length || model.stations.some((s) => s.outages?.length || s.priorityChanges?.length || s.inspects),
+    breaksDown(model) ||
+      model.supply ||
+      model.rush?.length ||
+      model.mixChanges?.length ||
+      model.stations.some((s) => s.priorityChanges?.length || s.inspects),
   )
 }
 
@@ -87,7 +96,7 @@ export function shiftLog(model: FactoryModel, result: SimResult, t: number, unit
     if (!station.inspects) return
     const scrapped = result.events.filter((e) => e.type === 'finish' && e.station === i && e.scrap && e.t <= t)
     if (scrapped.length === 0) return
-    entries.push({ at: scrapped[0].t, icon: 'bin', text: `${station.name} scrapped ${scrapped.length}`, detail: 'so far', tone: 'bad' })
+    entries.push({ at: scrapped.at(-1)!.t, icon: 'bin', text: `${station.name} has scrapped ${scrapped.length}`, detail: 'so far', tone: 'bad' })
   })
 
   return entries.sort((a, b) => a.at - b.at)

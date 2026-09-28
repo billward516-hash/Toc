@@ -62,6 +62,13 @@ export interface Outage {
   lasts: Dist
 }
 
+// One event that stops several stations at the same moment, such as a power surge: at a time drawn
+// from `at`, each named station breaks down for a time drawn from its `lasts`.
+export interface Incident {
+  at: Dist
+  outages: { station: string; lasts: Dist }[]
+}
+
 export interface PriorityChange {
   at: number
   order: string[]
@@ -141,6 +148,7 @@ export interface FactoryModel {
   mixChanges?: MixChange[]
   supply?: Supply
   rush?: Rush[]
+  incidents?: Incident[]
 }
 
 export function validateModel(model: FactoryModel): string[] {
@@ -215,6 +223,15 @@ export function validateModel(model: FactoryModel): string[] {
     if (change.mix.length === 0) problems.push('a mix change needs a mix')
     for (const id of change.mix) if (!productIds.has(id)) problems.push(`mix change: unknown product "${id}"`)
   }
+  for (const incident of model.incidents ?? []) {
+    const at = problemWith(incident.at)
+    if (at) problems.push(`incident: ${at}`)
+    for (const outage of incident.outages) {
+      if (!ids.has(outage.station)) problems.push(`incident: unknown station "${outage.station}"`)
+      const lasts = problemWith(outage.lasts)
+      if (lasts) problems.push(`incident: ${lasts}`)
+    }
+  }
   for (const rush of model.rush ?? []) {
     if (!(rush.at >= 0) || !Number.isInteger(rush.count) || rush.count < 1) problems.push('a rush order needs a time of at least 0 and a positive whole count')
     if (rush.product !== undefined && !productIds.has(rush.product)) problems.push(`rush order: unknown product "${rush.product}"`)
@@ -225,7 +242,7 @@ export function validateModel(model: FactoryModel): string[] {
       if (!(delivery.due >= 0) || !Number.isInteger(delivery.amount) || delivery.amount < 1) {
         problems.push('supply: a delivery needs a due time of at least 0 and a positive whole amount')
       }
-      const late = delivery.late && problemWith(delivery.late)
+      const late = delivery.late && problemWith(delivery.late, { zero: true })
       if (late) problems.push(`supply: late: ${late}`)
     }
   }

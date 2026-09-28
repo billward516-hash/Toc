@@ -23,4 +23,6 @@ export const principleNames: Record<number, string> = {
   31: 'There is always a next constraint',
   32: "Don't let old rules become the constraint",
   33: 'Balance the flow, not the capacity',
+  36: 'Keep enough materials on hand to ride out a late delivery',
+  37: "Scrap after the constraint wastes the constraint's time",
 }

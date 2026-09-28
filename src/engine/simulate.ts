@@ -73,6 +73,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const outageDraws = stations.map((s) => stream(seed, `outage:${s.id}`))
   const defectDraws = stations.map((s) => stream(seed, `defect:${s.id}`))
   const supplyDraws = stream(seed, 'supply')
+  const incidentDraws = stream(seed, 'incident')
   const lot = lotSize(release)
   const constraint = release.kind === 'rope' ? stations.findIndex((s) => s.id === release.constraint) : -1
   const machines = stations.map(machinesOf)
@@ -276,6 +277,13 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       agenda.push(at, { kind: 'outage', station: i, until: at + sample(outage.lasts, outageDraws[i]()) })
     }
   })
+  for (const incident of model.incidents ?? []) {
+    const at = sample(incident.at, incidentDraws())
+    for (const outage of incident.outages) {
+      const i = stations.findIndex((st) => st.id === outage.station)
+      agenda.push(at, { kind: 'outage', station: i, until: at + sample(outage.lasts, incidentDraws()) })
+    }
+  }
   for (const delivery of supply?.deliveries ?? []) {
     const at = delivery.due + (delivery.late ? sample(delivery.late, supplyDraws()) : 0)
     agenda.push(at, { kind: 'delivery', amount: delivery.amount, due: delivery.due })

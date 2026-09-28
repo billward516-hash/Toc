@@ -364,9 +364,10 @@ function StationColumn(props: ColumnProps) {
         </text>
       )}
       {stock && (
+        // Right of center, clear of a rope coming down into the first station.
         <g className={`stockroom${stock.count === 0 ? ' empty' : ''}`}>
-          <rect x={center - 78} y={TAG_Y - 18} width={156} height={36} rx={18} />
-          <text x={center} y={TAG_Y + 7}>
+          <rect x={center - 32} y={TAG_Y - 18} width={132} height={36} rx={18} />
+          <text x={center + 34} y={TAG_Y + 7}>
             {stock.count} {stock.name}
           </text>
         </g>

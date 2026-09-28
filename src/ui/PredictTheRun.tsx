@@ -11,7 +11,7 @@ import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
 import { LevelHeader, PlaybackPanel } from './parts.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
-import { hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
@@ -79,7 +79,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
           onSpeed={setSpeed}
           horizon={model.horizon}
           legend={
-            shown.model.stations.some((s) => s.outages?.length || s.jams) && (
+            (breaksDown(shown.model) || shown.model.stations.some((s) => s.jams)) && (
               <span>
                 <i className="swatch dot jammed" /> Broken down or jammed
               </span>

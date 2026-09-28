@@ -29,7 +29,8 @@ export function BarsChecklist(props: { goal: BarsGoal; result: SimResult; fresh:
     const met = score.days.filter((day) => day[b].met).length
     return { ok: met === total, text: rowText(bar, met, total, score.days[0][b], words) }
   })
-  const shown = goal.bars.slice(0, 2)
+  // A plan costs the same every day, so the day cards leave spending out.
+  const shown = goal.bars.map((bar, b) => ({ bar, b })).filter(({ bar }) => bar.metric !== 'spend').slice(0, 2)
   return (
     <div className="checklist">
       <ul>
@@ -50,7 +51,7 @@ export function BarsChecklist(props: { goal: BarsGoal; result: SimResult; fresh:
                   <strong>
                     <Icon name={ok ? 'check' : 'cross'} /> Day {i + 1}
                   </strong>
-                  {shown.map((bar, b) => (
+                  {shown.map(({ bar, b }) => (
                     <span key={bar.metric}>{readingText(bar, readings[b], days[i], words)}</span>
                   ))}
                 </li>

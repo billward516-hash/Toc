@@ -52,4 +52,10 @@ describe('problemWith', () => {
     expect(problemWith({ kind: 'uniform', min: 5, max: 2 })).not.toBeNull()
     expect(problemWith({ kind: 'triangular', min: 2, mode: 7, max: 6 })).not.toBeNull()
   })
+
+  it('allows a delay of zero, but not a negative one', () => {
+    expect(problemWith({ kind: 'uniform', min: 0, max: 90 }, { zero: true })).toBeNull()
+    expect(problemWith({ kind: 'triangular', min: 0, mode: 0, max: 90 }, { zero: true })).toBeNull()
+    expect(problemWith({ kind: 'fixed', value: -1 }, { zero: true })).toBe('fixed time must be at least 0')
+  })
 })

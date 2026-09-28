@@ -25,7 +25,7 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
-import { hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
 import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor } from './products.ts'
@@ -175,7 +175,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   <i className="swatch dot changing" /> Changeover
                 </span>
               )}
-              {shown.model.stations.some((s) => s.outages?.length) && (
+              {breaksDown(shown.model) && (
                 <span>
                   <i className="swatch dot jammed" /> Broken down
                 </span>

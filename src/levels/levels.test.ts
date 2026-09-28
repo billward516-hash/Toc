@@ -28,7 +28,8 @@ describe('level content', () => {
     const core = [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29, 31, 32, 33]
     const taught = new Set(levels.flatMap((l) => l.principles))
     expect(core.filter((p) => !taught.has(p))).toEqual([])
-    expect(Object.keys(principleNames).map(Number)).toEqual(core)
+    // Principles added later (spec section 3.6) are named only once a level teaches them.
+    expect(Object.keys(principleNames).map(Number).filter((p) => !taught.has(p))).toEqual([])
   })
 
   it('makes Cut look like the star in the busy level: far more parts made than robots shipped', () => {
@@ -260,6 +261,23 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
       expect(popup, option.id).toBeDefined()
       expect(fillTemplate(popup!.body, level.model, snapshotAt(real, real.horizon), values)).not.toMatch(/[{}]/)
     }
+  })
+
+  // The comparison's lesson must hold on any day, not just the one the player watches.
+  const lossOn = (seed: number) => {
+    const second = goal.compare ? applyChange(level.model, goal.compare.change) : level.model
+    return simulate(goal.compare ? level.model : steadyTwin(level.model), seed).output - simulate(second, seed).output
+  }
+
+  it.runIf(level.id === 'tier7-constraint-down')('loses about 20 robots to a 90-minute breakdown at Paint, whatever the day', () => {
+    for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeGreaterThanOrEqual(16)
+    for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeLessThanOrEqual(26)
+  })
+
+  it.runIf(level.id === 'tier7-where-scrap-hurts')('ships clearly fewer with scrap after Paint on nearly every day', () => {
+    const days = Array.from({ length: 100 }, (_, i) => lossOn(i + 1))
+    expect(days.filter((loss) => loss >= 5).length).toBeGreaterThanOrEqual(95)
+    expect(days.every((loss) => loss > 0)).toBe(true)
   })
 
   it.runIf(level.id === 'tier2-dice')('ships fewer than its perfect-day twin on every day, and clearly fewer on its own day', () => {

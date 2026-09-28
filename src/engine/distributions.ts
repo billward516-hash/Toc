@@ -51,15 +51,18 @@ export function mean(dist: Dist): number {
   }
 }
 
-export function problemWith(dist: Dist): string | null {
+// Times must be positive; a delay (`zero`) may also be exactly 0, such as a delivery that's on time.
+export function problemWith(dist: Dist, { zero = false } = {}): string | null {
+  const low = (value: number) => (zero ? value >= 0 : value > 0)
+  const least = zero ? '0 <=' : '0 <'
   switch (dist.kind) {
     case 'fixed':
-      return dist.value > 0 ? null : 'fixed time must be positive'
+      return low(dist.value) ? null : zero ? 'fixed time must be at least 0' : 'fixed time must be positive'
     case 'uniform':
-      return dist.min > 0 && dist.min <= dist.max ? null : 'uniform needs 0 < min <= max'
+      return low(dist.min) && dist.min <= dist.max ? null : `uniform needs ${least} min <= max`
     case 'triangular':
-      return dist.min > 0 && dist.min <= dist.mode && dist.mode <= dist.max && dist.min < dist.max
+      return low(dist.min) && dist.min <= dist.mode && dist.mode <= dist.max && dist.min < dist.max
         ? null
-        : 'triangular needs 0 < min <= mode <= max and min < max'
+        : `triangular needs ${least} min <= mode <= max and min < max`
   }
 }
