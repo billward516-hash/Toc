@@ -1,16 +1,18 @@
-import { levelState } from '../levels/graph.ts'
+import { levelState, maxStars } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
 import { Icon } from './icons.tsx'
+import { Stars } from './parts.tsx'
 
 interface LevelListProps {
   levels: Level[]
   tierNames: Record<number, string>
   completed: ReadonlySet<string>
+  stars: ReadonlyMap<string, number>
   onOpen: (level: Level) => void
 }
 
-export function LevelList({ levels, tierNames, completed, onOpen }: LevelListProps) {
+export function LevelList({ levels, tierNames, completed, stars, onOpen }: LevelListProps) {
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -28,6 +30,7 @@ export function LevelList({ levels, tierNames, completed, onOpen }: LevelListPro
               .filter((l) => l.tier === tier)
               .map((level, i) => {
                 const state = levelState(level, completed)
+                const possible = maxStars(level)
                 return (
                   <li key={level.id}>
                     <button className={`level-card ${state}`} disabled={state === 'locked'} onClick={() => onOpen(level)}>
@@ -37,6 +40,7 @@ export function LevelList({ levels, tierNames, completed, onOpen }: LevelListPro
                         <span className="principle">{level.principles.map((p) => principleNames[p]).join(' · ')}</span>
                       </span>
                       <span className="level-state">
+                        {possible > 0 && state !== 'locked' && <Stars earned={stars.get(level.id) ?? 0} max={possible} />}
                         {state === 'completed' && (
                           <>
                             <Icon name="check" /> Done

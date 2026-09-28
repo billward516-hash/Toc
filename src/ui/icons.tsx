@@ -67,6 +67,14 @@ const icons = {
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7" />,
   next: <path d="M9 5l7 7-7 7" />,
+  star: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />,
+  bolt: <path d="M13 3L6 13.5h5L10 21l7-10.5h-5z" />,
+  clock: (
+    <>
+      <circle cx={12} cy={12} r={8.5} />
+      <path d="M12 7.5V12l3 2" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof icons

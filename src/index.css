@@ -275,19 +275,54 @@ button {
   font-weight: 900;
 }
 
-.shipped-chip {
-  padding: 8px 16px;
-  font-weight: 800;
-  color: #fff;
-  background: var(--green-deep);
+.dashboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.dashboard .stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--card);
   border: 3px solid var(--ink);
   border-radius: 16px;
   box-shadow: 0 4px 0 var(--ink);
 }
 
-.shipped-chip strong {
-  margin-left: 6px;
+.dashboard .stat:first-child {
+  color: #fff;
+  background: var(--green-deep);
+}
+
+.dashboard dt {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.dashboard dd {
+  margin: 0;
   font-size: 22px;
+  font-weight: 900;
+}
+
+.viewing {
+  align-self: flex-start;
+  margin-bottom: -6px;
+  padding: 4px 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--muted);
+  background: #f1eadc;
+  border-radius: 999px;
+}
+
+.viewing.mine {
+  color: #fff;
+  background: var(--blue);
 }
 
 .floor {
@@ -461,6 +496,43 @@ button {
   fill: var(--green);
 }
 
+.factory .light.resting {
+  fill: #5c617e;
+}
+
+.factory .corner .ring {
+  stroke: var(--ink);
+  stroke-width: 3.5;
+}
+
+.factory .corner.upgraded .ring {
+  fill: #8a5cf6;
+}
+
+.factory .corner.upgraded path {
+  fill: #ffd84d;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.factory .corner.covered .ring {
+  fill: var(--green-deep);
+}
+
+.factory .corner.covered .face {
+  fill: #fff;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+.factory .corner.covered .hands {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
 .factory .progress-track {
   fill: #eee6d6;
 }
@@ -540,6 +612,16 @@ button {
   background: #c3c7d6;
 }
 
+.swatch.dot.resting {
+  background: #5c617e;
+}
+
+.legend svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ink);
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -561,6 +643,7 @@ button {
 }
 
 .clock-track {
+  position: relative;
   height: 12px;
   overflow: hidden;
   background: #eee6d6;
@@ -571,6 +654,150 @@ button {
 .clock-fill {
   height: 100%;
   background: var(--amber);
+}
+
+.clock-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(45deg, rgb(31 37 68 / 35%) 0 3px, transparent 3px 7px);
+}
+
+.lever {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lever legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.lever legend svg,
+.plan-summary svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 16px;
+  font-weight: 800;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+
+.chip.on {
+  color: #fff;
+  background: var(--blue);
+}
+
+.chip:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.plan-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-weight: 700;
+}
+
+.plan-summary li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.result-stats div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background: #f7f2e7;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+}
+
+.result-stats span {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.result-stats strong {
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.result-stats div:first-child {
+  background: #e9f8f0;
+}
+
+.stars {
+  display: inline-flex;
+  gap: 4px;
+  color: #e89a00;
+}
+
+.star svg {
+  width: 30px;
+  height: 30px;
+  opacity: 0.35;
+}
+
+.star.on svg {
+  opacity: 1;
+}
+
+.star.on path {
+  fill: #ffc233;
+  stroke: var(--ink);
+}
+
+.level-state .stars svg {
+  width: 24px;
+  height: 24px;
 }
 
 .question {

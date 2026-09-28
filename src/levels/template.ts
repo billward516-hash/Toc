@@ -1,12 +1,16 @@
 import type { FactoryModel } from '../engine/model.ts'
 import type { Snapshot } from '../engine/timeline.ts'
 
-// Pop-up text can quote the learner's own run: {shipped}, {made:<station>}, {waiting:<station>}.
-export function fillTemplate(text: string, model: FactoryModel, snapshot: Snapshot): string {
-  return text.replace(/\{(shipped|made|waiting)(?::([\w-]+))?\}/g, (token, what: string, id?: string) => {
-    if (what === 'shipped') return String(snapshot.shipped)
+// Text can quote the learner's own run: {shipped}, {made:<station>}, {waiting:<station>},
+// plus any named value passed in, such as {baseline} or {target}.
+export function fillTemplate(text: string, model: FactoryModel, snapshot: Snapshot, values: Record<string, number> = {}): string {
+  return text.replace(/\{(\w+)(?::([\w-]+))?\}/g, (token, name: string, id?: string) => {
+    if (id === undefined) {
+      if (name === 'shipped') return String(snapshot.shipped)
+      return name in values ? String(values[name]) : token
+    }
     const i = model.stations.findIndex((s) => s.id === id)
-    if (i < 0) return token
-    return String(what === 'made' ? snapshot.completed[i] : snapshot.queues[i])
+    if (i < 0 || (name !== 'made' && name !== 'waiting')) return token
+    return String(name === 'made' ? snapshot.completed[i] : snapshot.queues[i])
   })
 }

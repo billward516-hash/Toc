@@ -28,6 +28,7 @@ export const tier0: Level[] = [
       prompt: 'Which station holds the whole line back?',
       watchMinutes: 60,
     },
+    levers: [],
     popups: [
       {
         trigger: { kind: 'answered', correct: true },
@@ -77,6 +78,7 @@ export const tier0: Level[] = [
       prompt: 'Which station really decides how many robots the factory ships?',
       watchMinutes: 60,
     },
+    levers: [],
     popups: [
       {
         trigger: { kind: 'answered', correct: true },
@@ -127,6 +129,7 @@ export const tier0: Level[] = [
       prompt: 'Which station is the weakest link, the one that limits the whole factory?',
       watchMinutes: 120,
     },
+    levers: [],
     popups: [
       {
         trigger: { kind: 'answered', correct: true },

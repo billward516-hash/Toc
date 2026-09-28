@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+// Simulated minutes per real second at 1x: an 8-hour shift plays in 80 seconds.
+export const MINUTES_PER_SECOND = 6
+
 export interface Playback {
   t: number
   playing: boolean
@@ -7,6 +10,7 @@ export interface Playback {
   play: () => void
   pause: () => void
   restart: () => void
+  rewind: () => void
   skipToEnd: () => void
 }
 
@@ -52,6 +56,10 @@ export function usePlayback(horizon: number, minutesPerSecond: number): Playback
     restart: () => {
       seek(0)
       setPlaying(true)
+    },
+    rewind: () => {
+      setPlaying(false)
+      seek(0)
     },
     skipToEnd: () => {
       setPlaying(false)

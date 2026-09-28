@@ -128,6 +128,8 @@ Chosen over fixed-tick simulation specifically because TOC's core lessons (queue
 - **Linear lines for now.** Units flow through stations in order, with optional parallel servers per station. Routing, batching, setups, and downtime arrive with the tiers that need them.
 - **Release policies:** saturate (raw material always on hand, the "keep everyone busy" default of Tiers 0–2), interval (work arrives on a schedule), and rope (release only when work ahead of the constraint drops below the buffer, for Tier 3).
 - **Content is tested, not just authored.** Level tests check that each level produces its lesson across 31 seeds, e.g. in Tier 0 the answer is the slowest station and grows the biggest pile by the end of the shift.
+- **Where piles form (Tier 1).** With raw material always on hand, a pile builds in front of *every* station slower than the first one, not only the constraint, which would contradict the "biggest pile" reading Tier 0 teaches. Levels therefore keep the first station slower than every non-constraint, and a test checks that for every possible plan, across 21 seeds, the biggest pile sits in front of the true constraint (or nowhere, when the first station is the constraint). Tier 3's rope removes the flooding itself.
+- **Tier 1 plan levels.** Levers change one chosen station each (a tool that speeds it up; a floater who covers its breaks). Tests run every possible plan across 21 seeds: only the intended plan ever meets the target, the untouched factory never does, and every plan gets a written explanation. Planned breaks stop a station from starting new work (it finishes the part in hand).
 
 ---
 

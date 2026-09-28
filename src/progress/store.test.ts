@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { completedLevels, loadOrCreateLearner, localProgressStore, type KeyValue } from './store.ts'
+import { bestStars, completedLevels, loadOrCreateLearner, localProgressStore, type KeyValue } from './store.ts'
 
 const memory = (): KeyValue & { data: Map<string, string> } => {
   const data = new Map<string, string>()
@@ -57,6 +57,19 @@ describe('completedLevels', () => {
     await store.saveProgress('ana', { type: 'completed', levelId: 'a' })
     await store.saveProgress('ana', { type: 'started', levelId: 'b' })
     expect(completedLevels(await store.loadProgress('ana'))).toEqual(new Set(['a']))
+  })
+})
+
+describe('bestStars', () => {
+  it('keeps the best result for each level', async () => {
+    const store = localProgressStore(memory(), clock)
+    const ran = (levelId: string, stars: number) =>
+      store.saveProgress('ana', { type: 'ran', levelId, choices: {}, shipped: 100, met: stars > 0, stars })
+    await ran('a', 0)
+    await ran('a', 1)
+    await ran('a', 0)
+    await ran('b', 0)
+    expect(bestStars(await store.loadProgress('ana'))).toEqual(new Map([['a', 1], ['b', 0]]))
   })
 })
 

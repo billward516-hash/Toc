@@ -1,6 +1,7 @@
 export type ProgressEvent =
   | { type: 'started'; levelId: string }
   | { type: 'answered'; levelId: string; answer: string; correct: boolean }
+  | { type: 'ran'; levelId: string; choices: Record<string, string>; shipped: number; met: boolean; stars: number }
   | { type: 'completed'; levelId: string }
 
 // Every stored event carries who and when, so a later server-side or instructor view can consume
@@ -74,6 +75,14 @@ export function loadOrCreateLearner(storage: KeyValue | null = browserStorage())
 
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {
   return new Set(events.filter((e) => e.type === 'completed').map((e) => e.levelId))
+}
+
+export function bestStars(events: readonly StoredEvent[]): Map<string, number> {
+  const best = new Map<string, number>()
+  for (const event of events) {
+    if (event.type === 'ran') best.set(event.levelId, Math.max(best.get(event.levelId) ?? 0, event.stars))
+  }
+  return best
 }
 
 function browserStorage(): KeyValue | null {

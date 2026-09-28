@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
-import { feedbackFor, levelState, validateLevels } from './graph.ts'
+import { feedbackFor, feedbackForRun, levelState, maxStars, validateLevels } from './graph.ts'
 import type { Level } from './types.ts'
 
 const model: FactoryModel = {
@@ -22,6 +22,7 @@ const level = (id: string, requires: string[] = [], overrides: Partial<Level> = 
   model,
   seed: 1,
   goal: { kind: 'identifyBottleneck', answer: 'paint', prompt: 'Which station?', watchMinutes: 0 },
+  levers: [],
   popups: [
     { trigger: { kind: 'answered', correct: true }, title: 'Yes', body: '' },
     { trigger: { kind: 'answered', correct: false, station: 'cut' }, title: 'Cut is waiting', body: '' },
@@ -60,7 +61,61 @@ describe('feedbackFor', () => {
   })
 })
 
+const planLevel = (overrides: Partial<Level> = {}): Level =>
+  level('plan', [], {
+    goal: { kind: 'output', target: 20, prompt: 'Where does the tool go?' },
+    levers: [
+      { id: 'tool', kind: 'upgrade', label: 'Tool', stations: ['cut', 'paint'], factor: 0.75 },
+      { id: 'floater', kind: 'coverBreak', label: 'Floater', stations: ['cut', 'paint'] },
+    ],
+    popups: [
+      { trigger: { kind: 'ran', met: true }, title: 'Met', body: '' },
+      { trigger: { kind: 'ran', met: false, choices: { tool: 'cut' } }, title: 'Tool at cut', body: '' },
+      { trigger: { kind: 'ran', met: false, choices: { tool: 'cut', floater: 'cut' } }, title: 'All at cut', body: '' },
+      { trigger: { kind: 'ran', met: false }, title: 'Missed', body: '' },
+    ],
+    ...overrides,
+  })
+
+describe('feedbackForRun', () => {
+  const l = planLevel()
+
+  it('picks the pop-up written for the most specific matching plan', () => {
+    expect(feedbackForRun(l, false, { tool: 'cut', floater: 'cut' })?.title).toBe('All at cut')
+    expect(feedbackForRun(l, false, { tool: 'cut', floater: 'paint' })?.title).toBe('Tool at cut')
+    expect(feedbackForRun(l, false, { tool: 'paint', floater: 'cut' })?.title).toBe('Missed')
+    expect(feedbackForRun(l, true, { tool: 'paint', floater: 'paint' })?.title).toBe('Met')
+  })
+})
+
+describe('maxStars', () => {
+  it('awards no stars for spotting the constraint and one for an output target', () => {
+    expect(maxStars(level('a'))).toBe(0)
+    expect(maxStars(planLevel())).toBe(1)
+  })
+})
+
 describe('validateLevels', () => {
+  it('accepts a well-formed plan level', () => {
+    expect(validateLevels([planLevel()])).toEqual([])
+  })
+
+  it('catches levers and plan pop-ups that point at things that do not exist', () => {
+    const problems = validateLevels([
+      planLevel({
+        levers: [{ id: 'tool', kind: 'upgrade', label: 'Tool', stations: ['cut', 'glue'], factor: 0.75 }],
+        popups: [{ trigger: { kind: 'ran', met: false, choices: { tool: 'box', floater: 'cut' } }, title: '', body: '' }],
+      }),
+    ])
+    expect(problems).toEqual([
+      'level "plan": lever "tool" offers unknown station "glue"',
+      `level "plan": popup for tool = "box", which the lever doesn't offer`,
+      'level "plan": popup for unknown lever "floater"',
+      'level "plan": no popup for meeting the goal',
+      'level "plan": no fallback popup for missing the goal',
+    ])
+  })
+
   it('accepts a well-formed set', () => {
     expect(validateLevels([level('a'), level('b', ['a'])])).toEqual([])
   })

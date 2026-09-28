@@ -7,6 +7,7 @@ Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-
 - `npm run dev`, `npm test`, `npm run lint`, `npm run build` (type-checks, then builds to `dist/`).
 - `src/engine/` is the framework-free, deterministic simulator; keep it free of React and of `Math.random`.
 - Level content lives in `src/levels/`. `levels.test.ts` checks every level still teaches its lesson across many seeds, so run the tests after tuning any level.
+- With `saturate` release, keep the first station slower than every non-constraint station, or piles form in front of the wrong stations (see spec §4.7).
 - Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
 
 ## Independence log (every session)

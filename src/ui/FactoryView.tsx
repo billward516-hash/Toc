@@ -1,4 +1,4 @@
-import type { FactoryModel } from '../engine/model.ts'
+import { onBreak, type FactoryModel } from '../engine/model.ts'
 import type { ActiveJob, Snapshot } from '../engine/timeline.ts'
 import { StationGlyph } from './icons.tsx'
 
@@ -18,15 +18,18 @@ const HEIGHT = BOX_TOP + BOX_HEIGHT + 50
 const BUILDING = 5
 const ACCENTS = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff']
 
+export type Badge = 'upgraded' | 'covered'
+
 interface FactoryViewProps {
   model: FactoryModel
   snapshot: Snapshot
-  selected: string | null
-  constraint: string | null
+  selected?: string | null
+  constraint?: string | null
+  badges?: Record<string, Badge[]>
   onSelect?: (stationId: string) => void
 }
 
-export function FactoryView({ model, snapshot, selected, constraint, onSelect }: FactoryViewProps) {
+export function FactoryView({ model, snapshot, selected = null, constraint = null, badges = {}, onSelect }: FactoryViewProps) {
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
@@ -47,6 +50,8 @@ export function FactoryView({ model, snapshot, selected, constraint, onSelect }:
           working={snapshot.working[i]}
           made={snapshot.completed[i]}
           t={snapshot.t}
+          resting={onBreak(station, snapshot.t)}
+          badges={badges[station.id] ?? []}
           selected={selected === station.id}
           isConstraint={constraint === station.id}
           onSelect={onSelect}
@@ -74,21 +79,25 @@ interface ColumnProps {
   working: ActiveJob[]
   made: number
   t: number
+  resting: boolean
+  badges: Badge[]
   selected: boolean
   isConstraint: boolean
   onSelect?: (stationId: string) => void
 }
 
-function StationColumn({ x, id, name, accent, waiting, working, made, t, selected, isConstraint, onSelect }: ColumnProps) {
+function StationColumn(props: ColumnProps) {
+  const { x, id, name, accent, waiting, working, made, t, resting, badges, selected, isConstraint, onSelect } = props
   const center = x + COLUMN / 2
   const pileLeft = center - PILE_WIDTH / 2
   const shown = Math.min(waiting, PILE_COLUMNS * PILE_ROWS)
   const busy = working.length > 0
   const job = working[0]
   const progress = job ? Math.min(1, (t - job.start) / (job.end - job.start)) : 0
-  const status = !busy ? 'Waiting' : working.length > 1 ? `${working.length} working` : 'Working'
+  const status = busy ? (working.length > 1 ? `${working.length} working` : 'Working') : resting ? 'On break' : 'Waiting'
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
+  const extras = [badges.includes('upgraded') && 'upgraded', badges.includes('covered') && 'works through breaks'].filter(Boolean)
 
   return (
     <g
@@ -96,7 +105,7 @@ function StationColumn({ x, id, name, accent, waiting, working, made, t, selecte
       role={onSelect ? 'button' : undefined}
       tabIndex={onSelect ? 0 : undefined}
       aria-pressed={onSelect ? selected : undefined}
-      aria-label={`${name}: ${waiting} parts waiting, ${busy ? 'working' : 'waiting for parts'}, made ${made}`}
+      aria-label={`${name}: ${waiting} parts waiting, ${status.toLowerCase()}, made ${made}${extras.length ? `, ${extras.join(', ')}` : ''}`}
       onClick={() => onSelect?.(id)}
       onKeyDown={(event) => {
         if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
@@ -137,7 +146,7 @@ function StationColumn({ x, id, name, accent, waiting, working, made, t, selecte
       <text className="station-name" x={center} y={BOX_TOP + 94}>
         {name}
       </text>
-      <circle className={`light${busy ? ' on' : ''}`} cx={center - 46} cy={BOX_TOP + 115} r={7} />
+      <circle className={`light${busy ? ' on' : resting ? ' resting' : ''}`} cx={center - 46} cy={BOX_TOP + 115} r={7} />
       <text className="status" x={center - 32} y={BOX_TOP + 122}>
         {status}
       </text>
@@ -146,6 +155,8 @@ function StationColumn({ x, id, name, accent, waiting, working, made, t, selecte
       <text className="made" x={center} y={BOX_TOP + BOX_HEIGHT + 34}>
         Made {made}
       </text>
+      {badges.includes('covered') && <CornerBadge kind="covered" cx={x + 32} cy={BOX_TOP + 4} />}
+      {badges.includes('upgraded') && <CornerBadge kind="upgraded" cx={x + COLUMN - 32} cy={BOX_TOP + 4} />}
       {tag && (
         <g className={`tag ${isConstraint ? 'constraint' : 'pick'}`}>
           <rect x={center - 78} y={TAG_Y - 18} width={156} height={36} rx={18} />
@@ -153,6 +164,22 @@ function StationColumn({ x, id, name, accent, waiting, working, made, t, selecte
             {tag}
           </text>
         </g>
+      )}
+    </g>
+  )
+}
+
+function CornerBadge({ kind, cx, cy }: { kind: Badge; cx: number; cy: number }) {
+  return (
+    <g className={`corner ${kind}`}>
+      <circle className="ring" cx={cx} cy={cy} r={19} />
+      {kind === 'upgraded' ? (
+        <path d={`M${cx + 2} ${cy - 12}l-9 14h7l-2 10 9-14h-7z`} />
+      ) : (
+        <>
+          <circle cx={cx} cy={cy} r={10} className="face" />
+          <path d={`M${cx} ${cy - 6}v6l4 3`} className="hands" />
+        </>
       )}
     </g>
   )
