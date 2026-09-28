@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { levelState, maxStars } from '../levels/graph.ts'
+import { levelState, maxStars, tierParents } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
 import type { Preferences } from '../progress/store.ts'
@@ -33,6 +33,7 @@ export function LevelList({ levels, tierNames, completed, stars, player, prefere
         </p>
       </header>
       {player}
+      <ProgressMap levels={levels} tierNames={tierNames} completed={completed} stars={stars} />
       {completed.has(CORE_DONE) && (
         <fieldset className="lever settings">
           <legend>
@@ -56,7 +57,7 @@ export function LevelList({ levels, tierNames, completed, stars, player, prefere
         </fieldset>
       )}
       {tiers.map((tier) => (
-        <section key={tier} className="tier">
+        <section key={tier} id={`tier-${tier}`} className="tier">
           <h2>
             <span className="tier-chip">Tier {tier}</span> {tierNames[tier]}
           </h2>
@@ -100,5 +101,67 @@ export function LevelList({ levels, tierNames, completed, stars, player, prefere
         </section>
       ))}
     </div>
+  )
+}
+
+type Progress = Pick<LevelListProps, 'levels' | 'tierNames' | 'completed' | 'stars'>
+
+// The skill tree at a glance (spec §3.2): the tiers that must be played in order, then the ones they
+// open up, in any order. Each links to its levels below.
+function ProgressMap({ levels, tierNames, completed, stars }: Progress) {
+  const parents = tierParents(levels)
+  const tiers = [...parents.keys()].sort((a, b) => a - b)
+  const children = (tier: number) => tiers.filter((t) => parents.get(t) === tier)
+  const spine = tiers.filter((t) => parents.get(t) === null).slice(0, 1)
+  while (spine.length > 0 && children(spine[spine.length - 1]).length === 1) spine.push(children(spine[spine.length - 1])[0])
+  const branches = spine.length > 0 ? children(spine[spine.length - 1]) : []
+  const node = (tier: number) => (
+    <li key={tier}>
+      <TierNode tier={tier} name={tierNames[tier]} levels={levels.filter((l) => l.tier === tier)} completed={completed} stars={stars} />
+    </li>
+  )
+  return (
+    <nav className="map" aria-label="Progress map">
+      <p className="map-note">In order:</p>
+      <ol className="spine">{spine.map(node)}</ol>
+      {branches.length > 0 && (
+        <>
+          <p className="map-note">Then Tier {spine[spine.length - 1]} opens all of these, in any order:</p>
+          <ol className="branches">{branches.map(node)}</ol>
+        </>
+      )}
+    </nav>
+  )
+}
+
+function TierNode({ tier, name, levels, completed, stars }: { tier: number; name: string; levels: Level[]; completed: ReadonlySet<string>; stars: ReadonlyMap<string, number> }) {
+  const done = levels.filter((l) => completed.has(l.id)).length
+  const earned = levels.reduce((sum, l) => sum + (stars.get(l.id) ?? 0), 0)
+  const possible = levels.reduce((sum, l) => sum + maxStars(l), 0)
+  const locked = levels.length > 0 && levelState(levels[0], completed) === 'locked'
+  const state = locked ? 'locked' : done === levels.length ? 'completed' : done > 0 ? 'started' : 'open'
+  return (
+    <a className={`tier-node ${state}`} href={`#tier-${tier}`}>
+      <span className="tier-chip">Tier {tier}</span>
+      <strong>{name}</strong>
+      <span className="node-state">
+        {locked ? (
+          <>
+            <Icon name="lock" /> Locked
+          </>
+        ) : (
+          <>
+            <span>
+              {state === 'completed' && <Icon name="check" />} {done} of {levels.length} done
+            </span>
+            {possible > 0 && (
+              <span className="node-stars" aria-label={`${earned} of ${possible} stars`}>
+                <Icon name="star" /> {earned}/{possible}
+              </span>
+            )}
+          </>
+        )}
+      </span>
+    </a>
   )
 }

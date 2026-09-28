@@ -197,6 +197,10 @@ button {
   outline-offset: 2px;
 }
 
+.tier {
+  scroll-margin-top: 16px;
+}
+
 .tier h2 {
   display: flex;
   align-items: center;
@@ -293,8 +297,133 @@ button {
   height: 20px;
 }
 
+/* On a phone, stars sit above "Play" or "Done" so a three-star level still fits the screen. */
+@media (max-width: 600px) {
+  .level-state {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+}
+
 .settings {
   max-width: 640px;
+}
+
+/* The progress map: the tiers played in order, then the ones they open, each linking to its levels. */
+.map {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map .spine {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.map .branches {
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+
+.map-note {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.tier-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  padding: 10px 12px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.tier-node .tier-chip {
+  align-self: flex-start;
+}
+
+.tier-node strong {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.tier-node.started {
+  background: var(--blue-soft);
+}
+
+.tier-node.completed {
+  background: #e2f6ea;
+}
+
+.tier-node.locked {
+  color: var(--muted);
+  background: #f5f0e6;
+  border-color: var(--disabled);
+  box-shadow: 0 4px 0 var(--disabled);
+}
+
+.node-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.node-state {
+  column-gap: 10px;
+}
+
+.node-state > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.node-state svg {
+  width: 16px;
+  height: 16px;
+}
+
+.node-stars path {
+  fill: #ffc233;
+  stroke: var(--ink);
+}
+
+.tier-node.completed .node-state svg {
+  color: var(--green-deep);
+}
+
+.tier-node:focus-visible {
+  outline: 4px solid var(--blue);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .map .spine {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map .branches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Level */

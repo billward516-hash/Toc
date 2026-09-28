@@ -16,8 +16,10 @@ import {
   readBar,
   rushOnTime,
   starsFor,
+  tierParents,
   validateLevels,
 } from './graph.ts'
+import { levels } from './index.ts'
 import type { Goal, Level } from './types.ts'
 
 const model: FactoryModel = {
@@ -474,5 +476,13 @@ describe('validateLevels', () => {
       'level "a": no popup for a correct answer',
       'level "a": no fallback popup for a wrong answer',
     ])
+  })
+})
+
+describe('tierParents', () => {
+  it('chains Tiers 0-3 and branches every later tier from Tier 3', () => {
+    const parents = tierParents(levels)
+    expect([0, 1, 2, 3].map((tier) => parents.get(tier))).toEqual([null, 0, 1, 2])
+    for (let tier = 4; tier <= 10; tier++) expect(parents.get(tier), `tier ${tier}`).toBe(3)
   })
 })

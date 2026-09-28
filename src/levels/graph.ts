@@ -17,6 +17,19 @@ export function levelState(level: Level, completed: ReadonlySet<string>): LevelS
   return level.requires.every((id) => completed.has(id)) ? 'unlocked' : 'locked'
 }
 
+// Which tier unlocks each tier: the tier of the level its first level requires (none for the first).
+// Tiers 0-3 form a chain, and every later tier branches from Tier 3 (spec §3.2).
+export function tierParents(levels: Level[]): Map<number, number | null> {
+  const tierOf = new Map(levels.map((l) => [l.id, l.tier]))
+  const parents = new Map<number, number | null>()
+  for (const level of levels) {
+    if (parents.has(level.tier)) continue
+    const before = level.requires.map((id) => tierOf.get(id)).find((tier) => tier !== undefined && tier !== level.tier)
+    parents.set(level.tier, before ?? null)
+  }
+  return parents
+}
+
 // Tiers 1 and 2 score one metric each, so one star is the most they award. Buffer levels score
 // a healthy buffer, then low inventory, then both again on days the player hasn't seen; elevate
 // levels score output, then steady flow, then money well spent.
