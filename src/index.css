@@ -151,6 +151,22 @@ button {
   margin-top: 10px;
 }
 
+/* Shown in place of a screen that failed while drawing (CrashGuard). */
+.crashed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 560px;
+  margin: 24px auto;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.crashed h1 {
+  font-size: 26px;
+}
+
 /* Home */
 
 .hero {
