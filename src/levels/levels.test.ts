@@ -24,6 +24,13 @@ describe('level content', () => {
     }
   })
 
+  it('teaches every principle in the core (spec section 2) in at least one level', () => {
+    const core = [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29, 31, 32, 33]
+    const taught = new Set(levels.flatMap((l) => l.principles))
+    expect(core.filter((p) => !taught.has(p))).toEqual([])
+    expect(Object.keys(principleNames).map(Number)).toEqual(core)
+  })
+
   it('makes Cut look like the star in the busy level: far more parts made than robots shipped', () => {
     const busy = levels.find((l) => l.id === 'tier0-busy')!
     for (const seed of seeds(busy, 30)) {

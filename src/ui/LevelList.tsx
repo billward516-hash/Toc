@@ -20,7 +20,10 @@ export function LevelList({ levels, tierNames, completed, stars, player, onOpen 
     <div className="screen home">
       <header className="hero">
         <h1>TOC Factory</h1>
-        <p>Run a toy robot factory. Find the step that holds everything back, then make the whole line flow.</p>
+        <p>
+          Run a toy robot factory, then a candle workshop, a print shop, and a bakery. Find the step that holds everything back,
+          then make the whole line flow.
+        </p>
       </header>
       {player}
       {tiers.map((tier) => (
