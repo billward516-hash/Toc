@@ -1,5 +1,5 @@
 import type { Level } from '../levels/types.ts'
-import type { ProgressEvent } from '../progress/store.ts'
+import type { Preferences, ProgressEvent } from '../progress/store.ts'
 import { FindTheConstraint } from './FindTheConstraint.tsx'
 import { PlanTheShift } from './PlanTheShift.tsx'
 import { PredictTheRun } from './PredictTheRun.tsx'
@@ -10,6 +10,8 @@ interface LevelScreenProps {
   onRecord: (event: ProgressEvent) => void
   onExit: () => void
   onNext: (level: Level) => void
+  preferences: Preferences
+  onPreferences: (preferences: Preferences) => void
 }
 
 export function LevelScreen({ level, ...flow }: LevelScreenProps) {

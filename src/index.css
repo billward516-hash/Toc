@@ -293,10 +293,8 @@ button {
   height: 20px;
 }
 
-.more {
-  text-align: center;
-  font-weight: 600;
-  color: var(--muted);
+.settings {
+  max-width: 640px;
 }
 
 /* Level */
@@ -1136,6 +1134,90 @@ button {
 
 .shift-log li.warn .what {
   color: var(--amber-ink);
+}
+
+/* The shift clock as a timeline: a taller strip to grab, with a thumb at the current minute. */
+.scrub {
+  position: relative;
+  padding: 10px 0;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.scrub:focus-visible {
+  outline: none;
+}
+
+.scrub:focus-visible .clock-thumb {
+  outline: 4px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.clock-thumb {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 2px 0 var(--ink);
+  pointer-events: none;
+}
+
+.paused-at {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: #fff0d2;
+  border: 2px solid var(--amber);
+  border-radius: 12px;
+}
+
+.paused-at svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.sim-log summary,
+.why summary {
+  width: fit-content;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sim-log ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow-y: auto;
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.sim-log .when {
+  display: inline-block;
+  min-width: 36px;
+  color: var(--muted);
+}
+
+.why summary {
+  color: var(--blue);
+}
+
+.why p {
+  margin-top: 6px;
 }
 
 .clock-window {

@@ -7,10 +7,11 @@ import { fillTemplate } from '../levels/template.ts'
 import { Dialog } from './Dialog.tsx'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
-import { LevelHeader, PlaybackPanel } from './parts.tsx'
+import { Explanation, LevelHeader, PlaybackPanel } from './parts.tsx'
 import { productColor } from './products.ts'
 import { ShiftLog } from './ShiftLog.tsx'
 import { hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { SimulationLog } from './SimLog.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
@@ -20,7 +21,7 @@ interface Feedback {
   body: string
 }
 
-export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'identifyBottleneck'>) {
+export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, onNext, preferences }: LevelFlowProps<'identifyBottleneck'>) {
   const { model } = level
   const result = useMemo(() => simulate(model, level.seed), [model, level.seed])
   const [speed, setSpeed] = useState(1)
@@ -99,6 +100,7 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           ))}
         >
           {hasDisruptions(model) && <ShiftLog entries={shiftLog(model, result, playback.t, level.unit ?? 'robots')} />}
+          {level.tier >= 2 && <SimulationLog model={model} result={result} t={playback.t} unit={level.unit ?? 'robots'} />}
         </PlaybackPanel>
 
         <section className="question card" aria-live="polite">
@@ -181,7 +183,8 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
             )
           }
         >
-          <p>{feedback.body}</p>
+          {/* A wrong answer's hint stays in full: it's what the player needs to try again. */}
+          {feedback.correct ? <Explanation brief={preferences.brief}>{feedback.body}</Explanation> : <p>{feedback.body}</p>}
           {feedback.correct &&
             level.principles.map((p) => (
               <p key={p} className="principle-chip">

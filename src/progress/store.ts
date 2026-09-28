@@ -112,6 +112,32 @@ function write(storage: KeyValue | null, key: string, value: unknown) {
   }
 }
 
+// Each player's settings, kept on the device with their progress.
+export interface Preferences {
+  // Stop playback at each problem, such as a breakdown or the constraint's buffer running dry.
+  pauseAtProblems: boolean
+  // Fold each explanation behind a "Why?" button (offered once the player finishes Tier 3).
+  brief: boolean
+}
+
+const DEFAULT_PREFERENCES: Preferences = { pauseAtProblems: false, brief: false }
+
+export function loadPreferences(learnerId: string, storage: KeyValue | null = browserStorage()): Preferences {
+  try {
+    const parsed = JSON.parse(storage?.getItem(`${PREFIX}:prefs:${learnerId}`) ?? '{}') as Partial<Preferences> | null
+    return {
+      pauseAtProblems: parsed?.pauseAtProblems === true,
+      brief: parsed?.brief === true,
+    }
+  } catch {
+    return DEFAULT_PREFERENCES
+  }
+}
+
+export function savePreferences(learnerId: string, preferences: Preferences, storage: KeyValue | null = browserStorage()) {
+  write(storage, `${PREFIX}:prefs:${learnerId}`, preferences)
+}
+
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {
   return new Set(events.filter((e) => e.type === 'completed').map((e) => e.levelId))
 }

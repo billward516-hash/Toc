@@ -12,13 +12,20 @@ export interface Playback {
   restart: () => void
   rewind: () => void
   skipToEnd: () => void
+  // Jump to any minute of the shift, paused there.
+  seekTo: (minutes: number) => void
 }
 
 // The whole run is precomputed, so playback only moves a time cursor forward in step with real time.
-export function usePlayback(horizon: number, minutesPerSecond: number): Playback {
+// Playing stops by itself at each of `stops` it reaches, such as the moment a buffer runs dry.
+export function usePlayback(horizon: number, minutesPerSecond: number, stops: number[] = []): Playback {
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
   const cursor = useRef(0)
+  const stopsRef = useRef(stops)
+  useEffect(() => {
+    stopsRef.current = stops
+  }, [stops])
 
   const seek = useCallback(
     (value: number) => {
@@ -36,8 +43,11 @@ export function usePlayback(horizon: number, minutesPerSecond: number): Playback
       // Cap each step so a tab returning from the background doesn't leap ahead.
       const elapsed = Math.min(0.1, (now - last) / 1000)
       last = now
-      seek(cursor.current + elapsed * minutesPerSecond)
-      if (cursor.current >= horizon) setPlaying(false)
+      const from = cursor.current
+      const to = from + elapsed * minutesPerSecond
+      const stop = stopsRef.current.find((s) => s > from && s <= to)
+      seek(stop ?? to)
+      if (stop !== undefined || cursor.current >= horizon) setPlaying(false)
       else frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -64,6 +74,10 @@ export function usePlayback(horizon: number, minutesPerSecond: number): Playback
     skipToEnd: () => {
       setPlaying(false)
       seek(horizon)
+    },
+    seekTo: (minutes: number) => {
+      setPlaying(false)
+      seek(minutes)
     },
   }
 }

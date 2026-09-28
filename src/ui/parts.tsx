@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import type { ZoneSpan } from '../engine/timeline.ts'
 import type { Level } from '../levels/types.ts'
 import { Icon } from './icons.tsx'
+import type { Stop } from './shiftEvents.ts'
 import type { Playback } from './usePlayback.ts'
 
 const SPEEDS = [1, 4]
@@ -45,12 +46,15 @@ interface PlaybackPanelProps {
   legend?: ReactNode
   // The buffer's history colors the shift clock as it plays: red running dry, green healthy, amber flooding.
   zones?: ZoneSpan[]
+  // Where the line can have problems: whether playback stops at each one, and where they are.
+  pause?: { on: boolean; onToggle: () => void; stops: Stop[] }
   children?: ReactNode
 }
 
 export function PlaybackPanel(props: PlaybackPanelProps) {
-  const { playback, speed, onSpeed, horizon, windows = [], parts, legend, zones, children } = props
+  const { playback, speed, onSpeed, horizon, windows = [], parts, legend, zones, pause, children } = props
   const at = (minutes: number) => `${(100 * minutes) / horizon}%`
+  const stoppedAt = pause?.on && !playback.playing ? pause.stops.find((stop) => stop.at === playback.t) : undefined
   return (
     <div className="panel">
       <div className="legend" aria-hidden="true">
@@ -85,28 +89,80 @@ export function PlaybackPanel(props: PlaybackPanelProps) {
         <button className="btn" onClick={playback.skipToEnd}>
           <Icon name="skip" /> End of shift
         </button>
+        {pause && (
+          <button className={`btn small${pause.on ? ' active' : ''}`} aria-pressed={pause.on} onClick={pause.onToggle}>
+            <Icon name="alert" /> Pause at problems
+          </button>
+        )}
       </div>
       <div className="clock">
         <span>
           Shift clock {clock(playback.t)} of {clock(horizon)}
           {windows.map((w) => ` · Break ${clock(w.from)} to ${clock(w.to)}`).join('')}
         </span>
-        <div className="clock-track">
-          {zones ? (
-            zones
-              .filter((z) => z.from < playback.t)
-              .map((z) => (
-                <div key={z.from} className={`clock-zone ${z.zone}`} style={{ left: at(z.from), width: at(Math.min(z.to, playback.t) - z.from) }} />
-              ))
-          ) : (
-            <div className="clock-fill" style={{ width: at(playback.t) }} />
-          )}
-          {windows.map((w) => (
-            <div key={w.from} className="clock-window" style={{ left: at(w.from), width: at(w.to - w.from) }} />
-          ))}
-        </div>
+        <Scrubber t={playback.t} horizon={horizon} onSeek={playback.seekTo}>
+          <div className="clock-track">
+            {zones ? (
+              zones
+                .filter((z) => z.from < playback.t)
+                .map((z) => (
+                  <div key={z.from} className={`clock-zone ${z.zone}`} style={{ left: at(z.from), width: at(Math.min(z.to, playback.t) - z.from) }} />
+                ))
+            ) : (
+              <div className="clock-fill" style={{ width: at(playback.t) }} />
+            )}
+            {windows.map((w) => (
+              <div key={w.from} className="clock-window" style={{ left: at(w.from), width: at(w.to - w.from) }} />
+            ))}
+          </div>
+        </Scrubber>
+        {stoppedAt && (
+          <p className="paused-at" role="status">
+            <Icon name="alert" /> Paused at {clock(stoppedAt.at)}: {stoppedAt.why}
+          </p>
+        )}
       </div>
       {children}
+    </div>
+  )
+}
+
+// The shift clock as a timeline: drag along it, tap it, or use the arrow keys to jump to any minute.
+function Scrubber({ t, horizon, onSeek, children }: { t: number; horizon: number; onSeek: (minutes: number) => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const clamp = (minutes: number) => Math.min(horizon, Math.max(0, minutes))
+  const seekAt = (x: number) => {
+    const box = ref.current?.getBoundingClientRect()
+    if (box && box.width > 0) onSeek(clamp(((x - box.left) / box.width) * horizon))
+  }
+  const keys: Record<string, number> = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5, PageDown: -60, PageUp: 60 }
+  return (
+    <div
+      ref={ref}
+      className="scrub"
+      role="slider"
+      tabIndex={0}
+      aria-label="Shift clock"
+      aria-valuemin={0}
+      aria-valuemax={horizon}
+      aria-valuenow={Math.round(t)}
+      aria-valuetext={clock(t)}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        seekAt(event.clientX)
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) seekAt(event.clientX)
+      }}
+      onKeyDown={(event) => {
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? horizon : event.key in keys ? t + keys[event.key] : null
+        if (next === null) return
+        event.preventDefault()
+        onSeek(clamp(next))
+      }}
+    >
+      {children}
+      <span className="clock-thumb" style={{ left: `${(100 * t) / horizon}%` }} />
     </div>
   )
 }
@@ -143,6 +199,17 @@ export function JamLog({ entries, drum }: { entries: JamEntry[]; drum: string })
         </ol>
       )}
     </section>
+  )
+}
+
+// A result's explanation: in full, or with brief explanations on, folded behind "Why?" (spec §6).
+export function Explanation({ brief, children }: { brief: boolean; children: ReactNode }) {
+  if (!brief) return <p>{children}</p>
+  return (
+    <details className="why">
+      <summary>Why?</summary>
+      <p>{children}</p>
+    </details>
   )
 }
 

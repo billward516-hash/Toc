@@ -25,8 +25,9 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
-import { haltLabels, hasDisruptions, shiftLog, stopReasons } from './shiftEvents.ts'
-import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
+import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog, stopReasons } from './shiftEvents.ts'
+import { SimulationLog } from './SimLog.tsx'
+import { Explanation, JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor, productName } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
@@ -48,17 +49,22 @@ interface Run {
   stars: number
 }
 
-export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<PlanGoal['kind']>) {
+export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext, preferences, onPreferences }: LevelFlowProps<PlanGoal['kind']>) {
   const { model, levers, seed } = level
+  const unit = level.unit ?? 'robots'
   const baseline = useMemo(() => simulate(model, seed), [model, seed])
   const [speed, setSpeed] = useState(1)
-  const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed)
+  const [run, setRun] = useState<Run | null>(null)
+  const shown = run ?? { model, result: baseline }
+  const drum = goal.kind === 'buffer' ? model.stations.findIndex((s) => s.id === goal.drum) : -1
+  const band = useMemo(() => (goal.kind === 'buffer' ? { station: drum, low: goal.low, high: goal.high } : undefined), [goal, drum])
+  const stops = useMemo(() => problemStops(shown.model, shown.result, unit, band), [shown.model, shown.result, unit, band])
+  const stopTimes = useMemo(() => (preferences.pauseAtProblems ? stops.map((stop) => stop.at) : []), [stops, preferences.pauseAtProblems])
+  const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed, stopTimes)
   const [briefing, setBriefing] = useState(true)
   const [choices, setChoices] = useState<Choices>({})
-  const [run, setRun] = useState<Run | null>(null)
   const [dismissed, setDismissed] = useState(false)
 
-  const shown = run ?? { model, result: baseline }
   const snapshot = useMemo(() => snapshotAt(shown.result, playback.t), [shown.result, playback.t])
   const values = goalValues(goal, baseline, run?.result)
   const stars = maxStars(level)
@@ -69,14 +75,13 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const showResult = run !== null && playback.finished && !dismissed
   const popup = run ? feedbackForRun(level, run.met, run.plan) : undefined
   const pileLimit = goal.kind === 'steady' || goal.kind === 'elevate' ? goal.pileLimit : 5
-  const drum = goal.kind === 'buffer' ? model.stations.findIndex((s) => s.id === goal.drum) : -1
   const zones = useMemo(
     () => (goal.kind === 'buffer' ? bufferZones(shown.result, drum, goal.low, goal.high) : undefined),
     [goal, shown.result, drum],
   )
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
   const words: Words = {
-    unit: level.unit ?? 'robots',
+    unit,
     material: model.supply?.name ?? 'material',
     products: (id) => `${productName(model, id).toLowerCase()}s`,
   }
@@ -157,6 +162,11 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           horizon={model.horizon}
           windows={windows}
           zones={zones}
+          pause={
+            goal.kind === 'buffer' || canGoWrong(model)
+              ? { on: preferences.pauseAtProblems, onToggle: () => onPreferences({ ...preferences, pauseAtProblems: !preferences.pauseAtProblems }), stops }
+              : undefined
+          }
           parts={model.products?.map((product) => (
             <span key={product.id}>
               <i className="swatch" style={{ background: productColor(model, product.id) }} /> {product.name}
@@ -215,7 +225,8 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           }
         >
           {jams && <JamLog entries={jams} drum={model.stations[drum].name} />}
-          {!jams && hasDisruptions(shown.model) && <ShiftLog entries={shiftLog(shown.model, shown.result, playback.t, level.unit ?? 'robots')} />}
+          {!jams && hasDisruptions(shown.model) && <ShiftLog entries={shiftLog(shown.model, shown.result, playback.t, unit)} />}
+          {level.tier >= 2 && <SimulationLog model={shown.model} result={shown.result} t={playback.t} unit={unit} />}
         </PlaybackPanel>
 
         <section className="question card" aria-live="polite">
@@ -342,7 +353,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           {goal.kind === 'flow' && <FlowChecklist goal={goal} result={run.result} fresh={run.fresh} />}
           {goal.kind === 'profit' && <ProfitChecklist goal={goal} result={run.result} fresh={run.fresh} />}
           {goal.kind === 'bars' && <BarsChecklist goal={goal} result={run.result} fresh={run.fresh} words={words} spend={run.investment.spend} />}
-          {popup && <p>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</p>}
+          {popup && <Explanation brief={preferences.brief}>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</Explanation>}
           {run.met &&
             level.principles.map((p) => (
               <p key={p} className="principle-chip">

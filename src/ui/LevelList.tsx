@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { levelState, maxStars } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
+import type { Preferences } from '../progress/store.ts'
 import { Icon } from './icons.tsx'
 import { Stars } from './parts.tsx'
 
@@ -11,21 +12,49 @@ interface LevelListProps {
   completed: ReadonlySet<string>
   stars: ReadonlyMap<string, number>
   player: ReactNode
+  preferences: Preferences
+  onPreferences: (preferences: Preferences) => void
   onOpen: (level: Level) => void
 }
 
-export function LevelList({ levels, tierNames, completed, stars, player, onOpen }: LevelListProps) {
+// Explanations can be folded away once the player has finished the core lessons (spec §6).
+const CORE_DONE = 'tier3-read'
+
+export function LevelList({ levels, tierNames, completed, stars, player, preferences, onPreferences, onOpen }: LevelListProps) {
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
       <header className="hero">
         <h1>TOC Factory</h1>
         <p>
-          Run a toy robot factory, then a candle workshop, a print shop, and a bakery. Find the step that holds everything back,
-          then make the whole line flow.
+          Run a toy robot factory, a candle workshop, a print shop, and a bakery with its own shop. Find the step that holds
+          everything back, make the whole line flow, and keep it flowing through breakdowns, late trucks, rush orders, and
+          forecasts that are always wrong.
         </p>
       </header>
       {player}
+      {completed.has(CORE_DONE) && (
+        <fieldset className="lever settings">
+          <legend>
+            <Icon name="rule" /> Explanations after each run
+          </legend>
+          <div className="chips">
+            {[
+              { brief: false, label: 'Show them in full' },
+              { brief: true, label: 'Brief: tap "Why?" to read more' },
+            ].map((option) => (
+              <button
+                key={option.label}
+                className={`chip${preferences.brief === option.brief ? ' on' : ''}`}
+                aria-pressed={preferences.brief === option.brief}
+                onClick={() => onPreferences({ ...preferences, brief: option.brief })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
       {tiers.map((tier) => (
         <section key={tier} className="tier">
           <h2>
@@ -70,7 +99,6 @@ export function LevelList({ levels, tierNames, completed, stars, player, onOpen 
           </ol>
         </section>
       ))}
-      <p className="more">More tiers are on the way.</p>
     </div>
   )
 }

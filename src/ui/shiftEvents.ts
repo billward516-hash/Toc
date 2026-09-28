@@ -1,5 +1,6 @@
 import type { FactoryModel } from '../engine/model.ts'
-import type { SimResult } from '../engine/simulate.ts'
+import type { SimEvent, SimResult } from '../engine/simulate.ts'
+import { bufferZones } from '../engine/timeline.ts'
 import { customers } from './barTexts.ts'
 import type { IconName } from './icons.tsx'
 
@@ -30,6 +31,11 @@ export function haltLabels(model: FactoryModel): string[] {
 // Why stations stand idle on purpose, other than breaks: "No operator", "Maintenance".
 export function stopReasons(model: FactoryModel): string[] {
   return [...new Set(model.stations.flatMap((s) => (s.breaks ?? []).flatMap((b) => (b.reason ? [b.reason] : []))))]
+}
+
+// Whether anything on this line can go wrong mid-shift, for pausing at problems.
+export function canGoWrong(model: FactoryModel): boolean {
+  return Boolean(breaksDown(model) || model.supply || model.market)
 }
 
 // Whether a line has anything for the shift log to report.
@@ -184,6 +190,93 @@ function shopLog(model: FactoryModel, result: SimResult, t: number, unit: string
     entries.push({ at: result.horizon, icon: 'bin', text: waste > 0 ? `Closing: ${waste} thrown out` : 'Closing: nothing thrown out', tone: waste > 0 ? 'warn' : 'info' })
   }
   return entries
+}
+
+// A moment worth stopping playback at, and what happened.
+export interface Stop {
+  at: number
+  why: string
+}
+
+// Problems to stop at, in time order: a breakdown or named incident, the stockroom running out, a truck
+// that's late, customers starting to be turned away, and a buffer running dry after it had filled.
+export function problemStops(model: FactoryModel, result: SimResult, unit: string, buffer?: { station: number; low: number; high: number }): Stop[] {
+  const stops: Stop[] = []
+  const add = (at: number, why: string) => {
+    if (!stops.some((stop) => stop.at === at)) stops.push({ at, why })
+  }
+  const material = model.supply?.name ?? 'material'
+  let stock = result.supply?.onHand ?? Infinity
+  const lastLost = new Map<string, number>()
+  for (const event of result.events) {
+    if (event.type === 'jam' && event.outage) add(event.t, event.cause ?? `${model.stations[event.station].name} broke down`)
+    if (event.type === 'delivery') stock += event.amount
+    if (event.type === 'start' && event.station === 0 && --stock === 0) add(event.t, `Out of ${material}`)
+    if (event.type === 'lost') {
+      const key = event.product ?? ''
+      const last = lastLost.get(key)
+      if (last === undefined || event.t - last > 15) {
+        const product = event.product === undefined ? undefined : model.products?.find((p) => p.id === event.product)?.name.toLowerCase()
+        add(event.t, `Out of ${product ?? unit}: a customer left without one`)
+      }
+      lastLost.set(key, event.t)
+    }
+  }
+  for (const delivery of model.supply?.deliveries ?? []) {
+    const arrival = result.events.find((e) => e.type === 'delivery' && e.due === delivery.due)
+    if (!arrival || arrival.t > delivery.due + 1) add(delivery.due, `The truck due at ${clock(delivery.due)} is late`)
+  }
+  if (buffer) {
+    // The buffer starts empty; it runs dry only once it has filled.
+    const zones = bufferZones(result, buffer.station, buffer.low, buffer.high)
+    const filled = zones.findIndex((zone) => zone.zone !== 'dry')
+    const name = model.stations[buffer.station].name
+    for (const zone of zones.slice(filled + 1)) if (filled >= 0 && zone.zone === 'dry') add(zone.from, `${name}'s buffer ran dry`)
+  }
+  return stops.sort((a, b) => a.at - b.at)
+}
+
+// One event in plain words, for the simulation log.
+export function describeEvent(model: FactoryModel, result: SimResult, event: SimEvent, unit: string): string {
+  const text = eventWords(model, result, event, unit)
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function eventWords(model: FactoryModel, result: SimResult, event: SimEvent, unit: string): string {
+  const one = unit.endsWith('s') ? unit.slice(0, -1) : unit
+  const item = (job: number) => {
+    const product = result.products?.[job]
+    const name = product === undefined ? one : (model.products?.find((p) => p.id === product)?.name ?? product)
+    return `${name} #${job + 1}`
+  }
+  const station = (i: number) => model.stations[i].name
+  switch (event.type) {
+    case 'release':
+      return `${item(event.job)} released${event.rush ? ' (rush order)' : ''}`
+    case 'start':
+      return event.ready !== undefined && event.ready > event.t
+        ? `${station(event.station)} starts a ${Math.round(event.ready - event.t)}-minute changeover for ${item(event.job)}`
+        : `${station(event.station)} starts ${item(event.job)}`
+    case 'finish': {
+      const done = `${station(event.station)} finished ${item(event.job)}`
+      if (event.scrap) return `${done}: scrapped`
+      if (event.rework !== undefined) return `${done}: sent back to ${station(event.rework)}`
+      return event.station === model.stations.length - 1 ? `${done}: ${model.market ? 'on the shelf' : 'shipped'}` : done
+    }
+    case 'move':
+      return `${station(event.station)} sent a cart of ${event.jobs.length} to ${station(event.station + 1)}`
+    case 'jam':
+      if (event.cause) return `${event.cause} at ${station(event.station)} until ${clock(event.until)}`
+      return `${station(event.station)} ${event.outage ? 'broke down' : 'jammed'} until ${clock(event.until)}`
+    case 'delivery':
+      return `${event.amount} ${model.supply?.name ?? 'material'} delivered`
+    case 'sale':
+      return `A customer bought ${item(event.job)}`
+    case 'lost': {
+      const product = event.product === undefined ? undefined : model.products?.find((p) => p.id === event.product)?.name.toLowerCase()
+      return `A customer left without ${product ? `a ${product} ${one}` : `a ${one}`}`
+    }
+  }
 }
 
 function turnedAway(count: number): string {

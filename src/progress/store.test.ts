@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bestStars, chooseLearner, cleanNickname, completedLevels, devicePlayers, loadOrCreateLearner, localProgressStore, type KeyValue } from './store.ts'
+import { bestStars, chooseLearner, cleanNickname, completedLevels, devicePlayers, loadOrCreateLearner, loadPreferences, localProgressStore, savePreferences, type KeyValue } from './store.ts'
 
 const memory = (): KeyValue & { data: Map<string, string> } => {
   const data = new Map<string, string>()
@@ -115,5 +115,21 @@ describe('nicknames', () => {
     expect(chooseLearner(learner, '  ', storage)).toBe(learner)
     storage.data.set('toc-factory:learners', '{oops')
     expect(devicePlayers(storage)).toEqual([])
+  })
+})
+
+describe('preferences', () => {
+  it('keeps each player their own settings, and starts from none', () => {
+    const storage = memory()
+    expect(loadPreferences('sam', storage)).toEqual({ pauseAtProblems: false, brief: false })
+    savePreferences('sam', { pauseAtProblems: true, brief: true }, storage)
+    expect(loadPreferences('sam', storage)).toEqual({ pauseAtProblems: true, brief: true })
+    expect(loadPreferences('alex', storage)).toEqual({ pauseAtProblems: false, brief: false })
+  })
+
+  it('reads damaged settings as none', () => {
+    const storage = memory()
+    storage.data.set('toc-factory:prefs:sam', '{oops')
+    expect(loadPreferences('sam', storage)).toEqual({ pauseAtProblems: false, brief: false })
   })
 })

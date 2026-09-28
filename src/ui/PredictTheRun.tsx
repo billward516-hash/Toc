@@ -10,18 +10,19 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
 import { customers, shopStats } from './barTexts.ts'
-import { LevelHeader, PlaybackPanel } from './parts.tsx'
+import { Explanation, LevelHeader, PlaybackPanel } from './parts.tsx'
 import { productColor } from './products.ts'
 import { ShiftLog } from './ShiftLog.tsx'
 import { ShopDays } from './ShopDays.tsx'
-import { haltLabels, hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog } from './shiftEvents.ts'
+import { SimulationLog } from './SimLog.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
 // Watch one day, predict another, then watch it: a perfect-day twin and the real line by default, or
 // the line and the same line after a change, such as a breakdown. The second can be several days in
 // a row, shown together as a chart, with any one of them to watch.
-export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'predict'>) {
+export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext, preferences, onPreferences }: LevelFlowProps<'predict'>) {
   const { model, seed } = level
   const { compare } = goal
   const unit = level.unit ?? 'robots'
@@ -34,13 +35,15 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
   const real = seconds[watching]
   const days = compare ?? { first: 'The perfect day', second: 'The real day' }
   const [speed, setSpeed] = useState(1)
-  const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed)
+  const [locked, setLocked] = useState(false)
+  const shown = locked ? { model: realModel, result: real } : { model: twinModel, result: twin }
+  const stops = useMemo(() => problemStops(shown.model, shown.result, unit), [shown.model, shown.result, unit])
+  const stopTimes = useMemo(() => (preferences.pauseAtProblems ? stops.map((stop) => stop.at) : []), [stops, preferences.pauseAtProblems])
+  const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed, stopTimes)
   const [briefing, setBriefing] = useState(true)
   const [choice, setChoice] = useState<string | null>(null)
-  const [locked, setLocked] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
-  const shown = locked ? { model: realModel, result: real } : { model: twinModel, result: twin }
   const snapshot = useMemo(() => snapshotAt(shown.result, playback.t), [shown.result, playback.t])
   const values = goalValues(goal, twin, seconds[0], seconds)
   const fill = (text: string) => fillTemplate(text, realModel, snapshotAt(seconds[0], model.horizon), values)
@@ -111,6 +114,11 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
           speed={speed}
           onSpeed={setSpeed}
           horizon={model.horizon}
+          pause={
+            canGoWrong(realModel) || canGoWrong(twinModel)
+              ? { on: preferences.pauseAtProblems, onToggle: () => onPreferences({ ...preferences, pauseAtProblems: !preferences.pauseAtProblems }), stops }
+              : undefined
+          }
           parts={model.products?.map((product) => (
             <span key={product.id}>
               <i className="swatch" style={{ background: productColor(model, product.id) }} /> {product.name}
@@ -132,6 +140,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
           }
         >
           {hasDisruptions(shown.model) && <ShiftLog entries={shiftLog(shown.model, shown.result, playback.t, unit)} />}
+          {level.tier >= 2 && <SimulationLog model={shown.model} result={shown.result} t={playback.t} unit={unit} />}
         </PlaybackPanel>
 
         <section className="question card" aria-live="polite">
@@ -261,7 +270,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
               </div>
             </div>
           )}
-          {popup && <p>{fill(popup.body)}</p>}
+          {popup && <Explanation brief={preferences.brief}>{fill(popup.body)}</Explanation>}
           {level.principles.map((p) => (
             <p key={p} className="principle-chip">
               Principle {p}: {principleNames[p]}

@@ -7,7 +7,10 @@ import {
   completedLevels,
   devicePlayers,
   loadOrCreateLearner,
+  loadPreferences,
   localProgressStore,
+  savePreferences,
+  type Preferences,
   type ProgressEvent,
   type StoredEvent,
 } from './progress/store.ts'
@@ -21,6 +24,9 @@ export default function App() {
   const [store] = useState(() => localProgressStore())
   const [loaded, setLoaded] = useState<StoredEvent[]>([])
   const [open, setOpen] = useState<Level | null>(null)
+  // Settings changed this session, by player, over what's stored on the device.
+  const [changed, setChanged] = useState<ReadonlyMap<string, Preferences>>(new Map())
+  const preferences = useMemo(() => changed.get(learner.id) ?? loadPreferences(learner.id), [changed, learner.id])
   // Right after a switch, events loaded for the previous player are still in state; never show them.
   const events = useMemo(() => loaded.filter((e) => e.learnerId === learner.id), [loaded, learner.id])
 
@@ -39,6 +45,11 @@ export default function App() {
     void store.saveProgress(learner.id, event).then((saved) => setLoaded((previous) => [...previous, saved]))
   }
 
+  const setPreferences = (next: Preferences) => {
+    savePreferences(learner.id, next)
+    setChanged(new Map(changed).set(learner.id, next))
+  }
+
   const choosePlayer = (nickname: string) => {
     setLearner(chooseLearner(learner, nickname))
     setPlayers(devicePlayers())
@@ -55,6 +66,8 @@ export default function App() {
         onRecord={record}
         onExit={() => setOpen(null)}
         onNext={setOpen}
+        preferences={preferences}
+        onPreferences={setPreferences}
       />
     )
   }
@@ -66,6 +79,8 @@ export default function App() {
       completed={completed}
       stars={stars}
       player={<PlayerBar learner={learner} players={players} onChoose={choosePlayer} />}
+      preferences={preferences}
+      onPreferences={setPreferences}
       onOpen={setOpen}
     />
   )
