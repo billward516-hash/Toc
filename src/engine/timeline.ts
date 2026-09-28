@@ -50,3 +50,31 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
 
   return { t, released, queues, working, completed, shipped: completed[n - 1] }
 }
+
+// Share of [0, upTo] during which no station had `limit` or more units waiting.
+// Several events at the same instant take no time, so momentary spikes cost nothing.
+export function steadyShare(result: SimResult, limit: number, upTo = result.horizon): number {
+  if (upTo <= 0) return 1
+  const n = result.stations.length
+  const queues = new Array<number>(n).fill(0)
+  let crowded = 0
+  let unsteady = 0
+  let last = 0
+  const change = (i: number, delta: number) => {
+    const before = queues[i] >= limit
+    queues[i] += delta
+    const after = queues[i] >= limit
+    if (before !== after) crowded += after ? 1 : -1
+  }
+
+  for (const event of result.events) {
+    if (event.t > upTo) break
+    if (crowded > 0) unsteady += event.t - last
+    last = event.t
+    if (event.type === 'release') change(0, 1)
+    else if (event.type === 'start') change(event.station, -1)
+    else if (event.station + 1 < n) change(event.station + 1, 1)
+  }
+  if (crowded > 0) unsteady += upTo - last
+  return 1 - unsteady / upTo
+}

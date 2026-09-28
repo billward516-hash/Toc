@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from './model.ts'
 import { simulate } from './simulate.ts'
-import { snapshotAt } from './timeline.ts'
+import { snapshotAt, steadyShare } from './timeline.ts'
 
 const model: FactoryModel = {
   stations: [
@@ -40,6 +40,19 @@ describe('snapshotAt', () => {
     }
     const snap = snapshotAt(simulate(fixedLine, 1), 100)
     expect(snap.queues).toEqual([0, 30, 0])
+  })
+
+  it('measures how long the line stayed free of big piles', () => {
+    const fixedLine: FactoryModel = {
+      ...model,
+      stations: [2, 5, 3].map((value, i) => ({ ...model.stations[i], cycleTime: { kind: 'fixed', value } })),
+      horizon: 100,
+    }
+    const run = simulate(fixedLine, 1)
+    // Paint's pile reaches 5 at minute 16, drops to 4 at 17, and stays at 5 or more from 18 on.
+    expect(steadyShare(run, 5)).toBeCloseTo(0.17, 10)
+    expect(steadyShare(run, 5, 17)).toBeCloseTo(16 / 17, 10)
+    expect(steadyShare(run, 100)).toBe(1)
   })
 
   it('reports in-progress work with its start and finish times', () => {

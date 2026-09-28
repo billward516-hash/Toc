@@ -34,6 +34,12 @@ export function scale(dist: Dist, factor: number): Dist {
   }
 }
 
+// Standard work: the same average time with much less spread. Draws keep their order.
+export function steadied(dist: Dist, spread = 0.1): Dist {
+  const m = mean(dist)
+  return { kind: 'uniform', min: m * (1 - spread), max: m * (1 + spread) }
+}
+
 export function mean(dist: Dist): number {
   switch (dist.kind) {
     case 'fixed':
