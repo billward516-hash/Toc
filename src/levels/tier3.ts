@@ -122,7 +122,7 @@ export const tier3: Level[] = [
     principles: [19],
     requires: ['tier3-size'],
     briefing:
-      "Three machines jam today: Cut, Mold, and Box. Maintenance can fix one of them for good. Watch Paint's buffer: when it runs into the red, see which station is jammed at that moment. The shift log keeps track.",
+      "Three machines jam today: Cut, Mold, and Box. Maintenance can fix one of them for good. Watch Paint's buffer: when it runs into the red, see which station is jammed at that moment. Under the shift clock, a list of jams shows what each one did to the buffer.",
     model: {
       stations: withChanges(line(U(1.2, 2.4)), {
         cut: { jams: { every: U(40, 80), lasts: U(4, 8) } },
