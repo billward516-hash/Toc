@@ -57,21 +57,59 @@ export interface Learner {
   nickname: string | null
 }
 
+const LEARNER_KEY = `${PREFIX}:learner`
+const PLAYERS_KEY = `${PREFIX}:learners`
+
 export function loadOrCreateLearner(storage: KeyValue | null = browserStorage()): Learner {
-  const key = `${PREFIX}:learner`
   try {
-    const parsed = JSON.parse(storage?.getItem(key) ?? 'null') as Partial<Learner> | null
+    const parsed = JSON.parse(storage?.getItem(LEARNER_KEY) ?? 'null') as Partial<Learner> | null
     if (typeof parsed?.id === 'string') return { id: parsed.id, nickname: parsed.nickname ?? null }
   } catch {
     // Fall through and create a fresh learner.
   }
   const learner: Learner = { id: randomId(), nickname: null }
-  try {
-    storage?.setItem(key, JSON.stringify(learner))
-  } catch {
-    // The learner lives for this session only.
-  }
+  write(storage, LEARNER_KEY, learner)
   return learner
+}
+
+// Nicknames are free text (spec §8.3): no validation beyond trimming and a length cap.
+export const NICKNAME_MAX = 24
+
+export function cleanNickname(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').slice(0, NICKNAME_MAX).trim()
+}
+
+// Everyone with a nickname who has played on this device, so a shared tablet can switch players.
+export function devicePlayers(storage: KeyValue | null = browserStorage()): Learner[] {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(PLAYERS_KEY) ?? '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p): p is Learner => typeof p?.id === 'string' && typeof p?.nickname === 'string')
+  } catch {
+    return []
+  }
+}
+
+// Who plays next on this device. A nickname already played here picks up that player's progress.
+// Otherwise the current learner takes the nickname if they have none yet, keeping their progress,
+// or a new learner starts fresh. Nicknames never leave the device.
+export function chooseLearner(current: Learner, nickname: string, storage: KeyValue | null = browserStorage()): Learner {
+  const name = cleanNickname(nickname)
+  if (!name) return current
+  const players = devicePlayers(storage)
+  const known = players.find((p) => p.nickname?.toLowerCase() === name.toLowerCase())
+  const next = known ?? (current.nickname === null ? { ...current, nickname: name } : { id: randomId(), nickname: name })
+  write(storage, LEARNER_KEY, next)
+  write(storage, PLAYERS_KEY, [...players.filter((p) => p.id !== next.id), next])
+  return next
+}
+
+function write(storage: KeyValue | null, key: string, value: unknown) {
+  try {
+    storage?.setItem(key, JSON.stringify(value))
+  } catch {
+    // Private browsing or a full quota: this lasts for the session only.
+  }
 }
 
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {

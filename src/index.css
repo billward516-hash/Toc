@@ -150,6 +150,53 @@ button {
   color: var(--muted);
 }
 
+.player-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.player-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 640px;
+}
+
+.player-form label {
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.player-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+}
+
+.player-input input {
+  flex: 1 1 200px;
+  min-height: 48px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+}
+
+.player-input input:focus-visible {
+  outline: 4px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .tier h2 {
   display: flex;
   align-items: center;

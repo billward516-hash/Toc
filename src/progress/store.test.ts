@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bestStars, completedLevels, loadOrCreateLearner, localProgressStore, type KeyValue } from './store.ts'
+import { bestStars, chooseLearner, cleanNickname, completedLevels, devicePlayers, loadOrCreateLearner, localProgressStore, type KeyValue } from './store.ts'
 
 const memory = (): KeyValue & { data: Map<string, string> } => {
   const data = new Map<string, string>()
@@ -80,5 +80,40 @@ describe('loadOrCreateLearner', () => {
     expect(first.id).toMatch(/^[0-9a-f]{32}$/)
     expect(first.nickname).toBeNull()
     expect(loadOrCreateLearner(storage)).toEqual(first)
+  })
+})
+
+describe('nicknames', () => {
+  it('trims and caps a nickname, and nothing else', () => {
+    expect(cleanNickname('  Sam   the  Great ')).toBe('Sam the Great')
+    expect(cleanNickname('x'.repeat(40))).toHaveLength(24)
+    expect(cleanNickname('   ')).toBe('')
+  })
+
+  it('gives the first nickname to the learner already playing, keeping their progress', () => {
+    const storage = memory()
+    const learner = loadOrCreateLearner(storage)
+    const named = chooseLearner(learner, 'Sam', storage)
+    expect(named).toEqual({ id: learner.id, nickname: 'Sam' })
+    expect(loadOrCreateLearner(storage)).toEqual(named)
+    expect(devicePlayers(storage)).toEqual([named])
+  })
+
+  it('starts a new nickname fresh, and picks up a known one where it left off', () => {
+    const storage = memory()
+    const sam = chooseLearner(loadOrCreateLearner(storage), 'Sam', storage)
+    const alex = chooseLearner(sam, 'Alex', storage)
+    expect(alex.id).not.toBe(sam.id)
+    expect(chooseLearner(alex, ' sam ', storage)).toEqual(sam)
+    expect(loadOrCreateLearner(storage)).toEqual(sam)
+    expect(devicePlayers(storage).map((p) => p.nickname)).toEqual(['Alex', 'Sam'])
+  })
+
+  it('ignores a blank nickname and unreadable player lists', () => {
+    const storage = memory()
+    const learner = loadOrCreateLearner(storage)
+    expect(chooseLearner(learner, '  ', storage)).toBe(learner)
+    storage.data.set('toc-factory:learners', '{oops')
+    expect(devicePlayers(storage)).toEqual([])
   })
 })

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { levelState, maxStars } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
@@ -9,10 +10,11 @@ interface LevelListProps {
   tierNames: Record<number, string>
   completed: ReadonlySet<string>
   stars: ReadonlyMap<string, number>
+  player: ReactNode
   onOpen: (level: Level) => void
 }
 
-export function LevelList({ levels, tierNames, completed, stars, onOpen }: LevelListProps) {
+export function LevelList({ levels, tierNames, completed, stars, player, onOpen }: LevelListProps) {
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -20,6 +22,7 @@ export function LevelList({ levels, tierNames, completed, stars, onOpen }: Level
         <h1>TOC Factory</h1>
         <p>Run a toy robot factory. Find the step that holds everything back, then make the whole line flow.</p>
       </header>
+      {player}
       {tiers.map((tier) => (
         <section key={tier} className="tier">
           <h2>

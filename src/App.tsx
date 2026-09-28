@@ -3,7 +3,9 @@ import { levels, tierNames } from './levels/index.ts'
 import type { Level } from './levels/types.ts'
 import {
   bestStars,
+  chooseLearner,
   completedLevels,
+  devicePlayers,
   loadOrCreateLearner,
   localProgressStore,
   type ProgressEvent,
@@ -11,15 +13,19 @@ import {
 } from './progress/store.ts'
 import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
+import { PlayerBar } from './ui/PlayerBar.tsx'
 
 export default function App() {
-  const [learner] = useState(() => loadOrCreateLearner())
+  const [learner, setLearner] = useState(() => loadOrCreateLearner())
+  const [players, setPlayers] = useState(() => devicePlayers())
   const [store] = useState(() => localProgressStore())
-  const [events, setEvents] = useState<StoredEvent[]>([])
+  const [loaded, setLoaded] = useState<StoredEvent[]>([])
   const [open, setOpen] = useState<Level | null>(null)
+  // Right after a switch, events loaded for the previous player are still in state; never show them.
+  const events = useMemo(() => loaded.filter((e) => e.learnerId === learner.id), [loaded, learner.id])
 
   useEffect(() => {
-    void store.loadProgress(learner.id).then(setEvents)
+    void store.loadProgress(learner.id).then(setLoaded)
   }, [store, learner.id])
 
   useEffect(() => {
@@ -30,7 +36,12 @@ export default function App() {
   const stars = useMemo(() => bestStars(events), [events])
 
   const record = (event: ProgressEvent) => {
-    void store.saveProgress(learner.id, event).then((saved) => setEvents((previous) => [...previous, saved]))
+    void store.saveProgress(learner.id, event).then((saved) => setLoaded((previous) => [...previous, saved]))
+  }
+
+  const choosePlayer = (nickname: string) => {
+    setLearner(chooseLearner(learner, nickname))
+    setPlayers(devicePlayers())
   }
 
   if (open) {
@@ -48,5 +59,14 @@ export default function App() {
     )
   }
 
-  return <LevelList levels={levels} tierNames={tierNames} completed={completed} stars={stars} onOpen={setOpen} />
+  return (
+    <LevelList
+      levels={levels}
+      tierNames={tierNames}
+      completed={completed}
+      stars={stars}
+      player={<PlayerBar learner={learner} players={players} onChoose={choosePlayer} />}
+      onOpen={setOpen}
+    />
+  )
 }

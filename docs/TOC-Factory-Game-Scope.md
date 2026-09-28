@@ -242,6 +242,7 @@ Single HTML5 codebase running in-browser across tablet (primary target), laptop,
 - v1 has no accounts (§8.2), so learner identification for a real class is handled without any server dependency: **each learner enters a nickname once per device**, stored only in that device's localStorage and never transmitted — this satisfies the `learnerId` tagging §8.2 already requires, without collecting anything sensitive.
 - Because storage is local-only and per-device, a classroom set of shared/rotating tablets should assign one learner per device per session (or accept that switching users on one device means re-entering a nickname and starting fresh progress on that device) until v1.5's server-side accounts exist.
 - No name validation, account creation, or password is introduced — keeps friction at zero for a first-time class rollout.
+- *As built (week 1):* the home screen asks "What should we call you?" until a nickname is saved, and the first nickname goes to the learner already on the device, keeping any progress made so far. "Switch player" serves shared tablets: a nickname already played on the device picks up that player's progress (matched ignoring case and extra spaces), and a new one starts fresh. Nicknames are capped at 24 characters and live only in the device's localStorage.
 
 ---
 
