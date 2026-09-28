@@ -292,7 +292,7 @@ Items 2, 3, and 5 are intentionally left for empirical tuning once the DES engin
 
 - **React** for application/UI state; the simulation engine stays a framework-agnostic module (§4.6).
 - Visual rendering: **SVG/CSS**, per §7 — confirmed sufficient at the stated simulation scale (§4.1: "a dozen stations, a few hundred parts in flight").
-- Hosting/deployment and offline/PWA support are not yet decided — worth resolving before the class date if the classroom's wifi is unreliable, since §8's local-persistence model is most of the way to offline-capable already.
+- **Hosting: GitHub Pages** on the owner's personal GitHub account, published by GitHub Actions from the default branch after lint, tests, and a type-checked build pass. Free Pages requires the repository to stay public. Offline/PWA support is still undecided; it's worth doing before the class date if the classroom's wifi is unreliable, since §8's local persistence is most of the way there.
 
 ### 12.3 First Milestone (MVP Scope)
 

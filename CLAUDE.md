@@ -9,6 +9,7 @@ Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-
 - Level content lives in `src/levels/`. `levels.test.ts` checks every level still teaches its lesson across many seeds, so run the tests after tuning any level.
 - With `saturate` release, keep the first station slower than every non-constraint station, or piles form in front of the wrong stations (see spec §4.7).
 - Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
+- Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages.
 
 ## Independence log (every session)
 
