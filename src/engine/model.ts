@@ -138,6 +138,27 @@ export type Release =
   // Orders arrive on a schedule, `lot` units at a time (one by default).
   | { kind: 'interval'; every: Dist; lot?: number }
   | { kind: 'rope'; constraint: string; buffer: number }
+  // Make a planned number of units (the forecast), as fast as the first station takes them.
+  | { kind: 'plan'; quantity: number }
+  // Keep `target` of each product on the shelf or on the way: start that many, then one more for
+  // each one sold, until `until` minutes into the shift.
+  | { kind: 'replenish'; target: number; until?: number }
+
+// A shop counter at the end of the line (spec §3.6): finished units go on a shelf, and customers come
+// in while the shop is open, each wanting one unit. A customer who finds none leaves without buying (a
+// lost sale). The goods are fresh: whatever is made or being made and not sold by the end of the shift
+// is thrown out.
+export interface Market {
+  // How many customers come in: drawn each day, rounded.
+  customers: Dist
+  opens: number
+  closes: number
+  // A busy spell: this share of the day's customers come in between `from` and `to`.
+  rush?: { from: number; to: number; share: number }
+  // What customers ask for, when the line makes several products: each product's share of the day's
+  // customers, drawn each day and scaled to add up to one. Customers never take another product.
+  wants?: Record<string, Dist>
+}
 
 // A linear line: units flow through the stations in array order. Times are in minutes.
 export interface FactoryModel {
@@ -151,6 +172,7 @@ export interface FactoryModel {
   supply?: Supply
   rush?: Rush[]
   incidents?: Incident[]
+  market?: Market
 }
 
 export function validateModel(model: FactoryModel): string[] {
@@ -186,8 +208,8 @@ export function validateModel(model: FactoryModel): string[] {
         if (!productIds.has(product)) problems.push(`${where}: unknown product "${product}"`)
       }
       timesProblems(where, machine.times)
-      if (index === 0 && model.release.kind === 'saturate' && machine.products) {
-        problems.push(`${where}: with saturate release, the first station's machines must run every product`)
+      if (index === 0 && (model.release.kind === 'saturate' || model.release.kind === 'plan') && machine.products) {
+        problems.push(`${where}: with ${model.release.kind} release, the first station's machines must run every product`)
       }
     }
     // A product no machine here can run would wait forever.
@@ -258,6 +280,29 @@ export function validateModel(model: FactoryModel): string[] {
   if (release.kind === 'rope') {
     if (!ids.has(release.constraint)) problems.push(`rope: unknown constraint "${release.constraint}"`)
     if (!Number.isInteger(release.buffer) || release.buffer < 1) problems.push('rope: buffer must be a positive integer')
+  }
+  if (release.kind === 'plan' && !(Number.isInteger(release.quantity) && release.quantity >= 0)) {
+    problems.push('plan: quantity must be a whole number of at least 0')
+  }
+  if (release.kind === 'replenish') {
+    if (!model.market) problems.push('replenish: needs a market')
+    if (!Number.isInteger(release.target) || release.target < 1) problems.push('replenish: target must be a positive integer')
+    if (release.until !== undefined && !(release.until >= 0)) problems.push('replenish: until must be at least 0')
+  }
+  const { market } = model
+  if (market) {
+    const customers = problemWith(market.customers)
+    if (customers) problems.push(`market: customers: ${customers}`)
+    if (!(market.opens >= 0 && market.closes > market.opens && market.closes <= model.horizon)) problems.push('market: needs 0 <= opens < closes <= horizon')
+    if (market.rush && !(market.rush.from >= market.opens && market.rush.to > market.rush.from && market.rush.to <= market.closes && market.rush.share >= 0 && market.rush.share <= 1)) {
+      problems.push('market: a rush needs opens <= from < to <= closes and a share from 0 to 1')
+    }
+    for (const [id, share] of Object.entries(market.wants ?? {})) {
+      if (!productIds.has(id)) problems.push(`market: wants unknown product "${id}"`)
+      const problem = problemWith(share)
+      if (problem) problems.push(`market: wants ${id}: ${problem}`)
+    }
+    if (model.products && !market.wants) problems.push('market: a line with products needs wants')
   }
   return problems
 }

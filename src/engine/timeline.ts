@@ -30,6 +30,17 @@ export interface Snapshot {
   // Materials in the stockroom, and deliveries so far, when the line uses them.
   stock?: number
   deliveries?: number
+  // The shop counter so far, when the line sells to customers.
+  shop?: Shop
+}
+
+export interface Shop {
+  // Finished units waiting to be sold, by product when the line makes several.
+  shelf: number
+  shelfBy?: Record<string, number>
+  sold: number
+  // Customers who left without buying.
+  lost: number
 }
 
 // The state of the line at time t, rebuilt from the event log. Replaying from zero keeps
@@ -49,6 +60,9 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
   let shipped = 0
   let stock = result.supply?.onHand ?? 0
   let deliveries = 0
+  let sold = 0
+  let lost = 0
+  const soldBy: Record<string, number> = {}
 
   for (const event of result.events) {
     if (event.t > t) break
@@ -97,6 +111,15 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
         stock += event.amount
         deliveries++
         break
+      case 'sale': {
+        sold++
+        const product = result.products?.[event.job]
+        if (product !== undefined) soldBy[product] = (soldBy[product] ?? 0) + 1
+        break
+      }
+      case 'lost':
+        lost++
+        break
     }
   }
 
@@ -116,7 +139,13 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
     shipped,
     ...(shippedBy ? { shippedBy } : {}),
     ...(result.supply ? { stock, deliveries } : {}),
+    ...(result.market ? { shop: shopAt(shipped, shippedBy, sold, soldBy, lost) } : {}),
   }
+}
+
+function shopAt(shipped: number, shippedBy: Record<string, number> | undefined, sold: number, soldBy: Record<string, number>, lost: number): Shop {
+  const shelfBy = shippedBy && Object.fromEntries(Object.entries(shippedBy).map(([product, n]) => [product, n - (soldBy[product] ?? 0)]))
+  return { shelf: shipped - sold, ...(shelfBy ? { shelfBy } : {}), sold, lost }
 }
 
 export type Zone = 'dry' | 'healthy' | 'flooding'

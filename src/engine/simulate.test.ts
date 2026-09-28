@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Dist } from './distributions.ts'
-import { capacity, validateModel, type FactoryModel, type Release } from './model.ts'
+import { capacity, validateModel, type FactoryModel, type Market, type Release } from './model.ts'
 import { runBatch, simulate, type SimResult } from './simulate.ts'
 import { bufferZones, snapshotAt, steadyShare } from './timeline.ts'
 
@@ -546,6 +546,110 @@ describe('changing orders', () => {
       'a rush order needs a time of at least 0 and a positive whole count',
       'supply: on hand must be a whole number of at least 0',
       'supply: a delivery needs a due time of at least 0 and a positive whole amount',
+    ])
+  })
+})
+
+describe('the shop counter', () => {
+  const shop = (release: Release, market: Partial<Market> = {}, extra: Partial<FactoryModel> = {}): FactoryModel => ({
+    ...line([fixed(1), fixed(2)], release, 300),
+    market: { customers: fixed(40), opens: 100, closes: 300, ...market },
+    ...extra,
+  })
+  const customerTimes = (result: SimResult) => result.events.flatMap((e) => (e.type === 'sale' || e.type === 'lost' ? [e.t] : []))
+
+  it('makes the planned number, as fast as the first station takes them', () => {
+    const result = simulate(line([fixed(1), fixed(2)], { kind: 'plan', quantity: 10 }, 100), 1)
+    expect(result.released).toBe(10)
+    expect(result.output).toBe(10)
+    expect(result.events.filter((e) => e.type === 'release').map((e) => e.t)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+
+  it('sells what was made, turns customers away once it runs out, and throws out the rest', () => {
+    // Everything is made by 2:00, before the shop opens.
+    expect(simulate(shop({ kind: 'plan', quantity: 30 }), 1).market).toEqual({ customers: 40, sold: 30, lost: 10, waste: 0 })
+    expect(simulate(shop({ kind: 'plan', quantity: 50 }), 1).market).toEqual({ customers: 40, sold: 40, lost: 0, waste: 10 })
+  })
+
+  it('brings the same customers at the same times whatever the plan, and others on another day', () => {
+    const times = customerTimes(simulate(shop({ kind: 'plan', quantity: 5 }, { customers: uniform(20, 60) }), 3))
+    expect(times.length).toBeGreaterThanOrEqual(20)
+    expect(times.every((t) => t >= 100 && t < 300)).toBe(true)
+    expect(customerTimes(simulate(shop({ kind: 'replenish', target: 4 }, { customers: uniform(20, 60) }), 3))).toEqual(times)
+    expect(customerTimes(simulate(shop({ kind: 'plan', quantity: 5 }, { customers: uniform(20, 60) }), 4))).not.toEqual(times)
+  })
+
+  it('replaces each unit sold, keeping the target on the shelf or on the way', () => {
+    const result = simulate(shop({ kind: 'replenish', target: 6 }), 2)
+    const day = result.market!
+    expect(day.lost).toBe(0)
+    expect(result.released).toBe(6 + day.sold)
+    for (const t of [50, 150, 250]) {
+      const snapshot = snapshotAt(result, t)
+      expect(snapshot.shop!.shelf + snapshot.released - snapshot.shipped).toBe(6)
+    }
+    expect(day.waste).toBeLessThanOrEqual(6)
+    expect(day.waste).toBeGreaterThanOrEqual(5)
+  })
+
+  it('stops replacing what sells at the set time', () => {
+    const result = simulate(shop({ kind: 'replenish', target: 6, until: 200 }), 2)
+    expect(result.events.filter((e) => e.type === 'release').every((e) => e.t < 200)).toBe(true)
+    expect(result.market!.waste).toBeLessThan(simulate(shop({ kind: 'replenish', target: 6 }), 2).market!.waste)
+  })
+
+  it('brings a share of the customers in a busy spell', () => {
+    const times = customerTimes(simulate(shop({ kind: 'plan', quantity: 50 }, { rush: { from: 150, to: 180, share: 0.5 } }), 1))
+    expect(times.filter((t) => t >= 150 && t < 180).length).toBeGreaterThanOrEqual(20)
+  })
+
+  it('sells each customer only what they want', () => {
+    const flavors: Partial<FactoryModel> = {
+      products: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' },
+      ],
+      mix: ['a'],
+      stations: [{ id: 's0', name: 'Station 0', cycleTime: fixed(0.2) }],
+    }
+    // All 400 are made by 1:20, before the shop opens.
+    const result = simulate(shop({ kind: 'plan', quantity: 400 }, { customers: fixed(400), wants: { a: fixed(3), b: fixed(1) } }, flavors), 1)
+    const day = result.market!
+    expect(day.wantedBy!.a + day.wantedBy!.b).toBe(400)
+    expect(day.wantedBy!.a).toBeGreaterThan(260)
+    expect(day.wantedBy!.a).toBeLessThan(340)
+    // Only A is made, so every customer who wants B leaves without buying.
+    expect(day.lostBy!.b).toBe(day.wantedBy!.b)
+    expect(day.soldBy).toEqual({ a: day.wantedBy!.a })
+    expect(day.wasteBy).toEqual({ a: 400 - day.wantedBy!.a })
+    const end = snapshotAt(result, 300).shop!
+    expect(end).toEqual({ shelf: 400 - day.sold, shelfBy: { a: 400 - day.sold }, sold: day.sold, lost: day.lost })
+  })
+
+  it('shows the shelf and the customers so far', () => {
+    const result = simulate(shop({ kind: 'plan', quantity: 30 }), 1)
+    expect(snapshotAt(result, 50).shop).toEqual({ shelf: 24, sold: 0, lost: 0 })
+    const end = snapshotAt(result, 300).shop!
+    expect(end).toEqual({ shelf: 0, sold: 30, lost: 10 })
+    expect(simulate(line([fixed(1)]), 1).market).toBeUndefined()
+    expect(snapshotAt(simulate(line([fixed(1)]), 1), 50).shop).toBeUndefined()
+  })
+
+  it('rejects impossible shops', () => {
+    expect(validateModel(shop({ kind: 'plan', quantity: -1 }, { opens: 200, closes: 400, rush: { from: 100, to: 150, share: 2 } }))).toEqual([
+      'plan: quantity must be a whole number of at least 0',
+      'market: needs 0 <= opens < closes <= horizon',
+      'market: a rush needs opens <= from < to <= closes and a share from 0 to 1',
+    ])
+    expect(validateModel({ ...line([fixed(1)]), release: { kind: 'replenish', target: 0 } })).toEqual([
+      'replenish: needs a market',
+      'replenish: target must be a positive integer',
+    ])
+    const flavors: Partial<FactoryModel> = { products: [{ id: 'a', name: 'A' }], mix: ['a'] }
+    expect(validateModel(shop({ kind: 'plan', quantity: 5 }, {}, flavors))).toEqual(['market: a line with products needs wants'])
+    expect(validateModel(shop({ kind: 'plan', quantity: 5 }, { wants: { a: fixed(1), z: fixed(0) } }, flavors))).toEqual([
+      'market: wants unknown product "z"',
+      'market: wants z: fixed time must be positive',
     ])
   })
 })

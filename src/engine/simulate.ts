@@ -16,6 +16,9 @@ export type SimEvent =
   | { t: number; type: 'jam'; station: number; until: number; outage?: true }
   // Direct materials reaching the stockroom.
   | { t: number; type: 'delivery'; amount: number; due: number }
+  // At the shop counter: a customer buys a finished unit, or finds none of what they want and leaves.
+  | { t: number; type: 'sale'; job: number }
+  | { t: number; type: 'lost'; product?: string }
 
 export interface StationStats {
   id: string
@@ -45,10 +48,26 @@ export interface SimResult {
   escaped?: number
   // Job numbers of rush orders, when there are any.
   rush?: number[]
+  // The shop counter's day, when the line sells to customers.
+  market?: MarketDay
   output: number
   avgWip: number
   avgLeadTime: number | null
   stations: StationStats[]
+}
+
+export interface MarketDay {
+  customers: number
+  sold: number
+  // Customers who left without buying.
+  lost: number
+  // Units made or being made but not sold by the end of the shift.
+  waste: number
+  // By product, when the line makes several.
+  wantedBy?: Record<string, number>
+  soldBy?: Record<string, number>
+  lostBy?: Record<string, number>
+  wasteBy?: Record<string, number>
 }
 
 type Pending =
@@ -59,6 +78,7 @@ type Pending =
   | { kind: 'outage'; station: number; until: number }
   | { kind: 'delivery'; amount: number; due: number }
   | { kind: 'rush'; count: number; product?: string }
+  | { kind: 'customer'; product?: string }
 
 export function simulate(model: FactoryModel, seed: number): SimResult {
   const problems = validateModel(model)
@@ -74,6 +94,10 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const defectDraws = stations.map((s) => stream(seed, `defect:${s.id}`))
   const supplyDraws = stream(seed, 'supply')
   const incidentDraws = stream(seed, 'incident')
+  // Customers come and choose the same way whatever the plan: when (and how many) from one stream,
+  // what they want from another.
+  const marketDraws = stream(seed, 'market')
+  const wantDraws = stream(seed, 'wants')
   const lot = lotSize(release)
   const constraint = release.kind === 'rope' ? stations.findIndex((s) => s.id === release.constraint) : -1
   const machines = stations.map(machinesOf)
@@ -117,6 +141,17 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   let normal = 0
   let nextChange = 0
   const priorityChanges = stations.map((s) => [...(s.priorityChanges ?? [])].sort((a, b) => a.at - b.at))
+  const { market } = model
+  // Finished units waiting to be sold, oldest first, and the shop's day so far.
+  const shelf: number[] = []
+  const sold: boolean[] = []
+  const scrappedJob: boolean[] = []
+  let customers = 0
+  let sales = 0
+  let lostSales = 0
+  const wantedBy: Record<string, number> = {}
+  const soldBy: Record<string, number> = {}
+  const lostBy: Record<string, number> = {}
 
   const advance = (to: number) => {
     const dt = to - now
@@ -129,24 +164,25 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     now = to
   }
 
-  // A rush order has its own product, or else the next one in the pattern without taking its turn.
-  const newJob = (rush?: { product?: string }) => {
+  // New work follows the order pattern. An order outside it (a rush order, or a replacement for a unit
+  // sold) has its own product, or else the pattern's next one without taking its turn.
+  const newJob = (order?: { product?: string; rush?: true }) => {
     const job = releasedAt.length
     releasedAt.push(now)
     while (nextChange < mixChanges.length && mixChanges[nextChange].at <= now) {
       mix = mixChanges[nextChange++].mix
       mixFrom = normal
     }
-    const product = rush?.product ?? mix?.[(normal - mixFrom) % mix.length]
-    if (!rush) normal++
+    const product = order?.product ?? mix?.[(normal - mixFrom) % mix.length]
+    if (!order) normal++
     if (product !== undefined) products.push(product)
     wip++
     if (constraint >= 0) aheadOfConstraint++
-    if (rush) {
+    if (order?.rush) {
       isRush[job] = true
       rushJobs.push(job)
     }
-    events.push({ t: now, type: 'release', job, ...(rush ? { rush: true as const } : {}) })
+    events.push({ t: now, type: 'release', job, ...(order?.rush ? { rush: true as const } : {}) })
     return job
   }
 
@@ -177,7 +213,8 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   }
 
   // Each free machine, in order, takes its pick of the waiting jobs. With saturate release the
-  // first station never waits: it starts new work whenever a machine is free.
+  // first station never waits: it starts new work whenever a machine is free, as it does with plan
+  // release until the plan's quantity is started.
   const tryStart = (i: number) => {
     const station = stations[i]
     if (onBreak(station, now) || now < jammedUntil[i]) return
@@ -188,7 +225,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       const k = pick(i, m, machine)
       let job: number
       if (k >= 0) [job] = queues[i].splice(k, 1)
-      else if (i === 0 && release.kind === 'saturate') job = newJob()
+      else if (i === 0 && (release.kind === 'saturate' || (release.kind === 'plan' && normal < release.quantity))) job = newJob()
       else return
       if (i === 0 && supply) stock--
       holding[i][m] = job
@@ -231,6 +268,27 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     agenda.push(jammedUntil[i], { kind: 'resume', station: i })
   }
 
+  // A customer takes the oldest unit on the shelf of what they want. With replenish release, the sale
+  // starts a replacement.
+  const serve = (product: string | undefined) => {
+    customers++
+    if (product !== undefined) wantedBy[product] = (wantedBy[product] ?? 0) + 1
+    const k = shelf.findIndex((job) => product === undefined || products[job] === product)
+    if (k < 0) {
+      lostSales++
+      if (product !== undefined) lostBy[product] = (lostBy[product] ?? 0) + 1
+      events.push({ t: now, type: 'lost', ...(product !== undefined ? { product } : {}) })
+      return
+    }
+    const [job] = shelf.splice(k, 1)
+    sold[job] = true
+    sales++
+    const bought = products[job]
+    if (bought !== undefined) soldBy[bought] = (soldBy[bought] ?? 0) + 1
+    events.push({ t: now, type: 'sale', job })
+    if (release.kind === 'replenish' && (release.until === undefined || now < release.until)) arrive(0, newJob({ product: bought }))
+  }
+
   const finish = (i: number, m: number, job: number) => {
     holding[i][m] = null
     busy[i]--
@@ -243,6 +301,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     if (scrap) {
       wip--
       scrapped++
+      scrappedJob[job] = true
     } else if (i + 1 < n && transfer > 1) {
       // The cart leaves when it's full, or when the last unit of a multi-unit lot is done.
       carts[i].push(job)
@@ -259,6 +318,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       shipped++
       if (defective[job]) escaped++
       leadTimeTotal += now - releasedAt[job]
+      if (market) shelf.push(job)
     }
     tryStart(i)
     // The rope counts work until the constraint finishes it, or until it's scrapped before getting there.
@@ -274,7 +334,11 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   })
   if (release.kind === 'rope') fillRope()
   else if (release.kind === 'interval') agenda.push(0, { kind: 'release' })
-  else tryStart(0)
+  else if (release.kind === 'replenish') {
+    // Start the target of each product, taking turns.
+    const kinds = model.products?.map((p) => p.id) ?? [undefined]
+    for (let k = 0; k < release.target; k++) for (const product of kinds) arrive(0, newJob({ product }))
+  } else tryStart(0)
   // Breakdowns and late deliveries depend only on the seed, like jams.
   stations.forEach((station, i) => {
     for (const outage of station.outages ?? []) {
@@ -294,6 +358,32 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     agenda.push(at, { kind: 'delivery', amount: delivery.amount, due: delivery.due })
   }
   for (const rush of model.rush ?? []) agenda.push(rush.at, { kind: 'rush', count: rush.count, product: rush.product })
+  // The day's customers: how many, when each comes in, and what each wants. They're the same whatever
+  // the plan, like jams.
+  if (market) {
+    const count = Math.max(0, Math.round(sample(market.customers, marketDraws())))
+    const ids = (model.products ?? []).map((p) => p.id)
+    const shares = ids.map((id) => (market.wants?.[id] ? sample(market.wants[id], wantDraws()) : 0))
+    const total = shares.reduce((a, b) => a + b, 0)
+    const busy = market.rush ? Math.round(count * market.rush.share) : 0
+    for (let k = 0; k < count; k++) {
+      const { from, to } = k < busy && market.rush ? market.rush : { from: market.opens, to: market.closes }
+      const at = from + marketDraws() * (to - from)
+      let product: string | undefined
+      if (total > 0) {
+        let u = wantDraws() * total
+        product = ids[shares.findLastIndex((share) => share > 0)]
+        for (const [j, share] of shares.entries()) {
+          if (u < share) {
+            product = ids[j]
+            break
+          }
+          u -= share
+        }
+      }
+      agenda.push(at, { kind: 'customer', product })
+    }
+  }
 
   for (let next = agenda.peekTime(); next !== undefined && next <= horizon; next = agenda.peekTime()) {
     const { t, payload } = agenda.pop()!
@@ -311,7 +401,9 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       events.push({ t: now, type: 'delivery', amount: payload.amount, due: payload.due })
       tryStart(0)
     } else if (payload.kind === 'rush') {
-      for (let k = 0; k < payload.count; k++) arrive(0, newJob({ product: payload.product }))
+      for (let k = 0; k < payload.count; k++) arrive(0, newJob({ product: payload.product, rush: true }))
+    } else if (payload.kind === 'customer') {
+      serve(payload.product)
     } else if (release.kind === 'interval') {
       for (let k = 0; k < lot; k++) arrive(0, newJob())
       agenda.push(now + sample(release.every, releaseDraws()), { kind: 'release' })
@@ -327,6 +419,17 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     }
   }
   const makesDefects = stations.some((s) => s.defects !== undefined || s.inspects)
+  // Everything started and neither sold nor scrapped is thrown out at the end of the day.
+  const unstarted = new Set(queues[0])
+  const wasteBy: Record<string, number> = {}
+  let waste = 0
+  for (let job = 0; job < releasedAt.length; job++) {
+    if (sold[job] || scrappedJob[job] || unstarted.has(job)) continue
+    waste++
+    const product = products[job]
+    if (product !== undefined) wasteBy[product] = (wasteBy[product] ?? 0) + 1
+  }
+  const byProduct = model.mix ? { wantedBy, soldBy, lostBy, wasteBy } : {}
   return {
     seed,
     horizon,
@@ -336,6 +439,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     ...(supply ? { supply: { onHand: supply.onHand, avgStock: stockArea / horizon } } : {}),
     ...(makesDefects ? { scrapped, escaped } : {}),
     ...(rushJobs.length > 0 ? { rush: rushJobs } : {}),
+    ...(market ? { market: { customers, sold: sales, lost: lostSales, waste, ...byProduct } } : {}),
     output: shipped,
     avgWip: wipArea / horizon,
     avgLeadTime: shipped > 0 ? leadTimeTotal / shipped : null,
