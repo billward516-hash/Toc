@@ -68,6 +68,11 @@ Each level consists of three authored parts:
 
 - **Tiers 0–4: parametric changes only.** Player adjusts existing station speed, batch size, buffer size, release rate, or reassigns a floating operator. Layout topology is fixed.
 - **Tiers 5–6: topological changes unlocked.** Adding a buffer, adding parallel capacity, or rerouting a product becomes available — this gives "elevate the constraint" (principle 24/25) and policy-constraint fixes a literal, satisfying action rather than an abstract slider.
+- **Equipment rules (Tiers 5–6; added 2026-09-28 at the owner's request).** Equipment the player adds comes with restrictions, so each purchase is a trade-off rather than "buy everything":
+  - **Product restrictions and dedicated machines.** A machine may be able to run only some products (an oven that can't bake bread), or be dedicated to one product by house rule. A dedicated machine skips changeovers (Tier 4's setups) but can sit idle while another product's line is the constraint. A level can make the dedication rule itself the constraint: lifting "this oven only bakes cookies" raises output without buying anything. That's a policy constraint (principle 27), and the cheapest elevation there is, found by exploiting before elevating (focusing steps 2 and 4). In Tier 6, a machine shared by several products is where product-mix decisions bite (principle 28).
+  - **Budget.** Each machine has a price, and the level sets a budget. Tier 5's investment-efficiency metric (§5.3) scores output gained per dollar, so money spent anywhere but the constraint scores poorly.
+  - **Floor space.** The layout has a fixed number of open spots, and a new machine or buffer takes one. With more good ideas than space, the player has to choose where capacity matters most.
+  - **Engine work this needs:** more than one product, each with its own route and times; for each machine, the products it may run; a rule for which waiting product a shared machine takes next; and a price and floor spot for each machine the player can buy. Today's engine runs one product down a straight line, with identical parallel machines per station.
 - **Capstone / Sandbox:** full from-scratch factory construction is either a graded capstone tier or an ungraded, always-available sandbox mode (no pop-ups, free experimentation). Both can reuse the same station/routing editor built for Tier 5–6 topological changes. Not required for v1; architecture should not block it.
 
 ### 3.5 Factory Theming
@@ -279,8 +284,9 @@ The following were raised during scoping but do not yet have a final decision an
 3. Exact numeric targets/thresholds for output and revenue win conditions per level.
 4. Whether the capstone/sandbox mode ships in v1 or is deferred entirely to v1.5.
 5. Specific downtime/failure parameters (MTBF/MTTR ranges) per tier. *Set for Tier 3 in §4.7.*
+6. Prices, budgets, and floor-space limits for Tier 5–6 equipment (§3.4).
 
-Items 2, 3, and 5 are intentionally left for empirical tuning once the DES engine exists to tune against, rather than upfront guesses — they're playtesting outputs, not scoping inputs. Item 4 is deferred past the MVP milestone (§12.3) regardless.
+Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES engine exists to tune against, rather than upfront guesses — they're playtesting outputs, not scoping inputs. Item 4 is deferred past the MVP milestone (§12.3) regardless.
 
 ---
 
