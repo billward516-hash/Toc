@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { breakAt, type FactoryModel, type Machine, type Market, type Product, type Station } from '../engine/model.ts'
 import type { ActiveJob, Shop, Snapshot, Zone } from '../engine/timeline.ts'
 import { StationGlyph, WRENCH } from './icons.tsx'
@@ -52,6 +53,9 @@ interface FactoryViewProps {
   onSelect?: (stationId: string) => void
   // The tag over the selected station.
   selectedTag?: string
+  // How fast the shift plays (1 or 4) while it glides forward, so parts slide to their new places,
+  // more quickly at speed; 0 while paused or after a jump in time, so they snap.
+  glide?: number
 }
 
 // How products look: which product each job is, and each product's color and name.
@@ -72,7 +76,7 @@ const zoneLabel: Record<Zone, string> = { dry: 'running dry', healthy: 'healthy'
 
 export function FactoryView(props: FactoryViewProps) {
   const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', rushJobs, onSelect } = props
-  const { selectedTag = 'Your pick' } = props
+  const { selectedTag = 'Your pick', glide = 0 } = props
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
@@ -101,12 +105,35 @@ export function FactoryView(props: FactoryViewProps) {
   const products = model.products ?? []
   const many = products.length > 2
   return (
-    <svg className="factory" viewBox={`0 ${top} ${width} ${height - top}`} role="group" aria-label="Factory floor">
+    <svg
+      className={`factory${glide > 0 ? '' : ' still'}`}
+      style={glide > 0 ? ({ '--glide': `${Math.round(240 / Math.sqrt(glide))}ms` } as CSSProperties) : undefined}
+      viewBox={`0 ${top} ${width} ${height - top}`}
+      role="group"
+      aria-label="Factory floor"
+    >
       <rect className="conveyor" x={24} y={beltY} width={width - 48} height={14} rx={7} />
       {Array.from({ length: count }, (_, i) => (
         <path key={i} className="arrow" d={`M${(i + 1) * COLUMN - 7} ${beltY - 7}l12 14-12 14`} />
       ))}
       {release.kind === 'rope' && tiedTo >= 0 && <Rope tiedTo={tiedTo} length={release.buffer} name={model.stations[tiedTo].name} unit={unit} />}
+      {/* Piles first, then their parts, then the stations over them: a part slides behind its
+          station's box as it goes in, and never covers a pile's count. */}
+      {model.stations.map((station, i) => {
+        const zone = buffer?.station === station.id ? zoneOf(snapshot.queues[i]) : null
+        return (
+          <rect
+            key={station.id}
+            className={`waiting-area${zone ? ` zone-${zone}` : ''}`}
+            x={i * COLUMN + COLUMN / 2 - PILE_WIDTH / 2 - 9}
+            y={PILE_BOTTOM - PILE_HEIGHT - 9}
+            width={PILE_WIDTH + 18}
+            height={PILE_HEIGHT + 18}
+            rx={14}
+          />
+        )
+      })}
+      <Parts snapshot={snapshot} palette={palette} />
       {model.stations.map((station, i) => {
         const pause = breakAt(station, snapshot.t)
         return (
@@ -266,6 +293,43 @@ function ShopCounter({ x, boxHeight, shop, market, products, palette, t }: ShopP
   )
 }
 
+// Every part in a pile or at work, in one layer keyed by job: a part keeps its element from pile to
+// station to the next pile, so as the shift plays it slides between them instead of jumping (spec
+// §4.4). A part at work is hidden behind its station's box, fading out as it goes in and in as it
+// comes out.
+function Parts({ snapshot, palette }: { snapshot: Snapshot; palette: Palette }) {
+  const parts: { job: number; x: number; y: number; inside: boolean }[] = []
+  snapshot.waiting.forEach((jobs, i) => {
+    const pileLeft = i * COLUMN + COLUMN / 2 - PILE_WIDTH / 2
+    jobs.slice(0, PILE_COLUMNS * PILE_ROWS).forEach((job, k) => {
+      const row = Math.floor(k / PILE_COLUMNS)
+      parts.push({ job, x: pileLeft + (k % PILE_COLUMNS) * (BLOCK + GAP), y: PILE_BOTTOM - (row + 1) * BLOCK - row * GAP, inside: false })
+    })
+  })
+  snapshot.working.forEach((jobs, i) => {
+    for (const { job } of jobs) parts.push({ job, x: i * COLUMN + COLUMN / 2 - BLOCK / 2, y: BOX_TOP + 26, inside: true })
+  })
+  // In job order, which never changes, so elements are never moved in the page and their slides run on.
+  parts.sort((a, b) => a.job - b.job)
+  return (
+    <g className="parts" aria-hidden="true">
+      {parts.map(({ job, x, y, inside }) => {
+        const color = jobColor(palette, job)
+        return (
+          <rect
+            key={job}
+            className={`part${palette.isRush(job) ? ' rush' : ''}${inside ? ' inside' : ''}`}
+            style={{ transform: `translate(${x}px, ${y}px)`, fill: color }}
+            width={BLOCK}
+            height={BLOCK}
+            rx={6}
+          />
+        )
+      })}
+    </g>
+  )
+}
+
 // A rope from the station it's tied to back to the start of the line: new work goes in only
 // when fewer than `length` are on their way to that station.
 function Rope({ tiedTo, length, name, unit }: { tiedTo: number; length: number; name: string; unit: string }) {
@@ -331,7 +395,6 @@ function StationColumn(props: ColumnProps) {
   const { id, name, machines } = station
   const waiting = props.waiting.length
   const center = x + COLUMN / 2
-  const pileLeft = center - PILE_WIDTH / 2
   const busy = working.length > 0
   const job = working[0]
   const changing = job !== undefined && t < job.ready
@@ -382,30 +445,6 @@ function StationColumn(props: ColumnProps) {
       }}
     >
       <rect className="hit" x={x} y={0} width={COLUMN} height={height} />
-      <rect
-        className={`waiting-area${zone ? ` zone-${zone}` : ''}`}
-        x={pileLeft - 9}
-        y={PILE_BOTTOM - PILE_HEIGHT - 9}
-        width={PILE_WIDTH + 18}
-        height={PILE_HEIGHT + 18}
-        rx={14}
-      />
-      {props.waiting.slice(0, PILE_COLUMNS * PILE_ROWS).map((job, k) => {
-        const row = Math.floor(k / PILE_COLUMNS)
-        const color = jobColor(palette, job)
-        return (
-          <rect
-            key={job}
-            className={`part${palette.isRush(job) ? ' rush' : ''}`}
-            style={color ? { fill: color } : undefined}
-            x={pileLeft + (k % PILE_COLUMNS) * (BLOCK + GAP)}
-            y={PILE_BOTTOM - (row + 1) * BLOCK - row * GAP}
-            width={BLOCK}
-            height={BLOCK}
-            rx={6}
-          />
-        )
-      })}
       <text className={`pile-count${countClass}`} x={center} y={PILE_BOTTOM + 26}>
         {waiting} waiting
       </text>

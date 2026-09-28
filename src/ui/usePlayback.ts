@@ -6,6 +6,9 @@ export const MINUTES_PER_SECOND = 6
 export interface Playback {
   t: number
   playing: boolean
+  // Whether time is moving on smoothly as the shift plays, rather than jumping (a restart, a seek, the
+  // end of the shift), so the floor can animate the change.
+  gliding: boolean
   finished: boolean
   play: () => void
   pause: () => void
@@ -21,6 +24,7 @@ export interface Playback {
 export function usePlayback(horizon: number, minutesPerSecond: number, stops: number[] = []): Playback {
   const [t, setT] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [gliding, setGliding] = useState(false)
   const cursor = useRef(0)
   const stopsRef = useRef(stops)
   useEffect(() => {
@@ -46,6 +50,7 @@ export function usePlayback(horizon: number, minutesPerSecond: number, stops: nu
       const from = cursor.current
       const to = from + elapsed * minutesPerSecond
       const stop = stopsRef.current.find((s) => s > from && s <= to)
+      setGliding(true)
       seek(stop ?? to)
       if (stop !== undefined || cursor.current >= horizon) setPlaying(false)
       else frame = requestAnimationFrame(tick)
@@ -54,30 +59,37 @@ export function usePlayback(horizon: number, minutesPerSecond: number, stops: nu
     return () => cancelAnimationFrame(frame)
   }, [playing, horizon, minutesPerSecond, seek])
 
+  // Any jump in time snaps the floor to the new moment.
+  const jump = (value: number) => {
+    setGliding(false)
+    seek(value)
+  }
+
   return {
     t,
     playing,
+    gliding: playing && gliding,
     finished: t >= horizon,
     play: () => {
-      if (cursor.current >= horizon) seek(0)
+      if (cursor.current >= horizon) jump(0)
       setPlaying(true)
     },
     pause: () => setPlaying(false),
     restart: () => {
-      seek(0)
+      jump(0)
       setPlaying(true)
     },
     rewind: () => {
       setPlaying(false)
-      seek(0)
+      jump(0)
     },
     skipToEnd: () => {
       setPlaying(false)
-      seek(horizon)
+      jump(horizon)
     },
     seekTo: (minutes: number) => {
       setPlaying(false)
-      seek(minutes)
+      jump(minutes)
     },
   }
 }

@@ -629,6 +629,42 @@ button {
   stroke-width: 6;
 }
 
+/* Parts slide from pile to station to the next pile while the shift plays, more quickly at speed,
+   and fade in where they first appear; a jump in time (a restart, a seek, the end of the shift) snaps
+   them into place. */
+.factory .parts {
+  pointer-events: none;
+}
+
+.factory .parts .part {
+  transition:
+    transform var(--glide, 240ms) ease-out,
+    opacity var(--glide, 240ms) ease-out;
+  animation: part-in var(--glide, 240ms) ease-out;
+}
+
+.factory .parts .part.inside {
+  opacity: 0;
+}
+
+.factory.still .parts .part {
+  transition: none;
+  animation: none;
+}
+
+@keyframes part-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .factory .parts .part {
+    transition: none;
+    animation: none;
+  }
+}
+
 .factory .pile-count {
   font-size: 20px;
   fill: var(--muted);

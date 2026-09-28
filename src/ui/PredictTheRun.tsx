@@ -104,7 +104,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
             : 'A perfect day: every station takes exactly its average'}
       </p>
       <div className="floor">
-        <FactoryView model={shown.model} snapshot={snapshot} unit={unit} rushJobs={shown.result.rush} jobProducts={shown.result.products} />
+        <FactoryView model={shown.model} snapshot={snapshot} unit={unit} rushJobs={shown.result.rush} jobProducts={shown.result.products} glide={playback.gliding ? speed : 0} />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 

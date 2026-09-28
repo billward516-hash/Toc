@@ -153,7 +153,7 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
 
       <p className={`viewing${ran ? ' mine' : ''}`}>{ran ? `Run ${latest.number}, day ${day}` : 'Your line, ready to run'}</p>
       <div className="floor">
-        <FactoryView model={model} snapshot={snapshot} selected={open === null ? null : STEPS[open].id} selectedTag="Editing" onSelect={openStation} />
+        <FactoryView model={model} snapshot={snapshot} selected={open === null ? null : STEPS[open].id} selectedTag="Editing" onSelect={openStation} glide={playback.gliding ? speed : 0} />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 

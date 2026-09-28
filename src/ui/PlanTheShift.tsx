@@ -150,6 +150,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
           jobProducts={shown.result.products}
           unit={level.unit}
           rushJobs={shown.result.rush}
+          glide={playback.gliding ? speed : 0}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>

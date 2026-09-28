@@ -83,6 +83,7 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           jobProducts={result.products}
           unit={level.unit}
           onSelect={solved ? undefined : setSelected}
+          glide={playback.gliding ? speed : 0}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
