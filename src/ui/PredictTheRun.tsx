@@ -14,7 +14,7 @@ import { LevelHeader, PlaybackPanel } from './parts.tsx'
 import { productColor } from './products.ts'
 import { ShiftLog } from './ShiftLog.tsx'
 import { ShopDays } from './ShopDays.tsx'
-import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { haltLabels, hasDisruptions, shiftLog } from './shiftEvents.ts'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
@@ -117,9 +117,9 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
             </span>
           ))}
           legend={
-            (breaksDown(shown.model) || shown.model.stations.some((s) => s.jams)) && (
+            haltLabels(shown.model).length > 0 && (
               <span>
-                <i className="swatch dot jammed" /> Broken down or jammed
+                <i className="swatch dot jammed" /> {haltLabels(shown.model).map((label, k) => (k === 0 ? label : label.toLowerCase())).join(' or ')}
               </span>
             )
           }

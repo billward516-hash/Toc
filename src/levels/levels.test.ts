@@ -290,6 +290,15 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
     expect(days.every((loss) => loss > 0)).toBe(true)
   })
 
+  it.runIf(level.id === 'tier10-power-cut')('loses only about 7 robots to a 30-minute power cut, whatever the day', () => {
+    for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeGreaterThanOrEqual(5)
+    for (let seed = 1; seed <= 100; seed++) expect(lossOn(seed), `seed ${seed}`).toBeLessThanOrEqual(10)
+    // The briefing says 8 to 10 robots usually wait at Paint.
+    const paint = simulate(level.model, level.seed).stations[2].avgQueue
+    expect(paint).toBeGreaterThanOrEqual(8)
+    expect(paint).toBeLessThanOrEqual(10)
+  })
+
   it.runIf(level.id === 'tier9-forecast')('brings about 1,200 customers in 10 days, and throws cupcakes out and turns customers away in any 10 days', () => {
     const customers = seconds.reduce((sum, day) => sum + day.market!.customers, 0)
     expect(Math.abs(customers - 1200)).toBeLessThanOrEqual(20)
@@ -303,6 +312,19 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
   it.runIf(level.id === 'tier2-dice')('ships fewer than its perfect-day twin on every day, and clearly fewer on its own day', () => {
     for (let seed = 1; seed <= 100; seed++) expect(simulate(level.model, seed).output, `seed ${seed}`).toBeLessThan(twin.output)
     expect(twin.output - real.output).toBeGreaterThanOrEqual(8)
+  })
+})
+
+// Tier 10's texts make claims about the level's own day too.
+describe('tier 10 texts', () => {
+  const level = levels.find((l) => l.id === 'tier10-short-handed')!
+
+  it('lets Paint run dry within the hour when an operator before it covers', () => {
+    for (const cover of ['cut', 'mold']) {
+      const day = simulate(applyLevers(level.model, level.levers, { cover }), level.seed)
+      const busy = day.events.reduce((sum, e) => sum + (e.type === 'start' && e.station === 2 ? Math.max(0, Math.min(e.end, 180) - Math.max(e.t, 60)) : 0), 0)
+      expect(busy, cover).toBeLessThan(60)
+    }
   })
 })
 

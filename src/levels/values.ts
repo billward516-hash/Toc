@@ -127,6 +127,8 @@ function runFacts(baseline: SimResult, run: SimResult): Record<string, number> {
     stockBefore: Math.round(baseline.supply?.avgStock ?? 0),
     scrapped: run.scrapped ?? 0,
     scrappedBefore: baseline.scrapped ?? 0,
+    sentBack: run.reworked ?? 0,
+    sentBackBefore: baseline.reworked ?? 0,
     rush: run.rush?.length ?? 0,
     ...(run.market ? shopFacts(run.market) : {}),
     ...(baseline.market ? before(shopFacts(baseline.market)) : {}),

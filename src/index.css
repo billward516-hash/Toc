@@ -781,6 +781,11 @@ button {
   fill: var(--red);
 }
 
+.factory .sent-back {
+  font-size: 19px;
+  fill: var(--amber-ink);
+}
+
 .factory .stockroom rect {
   fill: #fff4dc;
   stroke: var(--ink);

@@ -25,7 +25,7 @@ import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
-import { breaksDown, hasDisruptions, shiftLog } from './shiftEvents.ts'
+import { haltLabels, hasDisruptions, shiftLog, stopReasons } from './shiftEvents.ts'
 import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor, productName } from './products.ts'
@@ -65,7 +65,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const budget = goal.kind === 'elevate' ? goal.budget : undefined
   const over = overBudget(levers, choices, budget)
   const ready = levers.every((lever) => choices[lever.id] !== undefined) && over === 0
-  const windows = breakWindows(model)
+  const windows = breakWindows(run?.model ?? model)
   const showResult = run !== null && playback.finished && !dismissed
   const popup = run ? feedbackForRun(level, run.met, run.plan) : undefined
   const pileLimit = goal.kind === 'steady' || goal.kind === 'elevate' ? goal.pileLimit : 5
@@ -169,19 +169,19 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   <i className="swatch dot resting" /> On break
                 </span>
               )}
-              {model.stations.some((s) => s.jams) && (
-                <span>
-                  <i className="swatch dot jammed" /> Jammed
+              {stopReasons(shown.model).map((reason) => (
+                <span key={reason}>
+                  <i className="swatch dot resting" /> {reason}
                 </span>
-              )}
+              ))}
+              {haltLabels(shown.model).map((label) => (
+                <span key={label}>
+                  <i className="swatch dot jammed" /> {label}
+                </span>
+              ))}
               {model.stations.some((s) => s.changeover) && (
                 <span>
                   <i className="swatch dot changing" /> Changeover
-                </span>
-              )}
-              {breaksDown(shown.model) && (
-                <span>
-                  <i className="swatch dot jammed" /> Broken down
                 </span>
               )}
               {shown.model.supply && (
@@ -609,10 +609,11 @@ function StarChecklist({ goal, result, fresh }: { goal: BufferGoal; result: SimR
   )
 }
 
+// Ordinary breaks, for the shift clock; stops with a reason show on the station and in the shift log.
 function breakWindows(model: FactoryModel) {
   const windows = new Map<string, { from: number; to: number }>()
   for (const station of model.stations) {
-    for (const b of station.breaks ?? []) windows.set(`${b.from}-${b.to}`, b)
+    for (const b of station.breaks ?? []) if (!b.reason) windows.set(`${b.from}-${b.to}`, b)
   }
   return [...windows.values()].sort((a, b) => a.from - b.from)
 }

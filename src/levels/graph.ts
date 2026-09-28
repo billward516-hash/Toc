@@ -1,6 +1,6 @@
 import { validateModel } from '../engine/model.ts'
 import type { SimResult } from '../engine/simulate.ts'
-import { bufferShare, steadyShare, type Snapshot } from '../engine/timeline.ts'
+import { bufferShare, movesOn, steadyShare, type Snapshot } from '../engine/timeline.ts'
 import { leverValues } from './levers.ts'
 import type { Bar, Choices, Comparison, Goal, Level, Popup } from './types.ts'
 
@@ -102,7 +102,7 @@ export function readBar(bar: Bar, day: SimResult, spend = 0): Reading {
 export function rushOnTime(day: SimResult, due: number): number {
   const rush = new Set(day.rush ?? [])
   const last = day.stations.length - 1
-  return day.events.filter((e) => e.type === 'finish' && e.station === last && !e.scrap && e.t <= due && rush.has(e.job)).length
+  return day.events.filter((e) => e.type === 'finish' && e.station === last && movesOn(e) && e.t <= due && rush.has(e.job)).length
 }
 
 export interface BarsScore {

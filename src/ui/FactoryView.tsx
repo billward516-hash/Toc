@@ -1,4 +1,4 @@
-import { onBreak, type FactoryModel, type Machine, type Market, type Product, type Station } from '../engine/model.ts'
+import { breakAt, type FactoryModel, type Machine, type Market, type Product, type Station } from '../engine/model.ts'
 import type { ActiveJob, Shop, Snapshot, Zone } from '../engine/timeline.ts'
 import { StationGlyph, WRENCH } from './icons.tsx'
 import { productColor, productName } from './products.ts'
@@ -77,7 +77,7 @@ export function FactoryView(props: FactoryViewProps) {
   const shopHeight = model.market && (model.products?.length ?? 0) > 2 ? 166 : 0
   const boxHeight = Math.max(BOX_HEIGHT, shopHeight, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
   const cartSpace = model.stations.some((s, i) => (s.transfer ?? 1) > 1 && i < count - 1) ? CART_SPACE : 0
-  const scrapSpace = model.stations.some((s) => s.inspects) ? SCRAP_SPACE : 0
+  const scrapSpace = model.stations.some((s) => s.inspects || s.changeoverScrap) ? SCRAP_SPACE : 0
   const height = BOX_TOP + boxHeight + cartSpace + scrapSpace + 50
   const rush = new Set(rushJobs ?? [])
   const material = model.supply?.name ?? 'material'
@@ -104,44 +104,49 @@ export function FactoryView(props: FactoryViewProps) {
         <path key={i} className="arrow" d={`M${(i + 1) * COLUMN - 7} ${beltY - 7}l12 14-12 14`} />
       ))}
       {release.kind === 'rope' && tiedTo >= 0 && <Rope tiedTo={tiedTo} length={release.buffer} name={model.stations[tiedTo].name} unit={unit} />}
-      {model.stations.map((station, i) => (
-        <StationColumn
-          key={station.id}
-          x={i * COLUMN}
-          station={station}
-          boxHeight={boxHeight}
-          cartSpace={cartSpace}
-          height={height}
-          palette={palette}
-          cart={i < count - 1 && (station.transfer ?? 1) > 1 ? snapshot.carts[i] : null}
-          accent={ACCENTS[i % ACCENTS.length]}
-          waiting={snapshot.waiting[i]}
-          working={snapshot.working[i]}
-          made={snapshot.completed[i]}
-          t={snapshot.t}
-          stopped={
-            snapshot.brokenUntil[i] !== null
-              ? 'broken'
-              : snapshot.jammed[i]
-                ? 'jammed'
-                : onBreak(station, snapshot.t)
-                  ? 'break'
-                  : i === 0 && snapshot.stock === 0
-                    ? 'starved'
-                    : null
-          }
-          brokenUntil={snapshot.brokenUntil[i]}
-          scrapped={station.inspects ? snapshot.scrapped[i] : null}
-          scrapY={BOX_TOP + boxHeight + cartSpace + 34 + SCRAP_SPACE}
-          stock={i === 0 && snapshot.stock !== undefined ? { count: snapshot.stock, name: material } : null}
-          badges={badges[station.id] ?? []}
-          buildingAt={buildingAt}
-          zone={buffer?.station === station.id ? zoneOf(snapshot.queues[i]) : null}
-          selected={selected === station.id}
-          isConstraint={constraint === station.id}
-          onSelect={onSelect}
-        />
-      ))}
+      {model.stations.map((station, i) => {
+        const pause = breakAt(station, snapshot.t)
+        return (
+          <StationColumn
+            key={station.id}
+            x={i * COLUMN}
+            station={station}
+            boxHeight={boxHeight}
+            cartSpace={cartSpace}
+            height={height}
+            palette={palette}
+            cart={i < count - 1 && (station.transfer ?? 1) > 1 ? snapshot.carts[i] : null}
+            accent={ACCENTS[i % ACCENTS.length]}
+            waiting={snapshot.waiting[i]}
+            working={snapshot.working[i]}
+            made={snapshot.completed[i]}
+            t={snapshot.t}
+            stopped={
+              snapshot.brokenUntil[i] !== null
+                ? 'broken'
+                : snapshot.jammed[i]
+                  ? 'jammed'
+                  : pause
+                    ? 'break'
+                    : i === 0 && snapshot.stock === 0
+                      ? 'starved'
+                      : null
+            }
+            why={snapshot.brokenUntil[i] !== null ? snapshot.brokenBy[i] : snapshot.jammed[i] ? null : (pause?.reason ?? null)}
+            brokenUntil={snapshot.brokenUntil[i]}
+            scrapped={station.reworkTo ? null : station.inspects || station.changeoverScrap ? snapshot.scrapped[i] : null}
+            sentBack={station.reworkTo ? { count: snapshot.sentBack[i], to: model.stations.find((s) => s.id === station.reworkTo)?.name ?? '' } : null}
+            scrapY={BOX_TOP + boxHeight + cartSpace + 34 + SCRAP_SPACE}
+            stock={i === 0 && snapshot.stock !== undefined ? { count: snapshot.stock, name: material } : null}
+            badges={badges[station.id] ?? []}
+            buildingAt={buildingAt}
+            zone={buffer?.station === station.id ? zoneOf(snapshot.queues[i]) : null}
+            selected={selected === station.id}
+            isConstraint={constraint === station.id}
+            onSelect={onSelect}
+          />
+        )
+      })}
       {snapshot.shop && model.market ? (
         <ShopCounter x={count * COLUMN} boxHeight={boxHeight} shop={snapshot.shop} market={model.market} products={products} palette={palette} t={snapshot.t} />
       ) : (
@@ -283,9 +288,13 @@ interface ColumnProps {
   t: number
   // A breakdown or jam shows at once; a break, or running out of material, once the station stops.
   stopped: Stop | null
+  // Why it stopped, in place of the usual words: "No operator", "Power cut".
+  why: string | null
   brokenUntil: number | null
-  // Units scrapped here, at a station that inspects.
+  // Units scrapped here, at a station that inspects or spoils units after a changeover, or sent back
+  // for rework, and where to.
   scrapped: number | null
+  sentBack: { count: number; to: string } | null
   scrapY: number
   // The stockroom in front of the first station, when the line uses materials.
   stock: { count: number; name: string } | null
@@ -303,7 +312,7 @@ const stopLabel: Record<Stop, string> = { broken: 'Broken down', jammed: 'Jammed
 
 function StationColumn(props: ColumnProps) {
   const { x, station, boxHeight, cartSpace, height, palette, cart, accent, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
-  const { brokenUntil, scrapped, scrapY, stock } = props
+  const { why, brokenUntil, scrapped, sentBack, scrapY, stock } = props
   const { id, name, machines } = station
   const waiting = props.waiting.length
   const center = x + COLUMN / 2
@@ -316,7 +325,7 @@ function StationColumn(props: ColumnProps) {
   // material, once the station stops.
   const running = changing ? 'Changeover' : working.length > 1 ? `${working.length} working` : 'Working'
   const halted = stopped === 'jammed' || stopped === 'broken'
-  const status = halted ? stopLabel[stopped] : busy ? running : stopped ? stopLabel[stopped] : 'Waiting'
+  const status = halted ? (why ?? stopLabel[stopped]) : busy ? running : stopped ? (why ?? stopLabel[stopped]) : 'Waiting'
   const light = halted ? ' jammed' : changing ? ' changing' : busy ? ' on' : stopped === 'break' ? ' resting' : stopped === 'starved' ? ' starved' : ''
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
@@ -329,9 +338,10 @@ function StationColumn(props: ColumnProps) {
       return `${machine.name}${allowed}: ${doing}`
     }),
     zone && `buffer ${zoneLabel[zone]}`,
-    brokenUntil !== null && `broken down until ${clockTime(brokenUntil)}`,
+    brokenUntil !== null && `${(why ?? 'broken down').toLowerCase()} until ${clockTime(brokenUntil)}`,
     stock && `${stock.count} ${stock.name} in the stockroom`,
     scrapped !== null && `${scrapped} scrapped`,
+    sentBack && `${sentBack.count} sent back to ${sentBack.to}`,
     badges.includes('upgraded') && 'upgraded',
     badges.includes('covered') && 'works through breaks',
     badges.includes('steadied') && 'standard work',
@@ -427,6 +437,11 @@ function StationColumn(props: ColumnProps) {
       {scrapped !== null && (
         <text className="scrapped" x={center} y={scrapY}>
           Scrapped {scrapped}
+        </text>
+      )}
+      {sentBack && (
+        <text className="sent-back" x={center} y={scrapY}>
+          Sent back {sentBack.count}
         </text>
       )}
       {stock && (

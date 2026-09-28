@@ -8,9 +8,10 @@ import { tier6 } from './tier6.ts'
 import { tier7 } from './tier7.ts'
 import { tier8 } from './tier8.ts'
 import { tier9 } from './tier9.ts'
+import { tier10 } from './tier10.ts'
 import type { Level } from './types.ts'
 
-export const levels: Level[] = [...tier0, ...tier1, ...tier2, ...tier3, ...tier4, ...tier5, ...tier6, ...tier7, ...tier8, ...tier9]
+export const levels: Level[] = [...tier0, ...tier1, ...tier2, ...tier3, ...tier4, ...tier5, ...tier6, ...tier7, ...tier8, ...tier9, ...tier10]
 
 export const tierNames: Record<number, string> = {
   0: 'Reading the factory',
@@ -23,4 +24,5 @@ export const tierNames: Record<number, string> = {
   7: 'When things break',
   8: 'Changing orders',
   9: 'Forecasts and demand',
+  10: 'Everyday problems',
 }

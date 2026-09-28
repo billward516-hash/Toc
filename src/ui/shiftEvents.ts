@@ -14,8 +14,22 @@ export interface LogEntry {
 export const clock = (minutes: number) => `${Math.floor(minutes / 60)}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`
 
 // Whether any station on the line can break down, on its own or in an incident.
-export function breaksDown(model: FactoryModel): boolean {
+function breaksDown(model: FactoryModel): boolean {
   return Boolean(model.incidents?.length || model.stations.some((s) => s.outages?.length))
+}
+
+// What a red light means on this line: jams, breakdowns, or named incidents such as a power cut.
+export function haltLabels(model: FactoryModel): string[] {
+  const labels = new Set<string>()
+  if (model.stations.some((s) => s.jams)) labels.add('Jammed')
+  if (model.stations.some((s) => s.outages?.length)) labels.add('Broken down')
+  for (const incident of model.incidents ?? []) labels.add(incident.name ?? 'Broken down')
+  return [...labels]
+}
+
+// Why stations stand idle on purpose, other than breaks: "No operator", "Maintenance".
+export function stopReasons(model: FactoryModel): string[] {
+  return [...new Set(model.stations.flatMap((s) => (s.breaks ?? []).flatMap((b) => (b.reason ? [b.reason] : []))))]
 }
 
 // Whether a line has anything for the shift log to report.
@@ -26,28 +40,51 @@ export function hasDisruptions(model: FactoryModel): boolean {
       model.rush?.length ||
       model.mixChanges?.length ||
       model.market ||
-      model.stations.some((s) => s.priorityChanges?.length || s.inspects),
+      model.stations.some((s) => s.priorityChanges?.length || s.inspects || s.changeoverScrap || s.breaks?.some((b) => b.reason)),
   )
 }
 
-// Every disruption up to minute `t` of the shown run: breakdowns, deliveries (and trucks running late),
-// rush orders, changes to the orders, scrap so far, and at a shop counter, running out and closing.
+// Every disruption up to minute `t` of the shown run: breakdowns and named incidents such as a power
+// cut, stops for a reason such as a missing operator, deliveries (and trucks running late), rush orders,
+// changes to the orders, scrap and rework so far, and at a shop counter, running out and closing.
 export function shiftLog(model: FactoryModel, result: SimResult, t: number, unit: string): LogEntry[] {
   const entries: LogEntry[] = []
   const productName = (id: string) => model.products?.find((p) => p.id === id)?.name ?? id
   const material = model.supply?.name ?? 'material'
 
+  // A named incident stops several stations at once, so it's one entry.
+  const incidents = new Map<string, { at: number; cause: string; stations: string[]; until: number }>()
   for (const event of result.events) {
     if (event.t > t) break
-    if (event.type === 'jam' && event.outage) {
-      const over = t >= event.until
-      entries.push({
-        at: event.t,
-        icon: 'wrench',
-        text: `${model.stations[event.station].name} broke down`,
-        detail: over ? `running again at ${clock(event.until)}` : `down until ${clock(event.until)}`,
-        tone: 'bad',
-      })
+    if (event.type !== 'jam' || !event.outage) continue
+    const station = model.stations[event.station].name
+    if (event.cause) {
+      const key = `${event.cause}@${event.t}`
+      const incident = incidents.get(key) ?? { at: event.t, cause: event.cause, stations: [], until: event.until }
+      incident.stations.push(station)
+      incident.until = Math.max(incident.until, event.until)
+      incidents.set(key, incident)
+      continue
+    }
+    const over = t >= event.until
+    entries.push({
+      at: event.t,
+      icon: 'wrench',
+      text: `${station} broke down`,
+      detail: over ? `running again at ${clock(event.until)}` : `down until ${clock(event.until)}`,
+      tone: 'bad',
+    })
+  }
+  for (const { at, cause, stations, until } of incidents.values()) {
+    const which = stations.length === model.stations.length ? 'every station' : stations.join(' and ')
+    entries.push({ at, icon: 'bolt', text: cause, detail: t >= until ? `${which} stopped, running again at ${clock(until)}` : `${which} stopped until ${clock(until)}`, tone: 'bad' })
+  }
+
+  // Stops with a reason, such as a missing operator or maintenance, once they start.
+  for (const station of model.stations) {
+    for (const stop of station.breaks ?? []) {
+      if (!stop.reason || t < stop.from) continue
+      entries.push({ at: stop.from, icon: 'clock', text: `${station.name}: ${stop.reason.toLowerCase()}`, detail: `${clock(stop.from)} to ${clock(stop.to)}`, tone: 'warn' })
     }
   }
 
@@ -93,12 +130,18 @@ export function shiftLog(model: FactoryModel, result: SimResult, t: number, unit
     }
   }
 
-  // Scrap, as a running count at each inspecting station.
+  // Scrap and rework, as running counts at each station that scraps or sends work back.
   model.stations.forEach((station, i) => {
-    if (!station.inspects) return
+    if (!station.inspects && !station.changeoverScrap) return
     const scrapped = result.events.filter((e) => e.type === 'finish' && e.station === i && e.scrap && e.t <= t)
-    if (scrapped.length === 0) return
-    entries.push({ at: scrapped.at(-1)!.t, icon: 'bin', text: `${station.name} has scrapped ${scrapped.length}`, detail: 'so far', tone: 'bad' })
+    if (scrapped.length > 0) {
+      entries.push({ at: scrapped.at(-1)!.t, icon: 'bin', text: `${station.name} has scrapped ${scrapped.length}`, detail: 'so far', tone: 'bad' })
+    }
+    const back = result.events.filter((e) => e.type === 'finish' && e.station === i && e.rework !== undefined && e.t <= t)
+    if (back.length > 0) {
+      const to = model.stations.find((s) => s.id === station.reworkTo)?.name
+      entries.push({ at: back.at(-1)!.t, icon: 'swap', text: `${station.name} has sent ${back.length} back to ${to}`, detail: 'so far', tone: 'warn' })
+    }
   })
 
   if (model.market) entries.push(...shopLog(model, result, t, unit))

@@ -93,7 +93,7 @@ export function rowText(bar: Bar, met: number, total: number, reading: Reading, 
     case 'stock':
       return `${bar.max} ${words.material} or less in the stockroom, on average, ${days}`
     case 'scrapped':
-      return `Scrapped ${bar.max} or fewer ${days}`
+      return bar.max === 0 ? `Scrapped nothing ${days}` : `Scrapped ${bar.max} or fewer ${days}`
     case 'rushOnTime':
       return `Every rush order out by ${clock(bar.due)} ${days}`
     case 'spend':
