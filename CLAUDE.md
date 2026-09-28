@@ -10,7 +10,7 @@ Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-
 - With `saturate` release, keep the first station slower than every non-constraint station, or piles form in front of the wrong stations (see spec §4.7).
 - Free play's line builder (`src/sandbox/`) turns a few settings per station into an engine model; its default line is tested like a level.
 - Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
-- Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages.
+- Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages once Pages is turned on for the repository (until then each run ends with a "Not published" warning).
 
 ## Independence log (every session)
 

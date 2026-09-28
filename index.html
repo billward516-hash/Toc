@@ -9,6 +9,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // The game needs Safari 16.4 (iPadOS 16.4), Chrome or Edge 111, Firefox 114, or newer. An older
+      // browser would show a blank page, so it gets a note instead.
+      try {
+        new Function('class A { static {} }')
+        if (typeof [].findLastIndex !== 'function') throw new Error('old browser')
+      } catch (error) {
+        document.getElementById('root').innerHTML =
+          '<div class="old-browser"><h1>TOC Factory needs a newer browser</h1>' +
+          '<p>On an iPad, update to iPadOS 16.4 or later in Settings, General, Software Update.</p>' +
+          '<p>On a computer or Chromebook, use a current Chrome, Edge, Firefox, or Safari.</p></div>'
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

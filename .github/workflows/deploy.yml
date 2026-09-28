@@ -16,6 +16,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.pages.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,16 +28,28 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - if: github.ref_name == github.event.repository.default_branch
+      # Publish the default branch once the repository has Pages turned on (Settings, Pages, Source:
+      # GitHub Actions). Until then the build still gets checked, and the run says why nothing went out.
+      - id: pages
+        if: github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" --silent; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Not published::GitHub Pages isn't turned on for this repository. Turn it on under Settings, Pages, Source: GitHub Actions, then push or run this workflow again."
+          fi
+      - if: steps.pages.outputs.publish == 'true'
         uses: actions/configure-pages@v5
-      - if: github.ref_name == github.event.repository.default_branch
+      - if: steps.pages.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   # Only the default branch is published; every other branch just gets checked.
   deploy:
-    if: github.ref_name == github.event.repository.default_branch
+    if: needs.build.outputs.publish == 'true'
     needs: build
     runs-on: ubuntu-latest
     concurrency:

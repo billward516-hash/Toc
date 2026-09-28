@@ -292,6 +292,8 @@ Score labels evolve from generic game terms to formal TOC accounting vocabulary 
 
 Single HTML5 codebase running in-browser across tablet (primary target), laptop, phone, Android, and iOS. No native app packaging required for v1.
 
+*As built:* the build targets the browsers Vite 8 calls widely available: Safari and iPadOS 16.4, Chrome and Edge 111, Firefox 114, or newer. iPads from 2017 on can run iPadOS 16.4; check classroom devices are updated. An older browser shows a note saying so instead of a blank page.
+
 ### 8.2 Single Learner + Classroom Support
 
 - **v1 ships single-learner, local persistence** (localStorage/IndexedDB) — progress, stars, and scores stored per-device.
