@@ -13,7 +13,7 @@ export interface Level {
   popups: Popup[]
 }
 
-export type Goal = { kind: 'identifyBottleneck'; answer: string }
+export type Goal = { kind: 'identifyBottleneck'; answer: string; prompt: string; watchMinutes: number }
 
 export type Trigger = { kind: 'answered'; correct: true } | { kind: 'answered'; correct: false; station?: string }
 

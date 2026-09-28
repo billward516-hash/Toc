@@ -21,7 +21,7 @@ const level = (id: string, requires: string[] = [], overrides: Partial<Level> = 
   briefing: '',
   model,
   seed: 1,
-  goal: { kind: 'identifyBottleneck', answer: 'paint' },
+  goal: { kind: 'identifyBottleneck', answer: 'paint', prompt: 'Which station?', watchMinutes: 0 },
   popups: [
     { trigger: { kind: 'answered', correct: true }, title: 'Yes', body: '' },
     { trigger: { kind: 'answered', correct: false, station: 'cut' }, title: 'Cut is waiting', body: '' },
@@ -78,7 +78,7 @@ describe('validateLevels', () => {
   it('catches answers and popups that point at missing stations', () => {
     const problems = validateLevels([
       level('a', [], {
-        goal: { kind: 'identifyBottleneck', answer: 'glue' },
+        goal: { kind: 'identifyBottleneck', answer: 'glue', prompt: 'Which station?', watchMinutes: 0 },
         popups: [{ trigger: { kind: 'answered', correct: false, station: 'glue' }, title: '', body: '' }],
       }),
     ])
