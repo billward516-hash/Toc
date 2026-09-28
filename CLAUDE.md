@@ -8,6 +8,7 @@ Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-
 - `src/engine/` is the framework-free, deterministic simulator; keep it free of React and of `Math.random`.
 - Level content lives in `src/levels/`. `levels.test.ts` checks every level still teaches its lesson across many seeds, so run the tests after tuning any level.
 - With `saturate` release, keep the first station slower than every non-constraint station, or piles form in front of the wrong stations (see spec §4.7).
+- Free play's line builder (`src/sandbox/`) turns a few settings per station into an engine model; its default line is tested like a level.
 - Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
 - Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages.
 

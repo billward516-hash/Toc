@@ -14,14 +14,19 @@ export interface Stat {
 }
 
 export function LevelHeader({ level, stats, onExit }: { level: Level; stats: Stat[]; onExit: () => void }) {
+  return <ScreenHeader chip={`Tier ${level.tier}`} title={level.title} stats={stats} onExit={onExit} />
+}
+
+// A play screen's title, with a way back to the levels and the numbers that matter as the shift plays.
+export function ScreenHeader({ chip, title, stats, onExit }: { chip: string; title: string; stats: Stat[]; onExit: () => void }) {
   return (
     <header className="level-header">
       <button className="btn small" onClick={onExit}>
         <Icon name="back" /> Levels
       </button>
       <div className="level-title">
-        <span className="tier-chip">Tier {level.tier}</span>
-        <h1>{level.title}</h1>
+        <span className="tier-chip">{chip}</span>
+        <h1>{title}</h1>
       </div>
       <dl className="dashboard">
         {stats.map((stat) => (

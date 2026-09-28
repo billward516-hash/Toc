@@ -15,12 +15,13 @@ interface LevelListProps {
   preferences: Preferences
   onPreferences: (preferences: Preferences) => void
   onOpen: (level: Level) => void
+  onFreePlay: () => void
 }
 
 // Explanations can be folded away once the player has finished the core lessons (spec §6).
 const CORE_DONE = 'tier3-read'
 
-export function LevelList({ levels, tierNames, completed, stars, player, preferences, onPreferences, onOpen }: LevelListProps) {
+export function LevelList({ levels, tierNames, completed, stars, player, preferences, onPreferences, onOpen, onFreePlay }: LevelListProps) {
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -34,6 +35,18 @@ export function LevelList({ levels, tierNames, completed, stars, player, prefere
       </header>
       {player}
       <ProgressMap levels={levels} tierNames={tierNames} completed={completed} stars={stars} />
+      <button className="level-card free" onClick={onFreePlay}>
+        <span className="level-number">
+          <Icon name="build" />
+        </span>
+        <span className="level-text">
+          <strong>Free play</strong>
+          <span className="principle">Build your own line and run it: any stations, any speeds. No stars, no scores.</span>
+        </span>
+        <span className="level-state">
+          Play <Icon name="next" />
+        </span>
+      </button>
       {completed.has(CORE_DONE) && (
         <fieldset className="lever settings">
           <legend>

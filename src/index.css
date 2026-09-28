@@ -719,7 +719,8 @@ button {
   stroke-width: 4;
 }
 
-.factory .glyph * {
+.factory .glyph *,
+.station-mark .glyph * {
   fill: #fff;
   stroke: var(--ink);
   stroke-width: 3;
@@ -727,7 +728,8 @@ button {
   stroke-linejoin: round;
 }
 
-.factory .glyph .ink {
+.factory .glyph .ink,
+.station-mark .glyph .ink {
   fill: var(--ink);
 }
 
@@ -1901,4 +1903,281 @@ button {
   background: var(--blue-soft);
   border: 2px solid var(--blue);
   border-radius: 12px;
+}
+
+/* Free play */
+
+.level-card.free .level-number {
+  color: #fff;
+  background: var(--blue);
+}
+
+.level-card.free .level-number svg {
+  width: 28px;
+  height: 28px;
+}
+
+.sandbox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.line-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.station-editor {
+  background: #f7f2e7;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  scroll-margin: 16px;
+}
+
+.station-editor.open {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+}
+
+/* The whole row opens and closes the station's settings. */
+.station-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.station-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.station-text strong {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.station-text span {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.station-top .paper {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
+
+.station-top .paper strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.station-top > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  transition: transform 120ms ease;
+}
+
+.station-editor.open .station-top > svg {
+  transform: rotate(90deg);
+}
+
+.station-mark {
+  flex: none;
+  width: 36px;
+  height: 36px;
+}
+
+.station-mark .mark {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.station-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  padding: 4px 12px 12px;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+}
+
+.stepper,
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.setting-label {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.chip.step {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 0;
+}
+
+.chip.step svg {
+  width: 20px;
+  height: 20px;
+}
+
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.stepper output {
+  min-width: 2.5ch;
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Running stays in reach: the bar sticks to the bottom of the screen while the editor is on it. */
+.run-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  width: calc(100% + 40px);
+  margin: 0 -20px -20px;
+  padding: 12px 20px;
+  background: var(--card);
+  border-top: 3px solid #eee4d0;
+  border-radius: 0 0 21px 21px;
+}
+
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+@media (max-width: 600px) {
+  .day-row {
+    flex-wrap: wrap;
+  }
+
+  .run-bar .btn {
+    flex: 1;
+  }
+}
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runs h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.sandbox-table {
+  width: 100%;
+  border-collapse: separate;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+.sandbox-table th,
+.sandbox-table td {
+  padding: 7px 8px;
+  text-align: right;
+  border-bottom: 2px solid #eee4d0;
+}
+
+.sandbox-table tr:last-child th,
+.sandbox-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.sandbox-table th:first-child,
+.sandbox-table .changes {
+  text-align: left;
+}
+
+.sandbox-table thead th {
+  font-size: 13px;
+  color: var(--muted);
+  vertical-align: bottom;
+  background: #f7f2e7;
+}
+
+.sandbox-table small {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.runs-table .changes {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.runs-table tr.current {
+  background: var(--blue-soft);
+}
+
+@media (max-width: 600px) {
+  .sandbox-table {
+    font-size: 14px;
+  }
+
+  .sandbox-table th,
+  .sandbox-table td {
+    padding: 6px 4px;
+  }
+
+  .runs-table .changes {
+    font-size: 13px;
+  }
 }

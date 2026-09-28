@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { bestStars, chooseLearner, cleanNickname, completedLevels, devicePlayers, loadOrCreateLearner, loadPreferences, localProgressStore, savePreferences, type KeyValue } from './store.ts'
+import {
+  bestStars,
+  chooseLearner,
+  cleanNickname,
+  completedLevels,
+  devicePlayers,
+  loadOrCreateLearner,
+  loadPreferences,
+  loadSandbox,
+  localProgressStore,
+  savePreferences,
+  saveSandbox,
+  type KeyValue,
+} from './store.ts'
 
 const memory = (): KeyValue & { data: Map<string, string> } => {
   const data = new Map<string, string>()
@@ -131,5 +144,17 @@ describe('preferences', () => {
     const storage = memory()
     storage.data.set('toc-factory:prefs:sam', '{oops')
     expect(loadPreferences('sam', storage)).toEqual({ pauseAtProblems: false, brief: false })
+  })
+})
+
+describe('free play', () => {
+  it("keeps each player's line, and gives nothing back for a new or damaged one", () => {
+    const storage = memory()
+    expect(loadSandbox('sam', storage)).toBeNull()
+    saveSandbox('sam', { stations: [], release: { kind: 'busy' } }, storage)
+    expect(loadSandbox('sam', storage)).toEqual({ stations: [], release: { kind: 'busy' } })
+    expect(loadSandbox('alex', storage)).toBeNull()
+    storage.data.set('toc-factory:sandbox:alex', '{oops')
+    expect(loadSandbox('alex', storage)).toBeNull()
   })
 })

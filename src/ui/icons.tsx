@@ -199,6 +199,10 @@ const icons = {
       <circle cx={16} cy={8} r={1.4} />
     </>
   ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
+  // A factory with a sawtooth roof and a chimney.
+  build: <path d="M3 20h18M4 20V11l4-3v3l4-3v3l4-3V4h3v16" />,
 }
 
 export type IconName = keyof typeof icons

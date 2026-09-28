@@ -138,6 +138,20 @@ export function savePreferences(learnerId: string, preferences: Preferences, sto
   write(storage, `${PREFIX}:prefs:${learnerId}`, preferences)
 }
 
+// The line each player last built in free play, kept as they left it. It comes back unchecked (null
+// when there's none), for free play to check before use.
+export function loadSandbox(learnerId: string, storage: KeyValue | null = browserStorage()): unknown {
+  try {
+    return JSON.parse(storage?.getItem(`${PREFIX}:sandbox:${learnerId}`) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+export function saveSandbox(learnerId: string, setup: unknown, storage: KeyValue | null = browserStorage()) {
+  write(storage, `${PREFIX}:sandbox:${learnerId}`, setup)
+}
+
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {
   return new Set(events.filter((e) => e.type === 'completed').map((e) => e.levelId))
 }
