@@ -333,7 +333,7 @@ The following were raised during scoping but do not yet have a final decision an
 2. Exact tolerance-band widths for the stability metric per level (difficulty dial). *Set for Tiers 2 and 3 in §4.7.*
 3. Exact numeric targets/thresholds for output and revenue win conditions per level. *Set for every level built so far (§4.7 and the level files).*
 4. Whether the capstone/sandbox mode ships in v1 or is deferred entirely to v1.5.
-5. Specific downtime/failure parameters (MTBF/MTTR ranges) per tier. *Set for Tier 3 in §4.7.*
+5. Specific downtime/failure parameters (MTBF/MTTR ranges) per tier. *Set for Tier 3 (jams) and Tiers 7 and 10 (long breakdowns, a power cut) in §4.7.*
 6. Prices, budgets, and floor-space limits for Tier 5–6 equipment (§3.4). *Prices and budgets are set for Tier 5 (§4.7); floor space isn't built, and Tier 6's levels buy no equipment.*
 
 Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES engine exists to tune against, rather than upfront guesses — they're playtesting outputs, not scoping inputs. Item 4 is deferred past the MVP milestone (§12.3) regardless.
@@ -358,7 +358,7 @@ Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES en
 ### 12.3 First Milestone (MVP Scope)
 
 - **Tiers 0–3, fully playable end-to-end**, before any work begins on Tiers 4–6. This is the mandatory linear spine (§3.2) and the natural first slice: it proves the full pipeline (DES engine, seeded replay, stability scoring, buffer-penetration meter, pop-up triggers, skill-tree UI shell) on the content everything else depends on.
-- Tiers 4–6 (including their distinct themes, §3.5) are explicitly out of scope until Tiers 0–3 are done and the class date is met. *Update, 2026-09-28:* Tiers 0–3 were playable at the end of week 1, and the owner asked to keep building, so Tiers 4–6 came early (§4.7). The class build stays the priority.
+- Tiers 4–6 (including their distinct themes, §3.5) are explicitly out of scope until Tiers 0–3 are done and the class date is met. *Update, 2026-09-28:* Tiers 0–3 were playable at the end of week 1, and the owner asked to keep building, so Tiers 4–6 came early (§4.7), followed by Tiers 7–10 at the owner's request (§3.6). The class build stays the priority.
 
 ### 12.4 Student Identification
 
