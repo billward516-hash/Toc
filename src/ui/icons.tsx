@@ -172,6 +172,25 @@ const icons = {
   ),
   rope: <path d="M3 15c2.5-5 5 3 7.5-2s5 3 7.5-2M18 11l3-3" />,
   sort: <path d="M4 6h16M4 12h11M4 18h6" />,
+  truck: (
+    <>
+      <path d="M2.5 6.5h11v9h-11zM13.5 9.5h4l3 3v3h-7" />
+      <circle cx={6.5} cy={17.5} r={1.8} />
+      <circle cx={17} cy={17.5} r={1.8} />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M12 3.5l9 16H3z" />
+      <path d="M12 10v4M12 17v.2" />
+    </>
+  ),
+  bin: (
+    <>
+      <path d="M5 7h14l-1.2 13H6.2z" />
+      <path d="M3.5 7h17M9 7V4h6v3M10 11v6M14 11v6" />
+    </>
+  ),
   tag: (
     <>
       <path d="M3.5 12.5L12 4h8v8l-8.5 8.5z" />

@@ -10,8 +10,11 @@ import {
   gainPer1000,
   levelState,
   maxStars,
+  barsScore,
   profitScore,
   profitSoFar,
+  readBar,
+  rushOnTime,
   starsFor,
   validateLevels,
 } from './graph.ts'
@@ -214,6 +217,50 @@ describe('profit stars', () => {
   })
 })
 
+describe('bars stars', () => {
+  // Paint ships one robot every 5 minutes after the first at 7: 11 in the hour.
+  const day = simulate(model, 1)
+  const goal: Extract<Goal, { kind: 'bars' }> = {
+    kind: 'bars',
+    bars: [
+      { metric: 'shipped', min: 11 },
+      { metric: 'wip', max: 100 },
+      { metric: 'spend', max: 1000 },
+    ],
+    freshDays: 2,
+    prompt: 'What will you change?',
+  }
+
+  it('needs the next bar met on every day for each star', () => {
+    expect(starsFor(goal, day, [day, day], { spend: 500, baseline: 0 })).toBe(3)
+    expect(starsFor(goal, day, [day, day], { spend: 2000, baseline: 0 })).toBe(2)
+    expect(starsFor({ ...goal, bars: [goal.bars[0], { metric: 'wip', max: 1 }, goal.bars[2]] }, day, [day, day])).toBe(1)
+    expect(starsFor({ ...goal, bars: [{ metric: 'shipped', min: 12 }, ...goal.bars.slice(1)] }, day, [day, day])).toBe(0)
+    expect(starsFor(goal, day, [day])).toBe(0)
+    expect(barsScore(goal, day, [day, day], 500).days).toHaveLength(3)
+    expect(maxStars(planLevel({ goal: { ...goal, bars: goal.bars.slice(0, 2) } }))).toBe(2)
+  })
+
+  it('reads each measure off a day', () => {
+    expect(readBar({ metric: 'shipped', min: 11 }, day)).toEqual({ value: 11, met: true })
+    expect(readBar({ metric: 'leadTime', max: 1 }, day).met).toBe(false)
+    expect(readBar({ metric: 'wip', max: 100 }, day)).toEqual({ value: day.avgWip, met: true })
+    expect(readBar({ metric: 'stock', max: 0 }, day)).toEqual({ value: 0, met: true })
+    expect(readBar({ metric: 'scrapped', max: 0 }, day)).toEqual({ value: 0, met: true })
+    expect(readBar({ metric: 'steady', min: 0.5, pileLimit: 5 }, day).met).toBe(false)
+    expect(readBar({ metric: 'spend', max: 10 }, day, 20)).toEqual({ value: 20, met: false })
+  })
+
+  it('counts rush orders shipped by their due time', () => {
+    // Cut has already started a normal robot when the rush comes in; the rush robots ship at 12 and 17.
+    const rushed = simulate({ ...model, rush: [{ at: 0, count: 2 }], stations: model.stations.map((s) => ({ ...s, expedite: true })) }, 1)
+    expect(rushed.rush).toHaveLength(2)
+    expect([6, 12, 17].map((due) => rushOnTime(rushed, due))).toEqual([0, 1, 2])
+    expect(readBar({ metric: 'rushOnTime', due: 12 }, rushed).met).toBe(false)
+    expect(readBar({ metric: 'rushOnTime', due: 17 }, rushed).met).toBe(true)
+  })
+})
+
 describe('buffer stars', () => {
   // Cut feeds Paint every 2 minutes and Paint takes 5, so Paint's pile passes 5 at minute 20 and keeps growing.
   const flood = simulate(model, 1)
@@ -346,6 +393,57 @@ describe('validateLevels', () => {
       'level "plan": a profit goal needs at least one fresh day',
       'level "plain": lever "menu" needs options',
       'level "plain": a profit goal needs a line that makes products',
+    ])
+  })
+
+  it('catches broken bars goals, option levers, and comparisons', () => {
+    const popups: Level['popups'] = [
+      { trigger: { kind: 'ran', met: true }, title: 'Met', body: '' },
+      { trigger: { kind: 'ran', met: false }, title: 'Missed', body: '' },
+    ]
+    const problems = validateLevels([
+      planLevel({
+        goal: { kind: 'bars', bars: [{ metric: 'shipped', min: 0 }, { metric: 'steady', min: 2, pileLimit: 0 }, { metric: 'rushOnTime', due: 0 }], freshDays: 1.5, prompt: '' },
+        levers: [
+          {
+            id: 'fix',
+            kind: 'option',
+            label: 'Fix',
+            options: [
+              { id: 'a', label: 'A', stations: { glue: { servers: 2 } }, price: -1 },
+              { id: 'a', label: 'A again' },
+            ],
+          },
+        ],
+        popups,
+      }),
+      {
+        ...level('demo'),
+        goal: {
+          kind: 'predict',
+          prompt: '',
+          options: [
+            { id: 'x', label: 'X' },
+            { id: 'y', label: 'Y' },
+          ],
+          answer: 'x',
+          compare: { first: 'A normal day', second: 'The breakdown day', change: { stations: { glue: {} } } },
+        },
+        popups: [
+          { trigger: { kind: 'predicted', option: 'x' }, title: 'X', body: '' },
+          { trigger: { kind: 'predicted', option: 'y' }, title: 'Y', body: '' },
+        ],
+      },
+    ])
+    expect(problems).toEqual([
+      'level "plan": lever "fix" repeats an option',
+      'level "plan": lever "fix" option "a" changes an unknown station "glue"',
+      'level "plan": lever "fix" option "a" needs a price of at least 0',
+      'level "plan": a bars goal needs a whole number of fresh days',
+      'level "plan": bar "shipped": needs a positive minimum',
+      'level "plan": bar "steady": needs 0 < min <= 1 and pileLimit >= 1',
+      'level "plan": bar "rushOnTime": needs a positive due time',
+      'level "demo": the comparison changes an unknown station "glue"',
     ])
   })
 

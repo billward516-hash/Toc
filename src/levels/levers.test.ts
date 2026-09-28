@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FactoryModel } from '../engine/model.ts'
-import { allPlans, applyLevers, leverValues, overBudget, planCost, valueLabel } from './levers.ts'
+import { allPlans, applyChange, applyLevers, leverValues, overBudget, planCost, valueLabel } from './levers.ts'
 import type { Lever } from './types.ts'
 
 const lunch = [{ from: 240, to: 300 }]
@@ -225,6 +225,44 @@ describe('product mix levers', () => {
     expect(valueLabel(mixLevers[0], 'cookies', bakery)).toBe('Cookies first')
     expect(valueLabel(mixLevers[1], 'both', bakery)).toBe('Both')
     expect(planCost(mixLevers, { first: 'cookies', menu: 'both' })).toBe(0)
+  })
+})
+
+describe('option levers', () => {
+  const repair: Lever = {
+    id: 'repair',
+    kind: 'option',
+    label: 'Fix first',
+    options: [
+      { id: 'cut', label: 'Cut first', stations: { cut: { outages: [{ at: { kind: 'fixed', value: 60 }, lasts: { kind: 'fixed', value: 20 } }] } } },
+      { id: 'stock', label: 'Keep 30 on hand', price: 500, model: { supply: { onHand: 30, deliveries: [] } } },
+    ],
+  }
+
+  it('changes the named stations and the rest of the model, and nothing else', () => {
+    const cut = applyLevers(model, [repair], { repair: 'cut' })
+    expect(cut.stations[0].outages).toHaveLength(1)
+    expect(cut.stations[0].cycleTime).toEqual(model.stations[0].cycleTime)
+    expect(cut.stations[1]).toBe(model.stations[1])
+    expect(applyLevers(model, [repair], { repair: 'stock' }).supply).toEqual({ onHand: 30, deliveries: [] })
+    expect(model.stations[0].outages).toBeUndefined()
+  })
+
+  it('applies before other levers, so they work on the changed factory', () => {
+    const both = applyLevers(model, [repair, levers[0]], { repair: 'cut', tool: 'cut' })
+    expect(both.stations[0].outages).toHaveLength(1)
+    expect(both.stations[0].cycleTime).toEqual({ kind: 'uniform', min: 1.6, max: 3.2 })
+  })
+
+  it('offers, labels, and prices each option', () => {
+    expect(leverValues(repair)).toEqual(['cut', 'stock'])
+    expect(valueLabel(repair, 'stock', model)).toBe('Keep 30 on hand')
+    expect(planCost([repair], { repair: 'stock' })).toBe(500)
+    expect(planCost([repair], { repair: 'cut' })).toBe(0)
+  })
+
+  it('applies a change on its own', () => {
+    expect(applyChange(model, { stations: { paint: { servers: 2 } } }).stations[1].servers).toBe(2)
   })
 })
 

@@ -15,6 +15,7 @@ const PILE_HEIGHT = PILE_ROWS * BLOCK + (PILE_ROWS - 1) * GAP
 const PILE_BOTTOM = 160
 const BOX_TOP = PILE_BOTTOM + 42
 const BOX_HEIGHT = 150
+const SCRAP_SPACE = 26
 // A station with named machines lists them in rows under its name.
 const MACHINE_TOP = 58
 const MACHINE_ROW = 31
@@ -46,11 +47,14 @@ interface FactoryViewProps {
   jobProducts?: string[]
   // What one unit of work is called, plural.
   unit?: string
+  // Job numbers of rush orders, outlined in gold.
+  rushJobs?: number[]
   onSelect?: (stationId: string) => void
 }
 
 // How products look: which product each job is, and each product's color and name.
 interface Palette {
+  isRush: (job: number) => boolean
   productOf: (job: number) => string | undefined
   color: (product: string) => string
   name: (product: string) => string
@@ -65,19 +69,23 @@ function jobColor(palette: Palette, job: number): string | undefined {
 const zoneLabel: Record<Zone, string> = { dry: 'running dry', healthy: 'healthy', flooding: 'flooding' }
 
 export function FactoryView(props: FactoryViewProps) {
-  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', onSelect } = props
+  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', rushJobs, onSelect } = props
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
   const boxHeight = Math.max(BOX_HEIGHT, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
   const cartSpace = model.stations.some((s, i) => (s.transfer ?? 1) > 1 && i < count - 1) ? CART_SPACE : 0
-  const height = BOX_TOP + boxHeight + cartSpace + 50
+  const scrapSpace = model.stations.some((s) => s.inspects) ? SCRAP_SPACE : 0
+  const height = BOX_TOP + boxHeight + cartSpace + scrapSpace + 50
+  const rush = new Set(rushJobs ?? [])
+  const material = model.supply?.name ?? 'material'
   const { release } = model
   const tiedTo = release.kind === 'rope' ? model.stations.findIndex((s) => s.id === release.constraint) : -1
   const top = tiedTo >= 0 ? -ROPE_SPACE : 0
   const zoneOf = (waiting: number): Zone | null =>
     buffer === null ? null : waiting < buffer.low ? 'dry' : waiting > buffer.high ? 'flooding' : 'healthy'
   const palette: Palette = {
+    isRush: (job) => rush.has(job),
     productOf: (job) => jobProducts?.[job],
     color: (product) => productColor(model, product),
     name: (product) => productName(model, product),
@@ -109,7 +117,21 @@ export function FactoryView(props: FactoryViewProps) {
           working={snapshot.working[i]}
           made={snapshot.completed[i]}
           t={snapshot.t}
-          stopped={snapshot.jammed[i] ? 'jammed' : onBreak(station, snapshot.t) ? 'break' : null}
+          stopped={
+            snapshot.brokenUntil[i] !== null
+              ? 'broken'
+              : snapshot.jammed[i]
+                ? 'jammed'
+                : onBreak(station, snapshot.t)
+                  ? 'break'
+                  : i === 0 && snapshot.stock === 0
+                    ? 'starved'
+                    : null
+          }
+          brokenUntil={snapshot.brokenUntil[i]}
+          scrapped={station.inspects ? snapshot.scrapped[i] : null}
+          scrapY={BOX_TOP + boxHeight + cartSpace + 34 + SCRAP_SPACE}
+          stock={i === 0 && snapshot.stock !== undefined ? { count: snapshot.stock, name: material } : null}
           badges={badges[station.id] ?? []}
           buildingAt={buildingAt}
           zone={buffer?.station === station.id ? zoneOf(snapshot.queues[i]) : null}
@@ -193,7 +215,14 @@ interface ColumnProps {
   working: ActiveJob[]
   made: number
   t: number
-  stopped: 'jammed' | 'break' | null
+  // A breakdown or jam shows at once; a break, or running out of material, once the station stops.
+  stopped: Stop | null
+  brokenUntil: number | null
+  // Units scrapped here, at a station that inspects.
+  scrapped: number | null
+  scrapY: number
+  // The stockroom in front of the first station, when the line uses materials.
+  stock: { count: number; name: string } | null
   badges: Badge[]
   buildingAt: number
   zone: Zone | null
@@ -202,8 +231,13 @@ interface ColumnProps {
   onSelect?: (stationId: string) => void
 }
 
+type Stop = 'broken' | 'jammed' | 'break' | 'starved'
+
+const stopLabel: Record<Stop, string> = { broken: 'Broken down', jammed: 'Jammed', break: 'On break', starved: 'No material' }
+
 function StationColumn(props: ColumnProps) {
   const { x, station, boxHeight, cartSpace, height, palette, cart, accent, working, made, t, stopped, badges, buildingAt, zone, selected, isConstraint, onSelect } = props
+  const { brokenUntil, scrapped, scrapY, stock } = props
   const { id, name, machines } = station
   const waiting = props.waiting.length
   const center = x + COLUMN / 2
@@ -212,10 +246,12 @@ function StationColumn(props: ColumnProps) {
   const job = working[0]
   const changing = job !== undefined && t < job.ready
   const progress = job ? progressOf(job, t) : 0
-  // A jam shows at once, even while the part in hand finishes; a break shows once the station stops.
+  // A jam or breakdown shows at once, even while the part in hand finishes; a break, or running out of
+  // material, once the station stops.
   const running = changing ? 'Changeover' : working.length > 1 ? `${working.length} working` : 'Working'
-  const status = stopped === 'jammed' ? 'Jammed' : busy ? running : stopped === 'break' ? 'On break' : 'Waiting'
-  const light = stopped === 'jammed' ? ' jammed' : changing ? ' changing' : busy ? ' on' : stopped === 'break' ? ' resting' : ''
+  const halted = stopped === 'jammed' || stopped === 'broken'
+  const status = halted ? stopLabel[stopped] : busy ? running : stopped ? stopLabel[stopped] : 'Waiting'
+  const light = halted ? ' jammed' : changing ? ' changing' : busy ? ' on' : stopped === 'break' ? ' resting' : stopped === 'starved' ? ' starved' : ''
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
   const extras = [
@@ -227,6 +263,9 @@ function StationColumn(props: ColumnProps) {
       return `${machine.name}${allowed}: ${doing}`
     }),
     zone && `buffer ${zoneLabel[zone]}`,
+    brokenUntil !== null && `broken down until ${clockTime(brokenUntil)}`,
+    stock && `${stock.count} ${stock.name} in the stockroom`,
+    scrapped !== null && `${scrapped} scrapped`,
     badges.includes('upgraded') && 'upgraded',
     badges.includes('covered') && 'works through breaks',
     badges.includes('steadied') && 'standard work',
@@ -266,7 +305,7 @@ function StationColumn(props: ColumnProps) {
         return (
           <rect
             key={job}
-            className="part"
+            className={`part${palette.isRush(job) ? ' rush' : ''}`}
             style={color ? { fill: color } : undefined}
             x={pileLeft + (k % PILE_COLUMNS) * (BLOCK + GAP)}
             y={PILE_BOTTOM - (row + 1) * BLOCK - row * GAP}
@@ -319,6 +358,19 @@ function StationColumn(props: ColumnProps) {
       <text className="made" x={center} y={BOX_TOP + boxHeight + cartSpace + 34}>
         Made {made}
       </text>
+      {scrapped !== null && (
+        <text className="scrapped" x={center} y={scrapY}>
+          Scrapped {scrapped}
+        </text>
+      )}
+      {stock && (
+        <g className={`stockroom${stock.count === 0 ? ' empty' : ''}`}>
+          <rect x={center - 78} y={TAG_Y - 18} width={156} height={36} rx={18} />
+          <text x={center} y={TAG_Y + 7}>
+            {stock.count} {stock.name}
+          </text>
+        </g>
+      )}
       {badges.includes('covered') && <CornerBadge kind="covered" cx={x + 32} cy={BOX_TOP + 4} />}
       {badges.includes('maintained') && <CornerBadge kind="maintained" cx={x + 32} cy={BOX_TOP + 4} />}
       {badges.includes('quick') && <CornerBadge kind="quick" cx={x + 32} cy={BOX_TOP + 4} />}
@@ -342,7 +394,7 @@ interface MachineRowProps {
   machine: Machine
   job: ActiveJob | undefined
   t: number
-  stopped: 'jammed' | 'break' | null
+  stopped: Stop | null
   palette: Palette
 }
 
@@ -389,7 +441,8 @@ function Cart({ x, y, jobs, palette }: { x: number; y: number; jobs: number[]; p
 function MachineRow({ x, y, machine, job, t, stopped, palette }: MachineRowProps) {
   const changing = job !== undefined && t < job.ready
   const progress = job ? progressOf(job, t) : 0
-  const light = stopped === 'jammed' ? ' jammed' : changing ? ' changing' : job ? ' on' : stopped === 'break' ? ' resting' : ''
+  const halted = stopped === 'jammed' || stopped === 'broken'
+  const light = halted ? ' jammed' : changing ? ' changing' : job ? ' on' : stopped === 'break' ? ' resting' : stopped === 'starved' ? ' starved' : ''
   const allowed = machine.products ?? palette.all
   const fill = job ? jobColor(palette, job.job) : undefined
   const barWidth = COLUMN - 68
@@ -441,4 +494,8 @@ function CornerBadge({ kind, cx, cy }: { kind: Badge; cx: number; cy: number }) 
       {kind === 'quick' && <path className="swap" d={`M${cx - 9} ${cy - 4}h15l-4-4M${cx + 9} ${cy + 4}h-15l4 4`} />}
     </g>
   )
+}
+
+function clockTime(minutes: number) {
+  return `${Math.floor(minutes / 60)}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`
 }

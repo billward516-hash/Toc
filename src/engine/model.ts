@@ -69,6 +69,8 @@ export interface PriorityChange {
 
 // Direct materials: the first station takes one unit from the stockroom for each job it starts.
 export interface Supply {
+  // What the material is called on screen, such as "plastic".
+  name?: string
   // Units in the stockroom when the shift starts.
   onHand: number
   deliveries: Delivery[]

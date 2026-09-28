@@ -19,15 +19,19 @@ import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
 import type { Choices, Goal, Lever } from '../levels/types.ts'
 import { goalValues, tenths } from '../levels/values.ts'
+import { BarsChecklist, BarsStarGoals } from './bars.tsx'
+import { barsHint, barsOutcome, barsResultStats, barStats, type Words } from './barTexts.ts'
 import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
+import { ShiftLog } from './ShiftLog.tsx'
+import { hasDisruptions, shiftLog } from './shiftEvents.ts'
 import { JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
 
-type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' | 'profit' }>
+type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' | 'profit' | 'bars' }>
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
 type FlowGoal = Extract<Goal, { kind: 'flow' }>
@@ -71,8 +75,16 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
     [goal, shown.result, drum],
   )
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
+  const words: Words = { material: model.supply?.name ?? 'material' }
+  const spend = run?.investment.spend ?? 0
+  const context = { words, spend }
 
-  const stats: Stat[] = goal.kind === 'profit' ? moneyStats(goal, shown.result, snapshot) : [{ label: 'Shipped', value: snapshot.shipped }]
+  const stats: Stat[] =
+    goal.kind === 'profit'
+      ? moneyStats(goal, shown.result, snapshot)
+      : goal.kind === 'bars'
+        ? barStats(goal, shown.result, snapshot, words, spend)
+        : [{ label: 'Shipped', value: snapshot.shipped }]
   if (goal.kind === 'steady' || goal.kind === 'elevate') {
     stats.push({ label: 'Steady', value: `${Math.floor(100 * steadyShare(shown.result, goal.pileLimit, playback.t))}%` })
   }
@@ -81,7 +93,9 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   if (goal.kind === 'buffer') {
     stats.push({ label: 'Healthy', value: percent(bufferShare(shown.result, drum, goal.low, goal.high, playback.t)) })
   }
-  if (goal.kind !== 'profit') stats.push({ label: goal.kind === 'buffer' ? 'On the floor' : 'In process', value: snapshot.released - snapshot.shipped })
+  if (goal.kind !== 'profit' && goal.kind !== 'bars') {
+    stats.push({ label: goal.kind === 'buffer' ? 'On the floor' : 'In process', value: snapshot.released - snapshot.shipped })
+  }
   if (goal.kind === 'output' || goal.kind === 'elevate' || goal.kind === 'flow') stats.push({ label: 'Goal', value: goal.target })
 
   const start = () => {
@@ -126,6 +140,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           buffer={goal.kind === 'buffer' ? { station: goal.drum, low: goal.low, high: goal.high } : null}
           jobProducts={shown.result.products}
           unit={level.unit}
+          rushJobs={shown.result.rush}
         />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
@@ -160,6 +175,21 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   <i className="swatch dot changing" /> Changeover
                 </span>
               )}
+              {shown.model.stations.some((s) => s.outages?.length) && (
+                <span>
+                  <i className="swatch dot jammed" /> Broken down
+                </span>
+              )}
+              {shown.model.supply && (
+                <span>
+                  <i className="swatch dot starved" /> No {words.material}
+                </span>
+              )}
+              {shown.model.rush?.length ? (
+                <span>
+                  <i className="swatch rush" /> Rush order
+                </span>
+              ) : null}
               {goal.kind === 'buffer' && (
                 <span className="buffer-key">
                   {model.stations[drum].name}'s buffer: <i className="swatch zone dry" /> running dry <i className="swatch zone healthy" /> healthy{' '}
@@ -181,6 +211,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           }
         >
           {jams && <JamLog entries={jams} drum={model.stations[drum].name} />}
+          {!jams && hasDisruptions(shown.model) && <ShiftLog entries={shiftLog(shown.model, shown.result, playback.t, level.unit ?? 'robots')} />}
         </PlaybackPanel>
 
         <section className="question card" aria-live="polite">
@@ -196,7 +227,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
               </ul>
               {playback.finished ? (
                 <p className="result">
-                  {outcomeText(goal, run.result)} {run.met ? 'Goal met!' : 'Not there yet.'}
+                  {outcomeText(goal, run.result, context)} {run.met ? 'Goal met!' : 'Not there yet.'}
                   {stars > 0 && <Stars earned={run.stars} max={stars} />}
                 </p>
               ) : (
@@ -216,11 +247,12 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           ) : (
             <>
               <p className="prompt">{fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values)}</p>
-              <p className="hint">{planningHint(goal, baseline)}</p>
+              <p className="hint">{planningHint(goal, baseline, context)}</p>
               {goal.kind === 'buffer' && <StarGoals goal={goal} />}
               {goal.kind === 'elevate' && <ElevateStarGoals goal={goal} />}
               {goal.kind === 'flow' && <FlowStarGoals goal={goal} />}
               {goal.kind === 'profit' && <ProfitStarGoals goal={goal} />}
+              {goal.kind === 'bars' && <BarsStarGoals goal={goal} words={words} />}
               {levers.map((lever) => (
                 <fieldset key={lever.id} className="lever">
                   <legend>
@@ -292,7 +324,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           }
         >
           <div className="result-stats">
-            {resultStats(goal, run.result, baseline, run.investment.spend).map((stat) => (
+            {resultStats(goal, run.result, baseline, { words, spend: run.investment.spend }).map((stat) => (
               <div key={stat.label}>
                 <span>{stat.label}</span>
                 <strong>{stat.value}</strong>
@@ -305,6 +337,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           {goal.kind === 'elevate' && <ElevateChecklist goal={goal} result={run.result} fresh={run.fresh} investment={run.investment} />}
           {goal.kind === 'flow' && <FlowChecklist goal={goal} result={run.result} fresh={run.fresh} />}
           {goal.kind === 'profit' && <ProfitChecklist goal={goal} result={run.result} fresh={run.fresh} />}
+          {goal.kind === 'bars' && <BarsChecklist goal={goal} result={run.result} fresh={run.fresh} words={words} spend={run.investment.spend} />}
           {popup && <p>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</p>}
           {run.met &&
             level.principles.map((p) => (
@@ -334,6 +367,7 @@ const badgeLegend: Record<Lever['kind'], string | null> = {
   transferSize: null,
   priority: null,
   menu: null,
+  option: null,
 }
 
 const stationBadge: Partial<Record<Lever['kind'], Badge>> = {
@@ -372,6 +406,8 @@ function leverIcon(lever: Lever): IconName {
       return 'sort'
     case 'menu':
       return 'tag'
+    case 'option':
+      return lever.icon ?? 'rule'
   }
 }
 
@@ -409,8 +445,16 @@ const minutes = (value: number | null) => (value === null ? '–' : `${Math.roun
 const wholeMinutes = (value: number | null) => (value === null ? '–' : Math.round(value))
 const changeoverMinutes = (result: SimResult) => result.stations.reduce((sum, s) => sum + s.changeoverTime, 0)
 
-function planningHint(goal: PlanGoal, baseline: SimResult): string {
+// Words and spending for the texts of bars levels.
+interface TextContext {
+  words: Words
+  spend: number
+}
+
+function planningHint(goal: PlanGoal, baseline: SimResult, { words }: TextContext): string {
   switch (goal.kind) {
+    case 'bars':
+      return barsHint(goal, baseline, words)
     case 'output':
       return `Today the factory ships ${baseline.output} a shift. The goal is ${goal.target}.`
     case 'steady':
@@ -430,8 +474,10 @@ function planningHint(goal: PlanGoal, baseline: SimResult): string {
   }
 }
 
-function outcomeText(goal: PlanGoal, result: SimResult): string {
+function outcomeText(goal: PlanGoal, result: SimResult, { words, spend }: TextContext): string {
   switch (goal.kind) {
+    case 'bars':
+      return barsOutcome(goal, result, words, spend)
     case 'output':
       return `Shipped ${result.output}, goal ${goal.target}.`
     case 'steady':
@@ -449,8 +495,10 @@ function outcomeText(goal: PlanGoal, result: SimResult): string {
   }
 }
 
-function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult, spend: number): Stat[] {
+function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult, { words, spend }: TextContext): Stat[] {
   switch (goal.kind) {
+    case 'bars':
+      return barsResultStats(goal, result, baseline, words, spend)
     case 'output':
       return [
         { label: 'Shipped', value: result.output },

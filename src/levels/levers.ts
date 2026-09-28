@@ -1,8 +1,22 @@
 import { mean, scale, steadied } from '../engine/distributions.ts'
 import type { FactoryModel, Station } from '../engine/model.ts'
-import type { Choices, Lever } from './types.ts'
+import type { Choices, Lever, ModelChange } from './types.ts'
+
+// The model with a change applied: station fields replaced by id, then the rest of the model.
+export function applyChange(model: FactoryModel, change: ModelChange): FactoryModel {
+  const stations = model.stations.map((station) => {
+    const patch = change.stations?.[station.id]
+    return patch ? { ...station, ...patch } : station
+  })
+  return { ...model, ...change.model, stations }
+}
 
 export function applyLevers(model: FactoryModel, levers: Lever[], choices: Choices): FactoryModel {
+  // Option levers change the factory first, so the other levers work on the changed factory.
+  for (const lever of levers) {
+    const option = lever.kind === 'option' ? lever.options.find((o) => o.id === choices[lever.id]) : undefined
+    if (option) model = applyChange(model, option)
+  }
   let release = model.release
   let mix = model.mix
   for (const lever of levers) {
@@ -59,6 +73,8 @@ function changeStation(station: Station, lever: Lever, choices: Choices): Statio
     if (!option || lever.station !== station.id) return station
     return { ...station, priority: option.order }
   }
+  // Option levers changed the factory before any other lever.
+  if (lever.kind === 'option') return station
   if (value !== station.id) return station
   switch (lever.kind) {
     case 'upgrade':
@@ -96,6 +112,7 @@ export function leverValues(lever: Lever): string[] {
       return lever.sizes.map(String)
     case 'priority':
     case 'menu':
+    case 'option':
       return lever.options.map((o) => o.id)
     default:
       return lever.stations
@@ -117,6 +134,7 @@ export function valueLabel(lever: Lever, value: string, model: FactoryModel): st
       return value === '1' ? 'One at a time' : `${value} at a time`
     case 'priority':
     case 'menu':
+    case 'option':
       return lever.options.find((o) => o.id === value)?.label ?? value
     default:
       return model.stations.find((s) => s.id === value)?.name ?? value
@@ -126,8 +144,9 @@ export function valueLabel(lever: Lever, value: string, model: FactoryModel): st
 // Money a plan spends on new machines.
 export function planCost(levers: Lever[], choices: Choices): number {
   return levers.reduce((sum, lever) => {
-    if (lever.kind !== 'buy') return sum
-    return sum + (lever.options.find((o) => o.id === choices[lever.id])?.price ?? 0)
+    if (lever.kind === 'buy') return sum + (lever.options.find((o) => o.id === choices[lever.id])?.price ?? 0)
+    if (lever.kind === 'option') return sum + (lever.options.find((o) => o.id === choices[lever.id])?.price ?? 0)
+    return sum
   }, 0)
 }
 

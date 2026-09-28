@@ -3,8 +3,8 @@ import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, starsFor, validateLevels } from './graph.ts'
-import { allPlans, applyLevers, overBudget, planCost, steadyTwin } from './levers.ts'
+import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, maxStars, starsFor, validateLevels } from './graph.ts'
+import { allPlans, applyChange, applyLevers, overBudget, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
 import { principleNames } from './principles.ts'
@@ -185,10 +185,10 @@ describe.each(levels.filter((l) => l.goal.kind === 'buffer' || l.goal.kind === '
   })
 })
 
-// Elevate and profit levels judge every star across the level's own day and fresh days, so each plan
-// is scored over 30 stand-in weeks of fresh days, and the lesson must come out the same in every one.
-describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 'profit'))('$goal.kind level $id', (level) => {
-  if (level.goal.kind !== 'elevate' && level.goal.kind !== 'profit') return
+// Elevate, profit, and bars levels judge every star across the level's own day and fresh days, so each
+// plan is scored over 30 stand-in weeks of fresh days, and the lesson must come out the same in every one.
+describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 'profit' || l.goal.kind === 'bars'))('$goal.kind level $id', (level) => {
+  if (level.goal.kind !== 'elevate' && level.goal.kind !== 'profit' && level.goal.kind !== 'bars') return
   const { goal, model, levers } = level
   // A plan over the level's budget can't run.
   const plans = allPlans(levers).filter((plan) => overBudget(levers, plan, goal.kind === 'elevate' ? goal.budget : undefined) === 0)
@@ -211,11 +211,12 @@ describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 
     }
   })
 
-  it('gives exactly one plan three stars, and it earns them every week', () => {
-    const best = plans.filter((plan) => record.get(plan)!.every((stars) => stars === 3))
+  it('gives exactly one plan every star, and it earns them every week', () => {
+    const top = maxStars(level)
+    const best = plans.filter((plan) => record.get(plan)!.every((stars) => stars === top))
     expect(best).toHaveLength(1)
     for (const plan of plans.filter((p) => p !== best[0])) {
-      expect(Math.max(...record.get(plan)!), JSON.stringify(plan)).toBeLessThan(3)
+      expect(Math.max(...record.get(plan)!), JSON.stringify(plan)).toBeLessThan(top)
     }
   })
 
@@ -248,8 +249,8 @@ describe.each(levels.filter((l) => l.goal.kind === 'elevate' || l.goal.kind === 
 describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level $id', (level) => {
   if (level.goal.kind !== 'predict') return
   const { goal } = level
-  const twin = simulate(steadyTwin(level.model), level.seed)
-  const real = simulate(level.model, level.seed)
+  const twin = simulate(goal.compare ? level.model : steadyTwin(level.model), level.seed)
+  const real = simulate(goal.compare ? applyChange(level.model, goal.compare.change) : level.model, level.seed)
 
   it('has feedback for every option, with every number filled in', () => {
     const values = goalValues(goal, twin, real)

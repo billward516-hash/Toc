@@ -23,6 +23,7 @@ export function LevelScreen({ level, ...flow }: LevelScreenProps) {
     case 'elevate':
     case 'flow':
     case 'profit':
+    case 'bars':
       return <PlanTheShift level={level} goal={goal} {...flow} />
     case 'predict':
       return <PredictTheRun level={level} goal={goal} {...flow} />

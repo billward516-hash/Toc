@@ -496,6 +496,12 @@ button {
   stroke-width: 3;
 }
 
+/* A rush order: a thick gold outline. */
+.factory .part.rush {
+  stroke: #e89a00;
+  stroke-width: 6;
+}
+
 .factory .pile-count {
   font-size: 20px;
   fill: var(--muted);
@@ -634,6 +640,11 @@ button {
   fill: var(--amber);
 }
 
+.factory .light.starved {
+  fill: #fff;
+  stroke: var(--red);
+}
+
 .factory .progress-fill.changing {
   fill: var(--amber);
 }
@@ -763,6 +774,29 @@ button {
 .factory .made {
   font-size: 21px;
   fill: var(--muted);
+}
+
+.factory .scrapped {
+  font-size: 19px;
+  fill: var(--red);
+}
+
+.factory .stockroom rect {
+  fill: #fff4dc;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.factory .stockroom text {
+  font-size: 19px;
+}
+
+.factory .stockroom.empty rect {
+  fill: var(--red);
+}
+
+.factory .stockroom.empty text {
+  fill: #fff;
 }
 
 .factory .tag rect {
@@ -984,6 +1018,79 @@ button {
 
 .jam-log li.held .what {
   color: var(--green-deep);
+}
+
+/* The shift log: breakdowns, deliveries, rush orders, order changes, and scrap as they happen. */
+.legend .swatch.dot.starved {
+  background: #fff;
+  border-color: var(--red);
+}
+
+.legend .swatch.rush {
+  border-color: #e89a00;
+  border-width: 4px;
+}
+
+.shift-log h2 {
+  margin-bottom: 8px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.shift-log ol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shift-log li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 5px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.shift-log li svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.shift-log .when {
+  min-width: 36px;
+  color: var(--muted);
+}
+
+.shift-log .what {
+  color: var(--muted);
+}
+
+.shift-log li.bad {
+  background: #ffe4e4;
+  border-color: var(--red);
+}
+
+.shift-log li.bad svg,
+.shift-log li.bad .what {
+  color: var(--red);
+}
+
+.shift-log li.warn {
+  background: #fff4dc;
+  border-color: var(--amber);
+}
+
+.shift-log li.warn .what {
+  color: var(--amber-ink);
 }
 
 .clock-window {

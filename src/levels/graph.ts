@@ -2,12 +2,13 @@ import { validateModel } from '../engine/model.ts'
 import type { SimResult } from '../engine/simulate.ts'
 import { bufferShare, steadyShare, type Snapshot } from '../engine/timeline.ts'
 import { leverValues } from './levers.ts'
-import type { Choices, Goal, Level, Popup } from './types.ts'
+import type { Bar, Choices, Goal, Level, Popup } from './types.ts'
 
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
 type FlowGoal = Extract<Goal, { kind: 'flow' }>
 type ProfitGoal = Extract<Goal, { kind: 'profit' }>
+type BarsGoal = Extract<Goal, { kind: 'bars' }>
 
 export type LevelState = 'locked' | 'unlocked' | 'completed'
 
@@ -29,6 +30,8 @@ export function maxStars(level: Level): number {
     case 'flow':
     case 'profit':
       return 3
+    case 'bars':
+      return level.goal.bars.length
     default:
       return 0
   }
@@ -48,9 +51,66 @@ export function goalMet(goal: Goal, result: SimResult): boolean {
       return bufferScore(goal, result).healthy >= goal.minHealthy
     case 'profit':
       return profitScore(goal, result).profit >= goal.target
+    case 'bars':
+      return goal.bars.length > 0 && readBar(goal.bars[0], result).met
     default:
       return false
   }
+}
+
+// One bar on one day: what was measured, and whether it clears the bar.
+export interface Reading {
+  value: number
+  met: boolean
+}
+
+export function readBar(bar: Bar, day: SimResult, spend = 0): Reading {
+  const atMost = (value: number, max: number) => ({ value, met: value <= max })
+  switch (bar.metric) {
+    case 'shipped':
+      return { value: day.output, met: day.output >= bar.min }
+    case 'steady': {
+      const value = steadyShare(day, bar.pileLimit)
+      return { value, met: value >= bar.min }
+    }
+    case 'leadTime':
+      return atMost(day.avgLeadTime ?? Infinity, bar.max)
+    case 'wip':
+      return atMost(day.avgWip, bar.max)
+    case 'stock':
+      return atMost(day.supply?.avgStock ?? 0, bar.max)
+    case 'scrapped':
+      return atMost(day.scrapped ?? 0, bar.max)
+    case 'rushOnTime': {
+      const value = rushOnTime(day, bar.due)
+      return { value, met: value >= (day.rush?.length ?? 0) }
+    }
+    case 'spend':
+      return atMost(spend, bar.max)
+  }
+}
+
+// Rush orders shipped by `due` minutes into the shift.
+export function rushOnTime(day: SimResult, due: number): number {
+  const rush = new Set(day.rush ?? [])
+  const last = day.stations.length - 1
+  return day.events.filter((e) => e.type === 'finish' && e.station === last && !e.scrap && e.t <= due && rush.has(e.job)).length
+}
+
+export interface BarsScore {
+  // Each day, the level's own first: a reading for every bar.
+  days: Reading[][]
+  stars: number
+}
+
+// Each star needs the next bar met on every day, the level's own and `goal.freshDays` more.
+export function barsScore(goal: BarsGoal, result: SimResult, freshDays: SimResult[], spend = 0): BarsScore {
+  const days = [result, ...freshDays].map((day) => goal.bars.map((bar) => readBar(bar, day, spend)))
+  let stars = 0
+  if (freshDays.length >= goal.freshDays) {
+    while (stars < goal.bars.length && days.every((day) => day[stars].met)) stars++
+  }
+  return { days, stars }
 }
 
 export interface ProfitScore {
@@ -150,6 +210,7 @@ export function flowHolds(goal: FlowGoal, day: SimResult): boolean {
 }
 
 export function starsFor(goal: Goal, result: SimResult, freshDays: SimResult[] = [], investment?: Investment): number {
+  if (goal.kind === 'bars') return barsScore(goal, result, freshDays, investment?.spend ?? 0).stars
   if (goal.kind === 'profit') {
     if (freshDays.length < goal.freshDays) return 0
     const days = [result, ...freshDays].map((day) => profitScore(goal, day))
@@ -285,6 +346,17 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
         }
         break
       }
+      case 'option': {
+        if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
+        if (new Set(lever.options.map((o) => o.id)).size !== lever.options.length) problems.push(`lever "${lever.id}" repeats an option`)
+        for (const option of lever.options) {
+          for (const id of Object.keys(option.stations ?? {})) {
+            if (!stationIds.has(id)) problems.push(`lever "${lever.id}" option "${option.id}" changes an unknown station "${id}"`)
+          }
+          if (option.price !== undefined && !(option.price >= 0)) problems.push(`lever "${lever.id}" option "${option.id}" needs a price of at least 0`)
+        }
+        break
+      }
       case 'menu':
         if (lever.options.length === 0) problems.push(`lever "${lever.id}" needs options`)
         for (const option of lever.options) {
@@ -331,6 +403,9 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     }
     case 'predict': {
       if (goal.options.length < 2) problems.push('a prediction needs at least two options')
+      for (const id of Object.keys(goal.compare?.change.stations ?? {})) {
+        if (!stationIds.has(id)) problems.push(`the comparison changes an unknown station "${id}"`)
+      }
       if (!goal.options.some((o) => o.id === goal.answer)) problems.push(`answer "${goal.answer}" is not an option`)
       for (const option of goal.options) {
         if (!popups.some((p) => p.trigger.kind === 'predicted' && p.trigger.option === option.id)) {
@@ -344,7 +419,8 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     case 'buffer':
     case 'elevate':
     case 'flow':
-    case 'profit': {
+    case 'profit':
+    case 'bars': {
       if (goal.kind === 'steady' && !(goal.minSteady > 0 && goal.minSteady <= 1 && goal.pileLimit >= 1)) {
         problems.push('a steady goal needs 0 < minSteady <= 1 and pileLimit >= 1')
       }
@@ -358,6 +434,14 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
         if (!(goal.expense >= 0)) problems.push('a profit goal needs an operating expense of at least 0')
         if (!(goal.maxInventory > 0)) problems.push('a profit goal needs a positive maxInventory')
         if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 1)) problems.push('a profit goal needs at least one fresh day')
+      }
+      if (goal.kind === 'bars') {
+        if (goal.bars.length < 1 || goal.bars.length > 3) problems.push('a bars goal needs one to three bars')
+        if (!(Number.isInteger(goal.freshDays) && goal.freshDays >= 0)) problems.push('a bars goal needs a whole number of fresh days')
+        for (const bar of goal.bars) {
+          const problem = barProblem(bar)
+          if (problem) problems.push(`bar "${bar.metric}": ${problem}`)
+        }
       }
       if (goal.kind === 'flow') {
         if (!(goal.target > 0)) problems.push('a flow goal needs a positive target')
@@ -397,4 +481,22 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
     }
   }
   return problems
+}
+
+function barProblem(bar: Bar): string | null {
+  switch (bar.metric) {
+    case 'shipped':
+      return bar.min > 0 ? null : 'needs a positive minimum'
+    case 'steady':
+      return bar.min > 0 && bar.min <= 1 && bar.pileLimit >= 1 ? null : 'needs 0 < min <= 1 and pileLimit >= 1'
+    case 'rushOnTime':
+      return bar.due > 0 ? null : 'needs a positive due time'
+    case 'leadTime':
+    case 'wip':
+      return bar.max > 0 ? null : 'needs a positive maximum'
+    case 'stock':
+    case 'scrapped':
+    case 'spend':
+      return bar.max >= 0 ? null : 'needs a maximum of at least 0'
+  }
 }

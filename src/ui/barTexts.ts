@@ -1,0 +1,156 @@
+import type { SimResult } from '../engine/simulate.ts'
+import { leadTimeSoFar, steadyShare, type Snapshot } from '../engine/timeline.ts'
+import { readBar, rushOnTime, type Reading } from '../levels/graph.ts'
+import type { Bar, Goal } from '../levels/types.ts'
+import { tenths } from '../levels/values.ts'
+import type { Stat } from './parts.tsx'
+
+export type BarsGoal = Extract<Goal, { kind: 'bars' }>
+
+// Words for what a line makes and uses, for the texts below.
+export interface Words {
+  material: string
+}
+
+const percent = (share: number) => `${Math.floor(100 * share)}%`
+const dollars = (amount: number) => `$${amount.toLocaleString('en-US')}`
+const clock = (minutes: number) => `${Math.floor(minutes / 60)}:${String(Math.floor(minutes % 60)).padStart(2, '0')}`
+
+// What each bar asks, as a star goal.
+export function goalText(bar: Bar, words: Words): string {
+  switch (bar.metric) {
+    case 'shipped':
+      return `Ship at least ${bar.min} a shift`
+    case 'steady':
+      return `Keep it steady: no pile of ${bar.pileLimit} or more for ${percent(bar.min)} of the shift`
+    case 'leadTime':
+      return `Get each order out in ${bar.max} minutes or less, on average`
+    case 'wip':
+      return `Keep ${bar.max} or less in process, on average`
+    case 'stock':
+      return `Keep ${bar.max} ${words.material} or less in the stockroom, on average`
+    case 'scrapped':
+      return bar.max === 0 ? 'Scrap nothing' : `Scrap ${bar.max} or fewer a shift`
+    case 'rushOnTime':
+      return `Ship every rush order by ${clock(bar.due)}`
+    case 'spend':
+      return bar.max === 0 ? 'Spend nothing' : `Spend ${dollars(bar.max)} or less`
+  }
+}
+
+// One day's reading, short enough for a day card.
+export function readingText(bar: Bar, reading: Reading, day: SimResult, words: Words): string {
+  switch (bar.metric) {
+    case 'shipped':
+      return `${reading.value} shipped`
+    case 'steady':
+      return `${percent(reading.value)} steady`
+    case 'leadTime':
+      return Number.isFinite(reading.value) ? `${Math.round(reading.value)} min` : 'none shipped'
+    case 'wip':
+      return `${tenths(reading.value)} in process`
+    case 'stock':
+      return `${Math.round(reading.value)} ${words.material}`
+    case 'scrapped':
+      return `${reading.value} scrapped`
+    case 'rushOnTime':
+      return `${reading.value} of ${day.rush?.length ?? 0} rush on time`
+    case 'spend':
+      return `${dollars(reading.value)} spent`
+  }
+}
+
+// How a bar did across the days, as a checklist row.
+export function rowText(bar: Bar, met: number, total: number, reading: Reading, words: Words): string {
+  const days = `on ${met} of ${total} days`
+  switch (bar.metric) {
+    case 'shipped':
+      return `Shipped at least ${bar.min} ${days}`
+    case 'steady':
+      return `Steady ${days}`
+    case 'leadTime':
+      return `Orders out in ${bar.max} minutes or less, on average, ${days}`
+    case 'wip':
+      return `${bar.max} or less in process, on average, ${days}`
+    case 'stock':
+      return `${bar.max} ${words.material} or less in the stockroom, on average, ${days}`
+    case 'scrapped':
+      return `Scrapped ${bar.max} or fewer ${days}`
+    case 'rushOnTime':
+      return `Every rush order out by ${clock(bar.due)} ${days}`
+    case 'spend':
+      return `Spent ${dollars(reading.value)} (limit ${dollars(bar.max)})`
+  }
+}
+
+// The live dashboard for a bars level: shipped first, then what each bar watches.
+export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, words: Words, spend: number): Stat[] {
+  const stats: Stat[] = [{ label: 'Shipped', value: snapshot.shipped }]
+  for (const bar of goal.bars) {
+    if (bar.metric === 'steady') stats.push({ label: 'Steady', value: percent(steadyShare(result, bar.pileLimit, snapshot.t)) })
+    if (bar.metric === 'stock') stats.push({ label: capitalize(words.material), value: snapshot.stock ?? 0 })
+    if (bar.metric === 'scrapped') stats.push({ label: 'Scrapped', value: snapshot.scrapped.reduce((a, b) => a + b, 0) })
+    if (bar.metric === 'leadTime') {
+      const lead = leadTimeSoFar(result, snapshot.t)
+      stats.push({ label: 'Lead time', value: lead === null ? '–' : `${Math.round(lead)} min` })
+    }
+    if (bar.metric === 'rushOnTime') stats.push({ label: 'Rush shipped', value: `${rushOnTime(result, snapshot.t)} of ${result.rush?.length ?? 0}` })
+    if (bar.metric === 'spend') stats.push({ label: 'Spent', value: dollars(spend) })
+  }
+  stats.push({ label: 'In process', value: snapshot.released - snapshot.shipped - snapshot.scrapped.reduce((a, b) => a + b, 0) })
+  const shipped = goal.bars.find((bar) => bar.metric === 'shipped')
+  if (shipped?.metric === 'shipped') stats.push({ label: 'Goal', value: shipped.min })
+  return stats
+}
+
+export function barsHint(goal: BarsGoal, baseline: SimResult, words: Words): string {
+  const facts = [`Today the factory ships ${baseline.output} a shift`]
+  for (const bar of goal.bars) {
+    if (bar.metric === 'steady') facts.push(`it's steady ${percent(steadyShare(baseline, bar.pileLimit))} of the time`)
+    if (bar.metric === 'stock') facts.push(`it keeps about ${Math.round(baseline.supply?.avgStock ?? 0)} ${words.material} in the stockroom`)
+    if (bar.metric === 'scrapped') facts.push(`it scraps ${baseline.scrapped ?? 0}`)
+    if (bar.metric === 'rushOnTime') facts.push(`${rushOnTime(baseline, bar.due)} of ${baseline.rush?.length ?? 0} rush orders ship on time`)
+  }
+  const joined = facts.length > 1 ? `${facts.slice(0, -1).join(', ')}, and ${facts.at(-1)}` : facts[0]
+  const days = goal.freshDays > 0 ? ` Your plan runs for ${goal.freshDays + 1} days.` : ''
+  return `${joined}.${days}`
+}
+
+export function barsOutcome(goal: BarsGoal, result: SimResult, words: Words, spend: number): string {
+  const readings = goal.bars.map((bar) => readingText(bar, readBar(bar, result, spend), result, words))
+  return `Today: ${readings.join(', ')}.`
+}
+
+export function barsResultStats(goal: BarsGoal, result: SimResult, baseline: SimResult, words: Words, spend: number): Stat[] {
+  const stats: Stat[] = goal.bars.slice(0, 3).map((bar) => {
+    const { value } = readBar(bar, result, spend)
+    switch (bar.metric) {
+      case 'shipped':
+        return { label: 'Shipped', value, detail: `goal ${bar.min}` }
+      case 'steady':
+        return { label: 'Steady', value: percent(value), detail: `goal ${percent(bar.min)}` }
+      case 'leadTime':
+        return { label: 'Lead time, min', value: Number.isFinite(value) ? Math.round(value) : '–', detail: `goal ${bar.max} or less` }
+      case 'wip':
+        return { label: 'In process', value: tenths(value), detail: `limit ${bar.max}` }
+      case 'stock':
+        return { label: `${capitalize(words.material)} on hand`, value: Math.round(value), detail: `limit ${bar.max}` }
+      case 'scrapped':
+        return { label: 'Scrapped', value, detail: `limit ${bar.max}` }
+      case 'rushOnTime':
+        return { label: 'Rush on time', value: `${value}/${result.rush?.length ?? 0}`, detail: `by ${clock(bar.due)}` }
+      case 'spend':
+        return { label: 'Spent', value: dollars(value), detail: `limit ${dollars(bar.max)}` }
+    }
+  })
+  if (stats.length < 3) stats.push({ label: 'Before', value: baseline.output, detail: 'shipped' })
+  return stats
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+export function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1)
+}

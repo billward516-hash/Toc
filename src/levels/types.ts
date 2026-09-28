@@ -1,4 +1,4 @@
-import type { FactoryModel, Machine } from '../engine/model.ts'
+import type { FactoryModel, Machine, Station } from '../engine/model.ts'
 
 export interface Level {
   id: string
@@ -21,8 +21,10 @@ export type Goal =
   | { kind: 'output'; target: number; prompt: string }
   // Steady flow: no station holds `pileLimit` or more waiting parts for at least `minSteady` of the shift.
   | { kind: 'steady'; pileLimit: number; minSteady: number; minShipped: number; prompt: string }
-  // Watch a steady twin of the line, predict how the real (varying) line compares, then run it.
-  | { kind: 'predict'; prompt: string; options: { id: string; label: string }[]; answer: string }
+  // Watch one day, predict how another compares, then watch it. By default the first day is a steady
+  // twin of the line and the second is the line itself; with `compare`, the first is the line and the
+  // second is the line after `compare.change`, such as a breakdown.
+  | { kind: 'predict'; prompt: string; options: { id: string; label: string }[]; answer: string; compare?: Comparison }
   // Drum-buffer-rope. One star: the pile in front of the drum stays within [low, high] for at least
   // `minHealthy` of the shift. Two: also average work in process at or under `maxAvgWip`.
   // Three: both hold on `freshDays` more days the player hasn't seen.
@@ -45,6 +47,9 @@ export type Goal =
       freshDays: number
       prompt: string
     }
+  // Per-day bars (spec §3.6), judged on the level's own day and `freshDays` more. Each star needs the
+  // next bar, in order, met on every day.
+  | { kind: 'bars'; bars: Bar[]; freshDays: number; prompt: string }
   // Elevating the constraint, judged on the level's own day and `freshDays` more (spec §5.4). One star:
   // at least `target` shipped every day. Two: also steady every day (no pile of `pileLimit` or more for
   // at least `minSteady` of the shift). Three: also at least `minGainPer1000` more shipped on the
@@ -84,6 +89,47 @@ export type Lever =
   | { id: string; kind: 'priority'; label: string; station: string; options: PriorityOption[] }
   // What the shop sells: each option sets the order pattern and how often an order comes in.
   | { id: string; kind: 'menu'; label: string; options: MenuOption[] }
+  // A choice that changes the factory, such as a repair order or a safety stock, each option maybe
+  // with a price. `icon` names the picture shown with it.
+  | { id: string; kind: 'option'; label: string; icon?: OptionIcon; options: ModelOption[] }
+
+export type OptionIcon = 'wrench' | 'truck' | 'stack' | 'bin' | 'rule' | 'clock' | 'money' | 'sort' | 'swap' | 'alert' | 'rope' | 'bolt' | 'even'
+
+// One thing to measure each day, and the bar it must clear.
+export type Bar =
+  | { metric: 'shipped'; min: number }
+  // No station with `pileLimit` or more waiting for at least `min` of the shift.
+  | { metric: 'steady'; min: number; pileLimit: number }
+  // Average minutes from release to shipping.
+  | { metric: 'leadTime'; max: number }
+  // Average work in process.
+  | { metric: 'wip'; max: number }
+  // Average materials in the stockroom.
+  | { metric: 'stock'; max: number }
+  | { metric: 'scrapped'; max: number }
+  // Every rush order shipped by `due` minutes into the shift.
+  | { metric: 'rushOnTime'; due: number }
+  // What the plan costs, the same every day.
+  | { metric: 'spend'; max: number }
+
+// A change to the factory: to stations by id, and to anything else about the model.
+export interface ModelChange {
+  stations?: Record<string, Partial<Station>>
+  model?: Partial<Omit<FactoryModel, 'stations'>>
+}
+
+export interface Comparison {
+  // What the two days are called: "A normal day", "The breakdown day".
+  first: string
+  second: string
+  change: ModelChange
+}
+
+export interface ModelOption extends ModelChange {
+  id: string
+  label: string
+  price?: number
+}
 
 export interface Economics {
   price: number
