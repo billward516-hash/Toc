@@ -37,12 +37,19 @@ const surge = (mold: number, assemble: number): Partial<FactoryModel> => ({
   ],
 })
 
-// A truck brings 30 bags of plastic, two hours' worth, at 2:00, 4:00, and 6:00, each 20 to 110 minutes late.
-const plastic = (onHand: number): Supply => ({
+// A truck brings 30 bags of plastic, two hours' worth, at 2:00, 4:00, and 6:00, each 20 to `latest`
+// minutes late.
+const plastic = (onHand: number, latest = 110): Supply => ({
   name: 'plastic',
   onHand,
-  deliveries: [120, 240, 360].map((due) => ({ due, amount: 30, late: between(20, 110) })),
+  deliveries: [120, 240, 360].map((due) => ({ due, amount: 30, late: between(20, latest) })),
 })
+
+// The bad day: a bad batch cracks 1 in 5 of Mold's parts, Mold breaks down some time in the morning, and
+// the plastic truck runs late again.
+const breakdown = (hours: number) => [{ at: between(60, 150), lasts: fixed(hours) }]
+const badDay = factory({ mold: { defects: 0.2, outages: breakdown(120) }, box: { inspects: true } }, { supply: plastic(30, 90) })
+const FIXES = 600 + 1500 + 1000
 
 export const tier7: Level[] = [
   {
@@ -311,6 +318,100 @@ export const tier7: Level[] = [
         trigger: { kind: 'ran', met: false },
         title: 'Still wasting Paint time',
         body: "The factory shipped {shipped}; it needs {target}. Where do the cracked parts use up Paint's time?",
+      },
+    ],
+  },
+  {
+    id: 'tier7-bad-day',
+    tier: 7,
+    title: 'A bad day',
+    principles: [4, 5],
+    requires: ['tier7-catch-it-early'],
+    briefing:
+      'Everything goes wrong at once. A bad batch of plastic cracks 1 in 5 of Mold\'s parts, and Box only finds them after Paint. Mold will break down some time in the morning, and the repair crew takes two hours to come. And the plastic truck is running late again, with 30 bags in the stockroom. The factory ships {baseline}. You have ${budget} to spend.',
+    model: badDay,
+    seed: 1,
+    goal: {
+      kind: 'bars',
+      bars: [
+        { metric: 'shipped', min: 107 },
+        { metric: 'spend', max: FIXES },
+      ],
+      freshDays: 6,
+      prompt: 'Which fixes are worth paying for?',
+    },
+    levers: [
+      {
+        id: 'plastic',
+        kind: 'option',
+        label: 'Plastic',
+        icon: 'truck',
+        options: [
+          { id: 'no', label: 'Keep the 30 bags' },
+          { id: 'yes', label: 'Order 60 more ahead of the truck, $600', price: 600, model: { supply: plastic(90, 90) } },
+        ],
+      },
+      {
+        id: 'cracks',
+        kind: 'option',
+        label: 'Cracked parts',
+        icon: 'bin',
+        options: [
+          { id: 'no', label: 'Keep testing at Box' },
+          { id: 'yes', label: 'Check each part as it leaves Mold, $1,500', price: 1500, stations: { mold: { inspects: true }, box: { inspects: false } } },
+        ],
+      },
+      {
+        id: 'crew',
+        kind: 'option',
+        label: "Mold's breakdown",
+        icon: 'wrench',
+        options: [
+          { id: 'no', label: 'Call the repair crew when it breaks: 2 hours' },
+          { id: 'yes', label: 'Keep a crew standing by: 20 minutes, $1,000', price: 1000, stations: { mold: { outages: breakdown(20) } } },
+        ],
+      },
+      {
+        id: 'box',
+        kind: 'option',
+        label: 'Box',
+        icon: 'bolt',
+        options: [
+          { id: 'no', label: 'Leave it' },
+          { id: 'yes', label: 'Upgrade it to run a third faster, $2,500', price: 2500, stations: { box: { cycleTime: about(1.8) } } },
+        ],
+      },
+    ],
+    popups: [
+      {
+        trigger: { kind: 'ran', met: true, choices: { plastic: 'yes', cracks: 'yes', crew: 'yes', box: 'no' } },
+        title: 'Protect the constraint',
+        body: "Every dollar went to protecting Paint's time. The extra plastic kept Cut going while the truck was late, and it covered the cracked parts, which use plastic too; checking at Mold threw them out before Paint spent time on them; and the standby crew had Mold running again before the robots waiting at Paint ran out. {shipped} shipped, for ${budget}. On a bad day, fix first whatever costs the constraint time.",
+      },
+      {
+        trigger: { kind: 'ran', met: true, choices: { plastic: 'yes', cracks: 'yes', crew: 'yes', box: 'yes' } },
+        title: 'The upgrade bought nothing',
+        body: 'The three fixes for Paint got {shipped} robots out, but the Box upgrade bought nothing: Box already had time to spare, and the $2,500 took you over budget.',
+      },
+      {
+        trigger: { kind: 'ran', met: false, choices: { plastic: 'no' } },
+        title: 'Out of plastic',
+        body: "The truck was late again, and 30 bags didn't last: Cut stopped, then Paint ran dry. {shipped} shipped.",
+      },
+      {
+        trigger: { kind: 'ran', met: false, choices: { cracks: 'no' } },
+        title: 'Painting robots to throw away',
+        body: "Box threw out {scrapped} cracked robots, every one already painted: Paint's time, wasted. {shipped} shipped.",
+      },
+      {
+        trigger: { kind: 'ran', met: false, choices: { crew: 'no' } },
+        title: 'Two hours without Mold',
+        body: 'When Mold broke down, the 8 robots on their way to Paint lasted about half an hour, then Paint stood idle until the crew came. {shipped} shipped.',
+      },
+      {
+        trigger: { kind: 'ran', met: false },
+        title: 'Not enough robots',
+        body: "{shipped} shipped; the goal is {target}. Which problems cost Paint time?",
       },
     ],
   },
