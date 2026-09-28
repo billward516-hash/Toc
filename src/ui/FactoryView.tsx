@@ -1,5 +1,5 @@
-import { onBreak, type FactoryModel, type Machine, type Station } from '../engine/model.ts'
-import type { ActiveJob, Snapshot, Zone } from '../engine/timeline.ts'
+import { onBreak, type FactoryModel, type Machine, type Market, type Product, type Station } from '../engine/model.ts'
+import type { ActiveJob, Shop, Snapshot, Zone } from '../engine/timeline.ts'
 import { StationGlyph, WRENCH } from './icons.tsx'
 import { productColor, productName } from './products.ts'
 
@@ -73,7 +73,9 @@ export function FactoryView(props: FactoryViewProps) {
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
-  const boxHeight = Math.max(BOX_HEIGHT, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
+  // A shop selling several products lists each one's shelf.
+  const shopHeight = model.market && (model.products?.length ?? 0) > 2 ? 166 : 0
+  const boxHeight = Math.max(BOX_HEIGHT, shopHeight, ...model.stations.map((s) => (s.machines ? MACHINE_TOP + s.machines.length * MACHINE_ROW + 6 : 0)))
   const cartSpace = model.stations.some((s, i) => (s.transfer ?? 1) > 1 && i < count - 1) ? CART_SPACE : 0
   const scrapSpace = model.stations.some((s) => s.inspects) ? SCRAP_SPACE : 0
   const height = BOX_TOP + boxHeight + cartSpace + scrapSpace + 50
@@ -140,44 +142,108 @@ export function FactoryView(props: FactoryViewProps) {
           onSelect={onSelect}
         />
       ))}
-      <g className="shipped" aria-label={`Shipped: ${snapshot.shipped}`}>
-        <rect className="bin" x={binLeft} y={BOX_TOP} width={BIN - 28} height={boxHeight} rx={24} />
-        {snapshot.shippedBy ? (
-          <>
-            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 32 : 38)}>
-              Shipped
-            </text>
-            <text className="bin-count compact" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 76 : 88)}>
-              {snapshot.shipped}
-            </text>
-            {products.map((product, k) => (
-              <g key={product.id} className={`bin-product${many ? ' tight' : ''}`}>
-                <rect
-                  x={binLeft + (many ? 16 : 22)}
-                  y={BOX_TOP + (many ? 88 + k * 20 : 106 + k * 24)}
-                  width={14}
-                  height={14}
-                  rx={3}
-                  style={{ fill: palette.color(product.id) }}
-                />
-                <text x={binLeft + (many ? 36 : 44)} y={BOX_TOP + (many ? 100 + k * 20 : 119 + k * 24)}>
-                  {snapshot.shippedBy?.[product.id] ?? 0} {shortName(product.name)}
-                </text>
-              </g>
-            ))}
-          </>
-        ) : (
-          <>
-            <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 44}>
-              Shipped
-            </text>
-            <text className="bin-count" x={count * COLUMN + BIN / 2} y={BOX_TOP + 112}>
-              {snapshot.shipped}
-            </text>
-          </>
-        )}
-      </g>
+      {snapshot.shop && model.market ? (
+        <ShopCounter x={count * COLUMN} boxHeight={boxHeight} shop={snapshot.shop} market={model.market} products={products} palette={palette} t={snapshot.t} />
+      ) : (
+        <g className="shipped" aria-label={`Shipped: ${snapshot.shipped}`}>
+          <rect className="bin" x={binLeft} y={BOX_TOP} width={BIN - 28} height={boxHeight} rx={24} />
+          {snapshot.shippedBy ? (
+            <>
+              <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 32 : 38)}>
+                Shipped
+              </text>
+              <text className="bin-count compact" x={count * COLUMN + BIN / 2} y={BOX_TOP + (many ? 76 : 88)}>
+                {snapshot.shipped}
+              </text>
+              {products.map((product, k) => (
+                <g key={product.id} className={`bin-product${many ? ' tight' : ''}`}>
+                  <rect
+                    x={binLeft + (many ? 16 : 22)}
+                    y={BOX_TOP + (many ? 88 + k * 20 : 106 + k * 24)}
+                    width={14}
+                    height={14}
+                    rx={3}
+                    style={{ fill: palette.color(product.id) }}
+                  />
+                  <text x={binLeft + (many ? 36 : 44)} y={BOX_TOP + (many ? 100 + k * 20 : 119 + k * 24)}>
+                    {snapshot.shippedBy?.[product.id] ?? 0} {shortName(product.name)}
+                  </text>
+                </g>
+              ))}
+            </>
+          ) : (
+            <>
+              <text className="bin-label" x={count * COLUMN + BIN / 2} y={BOX_TOP + 44}>
+                Shipped
+              </text>
+              <text className="bin-count" x={count * COLUMN + BIN / 2} y={BOX_TOP + 112}>
+                {snapshot.shipped}
+              </text>
+            </>
+          )}
+        </g>
+      )}
     </svg>
+  )
+}
+
+interface ShopProps {
+  x: number
+  boxHeight: number
+  shop: Shop
+  market: Market
+  products: Product[]
+  palette: Palette
+  t: number
+}
+
+// The shop counter at the end of the line: its sign, the shelf (by product when there are several),
+// and the customers who bought or left without buying.
+function ShopCounter({ x, boxHeight, shop, market, products, palette, t }: ShopProps) {
+  const left = x + 14
+  const center = x + BIN / 2
+  const open = t >= market.opens && t < market.closes
+  const sign = t < market.opens ? `Opens at ${clockTime(market.opens)}` : open ? 'Open' : 'Closed'
+  const soldOut = open && shop.shelf === 0
+  const byProduct = products.length > 0 && shop.shelfBy
+  const salesY = BOX_TOP + boxHeight - (byProduct ? 34 : 30)
+  const shelf = byProduct ? products.map((p) => `${shop.shelfBy?.[p.id] ?? 0} ${p.name.toLowerCase()}`).join(', ') : `${shop.shelf}`
+  return (
+    <g className="shipped shop" aria-label={`Shop ${sign.toLowerCase()}: on the shelf ${shelf}; ${shop.sold} sold, ${shop.lost} turned away`}>
+      <g className={`shop-sign${open ? ' open' : ''}`}>
+        <rect x={center - 75} y={TAG_Y - 18} width={150} height={36} rx={18} />
+        <text x={center} y={TAG_Y + 7}>
+          {sign}
+        </text>
+      </g>
+      <rect className="bin" x={left} y={BOX_TOP} width={BIN - 28} height={boxHeight} rx={24} />
+      <text className="bin-label" x={center} y={BOX_TOP + 32}>
+        On the shelf
+      </text>
+      {byProduct ? (
+        products.map((product, k) => {
+          const count = shop.shelfBy?.[product.id] ?? 0
+          return (
+            <g key={product.id} className={`bin-product tight${open && count === 0 ? ' empty' : ''}`}>
+              <rect x={left + 14} y={BOX_TOP + 46 + k * 22} width={14} height={14} rx={3} style={{ fill: palette.color(product.id) }} />
+              <text x={left + 33} y={BOX_TOP + 58 + k * 22}>
+                {count} {product.name.toLowerCase()}
+              </text>
+            </g>
+          )
+        })
+      ) : (
+        <text className={`bin-count compact${soldOut ? ' empty' : ''}`} x={center} y={BOX_TOP + 80}>
+          {shop.shelf}
+        </text>
+      )}
+      <text className="sales" x={center} y={salesY}>
+        {shop.sold} sold
+      </text>
+      <text className={`sales${shop.lost > 0 ? ' lost' : ''}`} x={center} y={salesY + 21}>
+        {shop.lost} turned away
+      </text>
+    </g>
   )
 }
 

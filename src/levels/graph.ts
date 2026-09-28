@@ -2,7 +2,7 @@ import { validateModel } from '../engine/model.ts'
 import type { SimResult } from '../engine/simulate.ts'
 import { bufferShare, steadyShare, type Snapshot } from '../engine/timeline.ts'
 import { leverValues } from './levers.ts'
-import type { Bar, Choices, Goal, Level, Popup } from './types.ts'
+import type { Bar, Choices, Comparison, Goal, Level, Popup } from './types.ts'
 
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
 type ElevateGoal = Extract<Goal, { kind: 'elevate' }>
@@ -91,6 +91,10 @@ export function readBar(bar: Bar, day: SimResult, spend = 0): Reading {
     }
     case 'spend':
       return atMost(spend, bar.max)
+    case 'lost':
+      return atMost(day.market?.lost ?? 0, bar.max)
+    case 'waste':
+      return atMost(day.market?.waste ?? 0, bar.max)
   }
 }
 
@@ -265,6 +269,12 @@ export function feedbackForRun(level: Level, met: boolean, choices: Choices): Po
   return best
 }
 
+// The days a prediction's second part covers: the level's own day, or with `days`, that many days
+// after it.
+export function secondDays(seed: number, compare?: Comparison): number[] {
+  return compare?.days ? Array.from({ length: compare.days }, (_, k) => seed + 1 + k) : [seed]
+}
+
 export function feedbackForPrediction(level: Level, option: string): Popup | undefined {
   return level.popups.find((p) => p.trigger.kind === 'predicted' && p.trigger.option === option)
 }
@@ -410,6 +420,8 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
       for (const id of Object.keys(goal.compare?.change.stations ?? {})) {
         if (!stationIds.has(id)) problems.push(`the comparison changes an unknown station "${id}"`)
       }
+      const days = goal.compare?.days
+      if (days !== undefined && !(Number.isInteger(days) && days >= 2)) problems.push('a comparison over days needs at least two')
       if (!goal.options.some((o) => o.id === goal.answer)) problems.push(`answer "${goal.answer}" is not an option`)
       for (const option of goal.options) {
         if (!popups.some((p) => p.trigger.kind === 'predicted' && p.trigger.option === option.id)) {
@@ -446,6 +458,7 @@ function goalProblems({ goal, levers, popups, model }: Level): string[] {
           const problem = barProblem(bar)
           if (problem) problems.push(`bar "${bar.metric}": ${problem}`)
           if (bar.metric === 'shippedOf' && !productIds.has(bar.product)) problems.push(`bar "shippedOf" names unknown product "${bar.product}"`)
+          if ((bar.metric === 'lost' || bar.metric === 'waste') && !model.market) problems.push(`bar "${bar.metric}" needs a line that sells to customers`)
         }
       }
       if (goal.kind === 'flow') {
@@ -503,6 +516,8 @@ function barProblem(bar: Bar): string | null {
     case 'stock':
     case 'scrapped':
     case 'spend':
+    case 'lost':
+    case 'waste':
       return bar.max >= 0 ? null : 'needs a maximum of at least 0'
   }
 }

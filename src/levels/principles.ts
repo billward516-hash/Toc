@@ -27,4 +27,7 @@ export const principleNames: Record<number, string> = {
   37: "Scrap after the constraint wastes the constraint's time",
   38: 'A change in the product mix can move the constraint',
   39: 'Changing priorities at the constraint costs output',
+  40: 'Forecasts are always wrong',
+  41: 'Make what customers take, not what the forecast says',
+  42: 'Forecast the total, and decide the details as late as you can',
 }

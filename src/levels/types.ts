@@ -93,7 +93,7 @@ export type Lever =
   // with a price. `icon` names the picture shown with it.
   | { id: string; kind: 'option'; label: string; icon?: OptionIcon; options: ModelOption[] }
 
-export type OptionIcon = 'wrench' | 'truck' | 'stack' | 'bin' | 'rule' | 'clock' | 'money' | 'sort' | 'swap' | 'alert' | 'rope' | 'bolt' | 'even'
+export type OptionIcon = 'wrench' | 'truck' | 'stack' | 'bin' | 'rule' | 'clock' | 'money' | 'sort' | 'swap' | 'alert' | 'rope' | 'bolt' | 'even' | 'tag'
 
 // One thing to measure each day, and the bar it must clear.
 export type Bar =
@@ -113,6 +113,9 @@ export type Bar =
   | { metric: 'rushOnTime'; due: number }
   // What the plan costs, the same every day.
   | { metric: 'spend'; max: number }
+  // At the shop counter: customers who left without buying, and units thrown out at closing.
+  | { metric: 'lost'; max: number }
+  | { metric: 'waste'; max: number }
 
 // A change to the factory: to stations by id, and to anything else about the model.
 export interface ModelChange {
@@ -125,6 +128,8 @@ export interface Comparison {
   first: string
   second: string
   change: ModelChange
+  // The second is this many days in a row (the days after the level's own), not one.
+  days?: number
 }
 
 export interface ModelOption extends ModelChange {

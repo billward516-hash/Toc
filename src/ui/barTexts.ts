@@ -1,5 +1,5 @@
 import type { SimResult } from '../engine/simulate.ts'
-import { leadTimeSoFar, steadyShare, type Snapshot } from '../engine/timeline.ts'
+import { leadTimeSoFar, steadyShare, type Shop, type Snapshot } from '../engine/timeline.ts'
 import { readBar, rushOnTime, type Reading } from '../levels/graph.ts'
 import type { Bar, Goal } from '../levels/types.ts'
 import { tenths } from '../levels/values.ts'
@@ -9,6 +9,8 @@ export type BarsGoal = Extract<Goal, { kind: 'bars' }>
 
 // Words for what a line makes and uses, for the texts below.
 export interface Words {
+  // What one unit of work is called, plural: "robots".
+  unit: string
   material: string
   // A product's name, plural and lower case: "deluxe robots".
   products: (id: string) => string
@@ -39,6 +41,10 @@ export function goalText(bar: Bar, words: Words): string {
       return `Ship every rush order by ${clock(bar.due)}`
     case 'spend':
       return bar.max === 0 ? 'Spend nothing' : `Spend ${dollars(bar.max)} or less`
+    case 'lost':
+      return bar.max === 0 ? 'Turn no customer away' : `Turn away ${bar.max} or fewer customers a day`
+    case 'waste':
+      return bar.max === 0 ? 'Throw nothing out' : `Throw out ${bar.max} or fewer a day`
   }
 }
 
@@ -63,6 +69,10 @@ export function readingText(bar: Bar, reading: Reading, day: SimResult, words: W
       return `${reading.value} of ${day.rush?.length ?? 0} rush on time`
     case 'spend':
       return `${dollars(reading.value)} spent`
+    case 'lost':
+      return `${reading.value} turned away`
+    case 'waste':
+      return `${reading.value} thrown out`
   }
 }
 
@@ -88,11 +98,16 @@ export function rowText(bar: Bar, met: number, total: number, reading: Reading, 
       return `Every rush order out by ${clock(bar.due)} ${days}`
     case 'spend':
       return `Spent ${dollars(reading.value)} (limit ${dollars(bar.max)})`
+    case 'lost':
+      return bar.max === 0 ? `Turned no customer away ${days}` : `Turned away ${bar.max} or fewer ${days}`
+    case 'waste':
+      return bar.max === 0 ? `Threw nothing out ${days}` : `Threw out ${bar.max} or fewer ${days}`
   }
 }
 
 // The live dashboard for a bars level: shipped first, then what each bar watches.
 export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, words: Words, spend: number): Stat[] {
+  if (snapshot.shop) return shopStats(result, snapshot.shop, snapshot.t)
   const stats: Stat[] = [{ label: 'Shipped', value: snapshot.shipped }]
   for (const bar of goal.bars) {
     if (bar.metric === 'shippedOf') stats.push({ label: capitalize(words.products(bar.product)), value: snapshot.shippedBy?.[bar.product] ?? 0 })
@@ -112,8 +127,24 @@ export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, 
   return stats
 }
 
+// The shop counter's day so far; what's thrown out shows once the shift is over.
+export function shopStats(result: SimResult, shop: Shop, t: number): Stat[] {
+  const stats: Stat[] = [
+    { label: 'Sold', value: shop.sold },
+    { label: 'Turned away', value: shop.lost },
+    { label: 'On the shelf', value: shop.shelf },
+  ]
+  if (t >= result.horizon && result.market) stats.push({ label: 'Thrown out', value: result.market.waste })
+  return stats
+}
+
 export function barsHint(goal: BarsGoal, baseline: SimResult, words: Words): string {
-  const facts = [`Today the factory ships ${baseline.output} a shift`]
+  const { market } = baseline
+  const facts = market
+    ? [
+        `Today ${market.customers} customers come in: the shop sells ${market.sold} ${words.unit}, turns ${market.lost > 0 ? customers(market.lost) : 'no one'} away, and throws ${market.waste > 0 ? `out ${market.waste}` : 'none out'}`,
+      ]
+    : [`Today the factory ships ${baseline.output} a shift`]
   for (const bar of goal.bars) {
     if (bar.metric === 'shippedOf') facts.push(`${baseline.shippedBy?.[bar.product] ?? 0} of them ${words.products(bar.product)}`)
     if (bar.metric === 'steady') facts.push(`it's steady ${percent(steadyShare(baseline, bar.pileLimit))} of the time`)
@@ -153,10 +184,19 @@ export function barsResultStats(goal: BarsGoal, result: SimResult, baseline: Sim
         return { label: 'Rush on time', value: `${value}/${result.rush?.length ?? 0}`, detail: `by ${clock(bar.due)}` }
       case 'spend':
         return { label: 'Spent', value: dollars(value), detail: `limit ${dollars(bar.max)}` }
+      case 'lost':
+        return { label: 'Turned away', value, detail: `limit ${bar.max}` }
+      case 'waste':
+        return { label: 'Thrown out', value, detail: `limit ${bar.max}` }
     }
   })
-  if (stats.length < 3) stats.push({ label: 'Before', value: baseline.output, detail: 'shipped' })
+  if (stats.length < 3 && result.market) stats.push({ label: 'Sold', value: result.market.sold, detail: `of ${result.market.customers} customers` })
+  else if (stats.length < 3) stats.push({ label: 'Before', value: baseline.output, detail: 'shipped' })
   return stats
+}
+
+export function customers(count: number): string {
+  return `${count} ${count === 1 ? 'customer' : 'customers'}`
 }
 
 function capitalize(text: string): string {

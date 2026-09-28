@@ -76,6 +76,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   )
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
   const words: Words = {
+    unit: level.unit ?? 'robots',
     material: model.supply?.name ?? 'material',
     products: (id) => `${productName(model, id).toLowerCase()}s`,
   }

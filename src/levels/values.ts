@@ -1,11 +1,12 @@
-import type { SimResult } from '../engine/simulate.ts'
+import type { MarketDay, SimResult } from '../engine/simulate.ts'
 import { steadyShare } from '../engine/timeline.ts'
 import { bufferScore, profitScore, rushOnTime } from './graph.ts'
 import type { Goal } from './types.ts'
 
 // Named numbers a level's text can quote, such as {baseline} or {steadyPct}.
-// For a prediction, the baseline is the first day watched and the run is the second.
-export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = baseline): Record<string, number> {
+// For a prediction, the baseline is the first day watched and the run is the second; when the second
+// is several days, `days` holds them all (the run is the first), and shop numbers are their totals.
+export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = baseline, days: SimResult[] = [run]): Record<string, number> {
   switch (goal.kind) {
     case 'output':
       return { baseline: baseline.output, target: goal.target }
@@ -17,8 +18,10 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
         minShipped: goal.minShipped,
         steadyPct: Math.floor(100 * steadyShare(run, goal.pileLimit)),
       }
-    case 'predict':
-      return { ...runFacts(baseline, run), steady: baseline.output, gap: baseline.output - run.output, first: baseline.output, second: run.output }
+    case 'predict': {
+      const values = { ...runFacts(baseline, run), steady: baseline.output, gap: baseline.output - run.output, first: baseline.output, second: run.output }
+      return days.length > 1 ? { ...values, ...dayTotals(days) } : values
+    }
     case 'bars': {
       const values: Record<string, number> = { ...runFacts(baseline, run), days: goal.freshDays + 1 }
       for (const bar of goal.bars) {
@@ -39,6 +42,8 @@ export function goalValues(goal: Goal, baseline: SimResult, run: SimResult = bas
         if (bar.metric === 'stock') values.maxStock = bar.max
         if (bar.metric === 'scrapped') values.maxScrapped = bar.max
         if (bar.metric === 'spend') values.budget = bar.max
+        if (bar.metric === 'lost') values.maxLost = bar.max
+        if (bar.metric === 'waste') values.maxWaste = bar.max
         if (bar.metric === 'rushOnTime') {
           values.onTime = rushOnTime(run, bar.due)
           values.onTimeBefore = rushOnTime(baseline, bar.due)
@@ -123,5 +128,32 @@ function runFacts(baseline: SimResult, run: SimResult): Record<string, number> {
     scrapped: run.scrapped ?? 0,
     scrappedBefore: baseline.scrapped ?? 0,
     rush: run.rush?.length ?? 0,
+    ...(run.market ? shopFacts(run.market) : {}),
+    ...(baseline.market ? before(shopFacts(baseline.market)) : {}),
+  }
+}
+
+// The shop counter's day: {customers}, {sold}, {turnedAway}, and {thrownOut}.
+function shopFacts(day: MarketDay): Record<string, number> {
+  return { customers: day.customers, sold: day.sold, turnedAway: day.lost, thrownOut: day.waste }
+}
+
+function before(values: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [`${name}Before`, value]))
+}
+
+// The shop over several days: totals, plus {days}, the {busyDays} that turned customers away, and
+// the {slowDays} that threw cupcakes out.
+function dayTotals(days: SimResult[]): Record<string, number> {
+  const shop = days.flatMap((day) => (day.market ? [day.market] : []))
+  const total = (pick: (day: MarketDay) => number) => shop.reduce((sum, day) => sum + pick(day), 0)
+  return {
+    days: days.length,
+    customers: total((day) => day.customers),
+    sold: total((day) => day.sold),
+    turnedAway: total((day) => day.lost),
+    thrownOut: total((day) => day.waste),
+    busyDays: shop.filter((day) => day.lost > 0).length,
+    slowDays: shop.filter((day) => day.waste > 0).length,
   }
 }

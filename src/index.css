@@ -832,6 +832,46 @@ button {
   font-weight: 900;
 }
 
+.factory .bin-count.empty,
+.factory .bin-product.empty text {
+  fill: var(--red);
+}
+
+.factory .sales {
+  font-size: 15px;
+  fill: var(--green-deep);
+}
+
+.factory .shop .bin-label {
+  font-size: 19px;
+}
+
+.factory .shop .bin-product text {
+  font-size: 14px;
+}
+
+.factory .sales.lost {
+  fill: var(--red);
+}
+
+.factory .shop-sign rect {
+  fill: #e4e1d8;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.factory .shop-sign.open rect {
+  fill: var(--green);
+}
+
+.factory .shop-sign text {
+  font-size: 18px;
+}
+
+.factory .shop-sign.open text {
+  fill: #fff;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -1216,6 +1256,112 @@ button {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.result-stats.four {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.result-stats.four div {
+  padding: 10px 4px;
+}
+
+.result-stats.four span {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .result-stats.four {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Several days at the shop counter, one bar each. */
+.shop-days {
+  margin: 0;
+  width: 100%;
+}
+
+.shop-days svg {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+}
+
+.shop-days .sold {
+  fill: var(--part);
+}
+
+.shop-days .waste {
+  fill: #b9b2a3;
+}
+
+.shop-days .lost {
+  fill: var(--red);
+}
+
+.shop-days rect {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.shop-days .axis {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.shop-days .plan {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.shop-days text {
+  font-size: 11px;
+  font-weight: 800;
+  text-anchor: middle;
+  fill: var(--ink);
+}
+
+.shop-days .day {
+  fill: var(--muted);
+}
+
+.shop-days figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.shop-days figcaption span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch.sold {
+  background: var(--part);
+}
+
+.swatch.waste {
+  background: #b9b2a3;
+}
+
+.swatch.lost {
+  background: var(--red);
+}
+
+.swatch.plan {
+  height: 0;
+  border-width: 2px 0 0;
+  border-style: dashed;
+  border-radius: 0;
+  background: none;
+}
+
 @media (max-width: 600px) {
   .result-stats {
     gap: 6px;
@@ -1343,11 +1489,16 @@ button {
 .days.compact li {
   padding: 6px 8px;
   font-size: 12px;
-  white-space: nowrap;
+}
+
+/* A long reading wraps inside its card rather than spilling into the next one. */
+.days.compact li span {
+  overflow-wrap: anywhere;
 }
 
 .days.compact li strong {
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .days li.ok {

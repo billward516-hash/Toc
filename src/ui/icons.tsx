@@ -107,6 +107,8 @@ const glyphs: Record<string, ReactNode> = {
   ),
 }
 glyphs.pack = glyphs.box
+glyphs.frost = glyphs.decorate
+glyphs.cool = glyphs.decorate
 
 export function StationGlyph({ kind, x, y, size }: { kind: string; x: number; y: number; size: number }) {
   return (

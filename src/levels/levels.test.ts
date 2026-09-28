@@ -3,7 +3,7 @@ import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, maxStars, starsFor, validateLevels } from './graph.ts'
+import { bufferScore, feedbackForPrediction, feedbackForRun, flowHolds, goalMet, maxStars, secondDays, starsFor, validateLevels } from './graph.ts'
 import { allPlans, applyChange, applyLevers, overBudget, planCost, steadyTwin } from './levers.ts'
 import { goalValues } from './values.ts'
 import { levels } from './index.ts'
@@ -255,10 +255,12 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
   if (level.goal.kind !== 'predict') return
   const { goal } = level
   const twin = simulate(goal.compare ? level.model : steadyTwin(level.model), level.seed)
-  const real = simulate(goal.compare ? applyChange(level.model, goal.compare.change) : level.model, level.seed)
+  const secondModel = goal.compare ? applyChange(level.model, goal.compare.change) : level.model
+  const seconds = secondDays(level.seed, goal.compare).map((day) => simulate(secondModel, day))
+  const real = seconds[0]
 
   it('has feedback for every option, with every number filled in', () => {
-    const values = goalValues(goal, twin, real)
+    const values = goalValues(goal, twin, real, seconds)
     for (const option of goal.options) {
       expect(fillTemplate(option.label, level.model, snapshotAt(real, 0), values)).not.toMatch(/[{}]/)
       const popup = feedbackForPrediction(level, option.id)
@@ -288,9 +290,41 @@ describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level
     expect(days.every((loss) => loss > 0)).toBe(true)
   })
 
+  it.runIf(level.id === 'tier9-forecast')('brings about 1,200 customers in 10 days, and throws cupcakes out and turns customers away in any 10 days', () => {
+    const customers = seconds.reduce((sum, day) => sum + day.market!.customers, 0)
+    expect(Math.abs(customers - 1200)).toBeLessThanOrEqual(20)
+    expect(twin.market).toEqual({ customers: 120, sold: 120, lost: 0, waste: 0 })
+    for (let start = 1; start <= 100; start++) {
+      const days = Array.from({ length: 10 }, (_, k) => simulate(secondModel, start + k).market!)
+      expect(days.some((day) => day.waste > 0) && days.some((day) => day.lost > 0), `days ${start}..${start + 9}`).toBe(true)
+    }
+  })
+
   it.runIf(level.id === 'tier2-dice')('ships fewer than its perfect-day twin on every day, and clearly fewer on its own day', () => {
     for (let seed = 1; seed <= 100; seed++) expect(simulate(level.model, seed).output, `seed ${seed}`).toBeLessThan(twin.output)
     expect(twin.output - real.output).toBeGreaterThanOrEqual(8)
+  })
+})
+
+// Tier 9's texts describe the level's own day, so check the claims they make about it.
+describe('tier 9 texts', () => {
+  const find = (id: string) => levels.find((l) => l.id === id)!
+  const day = (level: Level, plan: Choices) => simulate(applyLevers(level.model, level.levers, plan), level.seed)
+
+  it('opens Bake what sells on a busy day: the forecast sells out and turns customers away', () => {
+    const level = find('tier9-bake-what-sells')
+    expect(simulate(level.model, level.seed).market).toMatchObject({ sold: 120, waste: 0 })
+    expect(simulate(level.model, level.seed).market!.lost).toBeGreaterThan(0)
+    expect(day(level, { plan: 'replace' }).market!.lost).toBe(0)
+  })
+
+  it('runs the small shelf dry only in the lunch rush', () => {
+    const level = find('tier9-lunch-rush')
+    const small = day(level, { shelf: 'ten' })
+    const lost = small.events.filter((e) => e.type === 'lost').map((e) => e.t)
+    expect(lost.length).toBeGreaterThan(0)
+    expect(lost.every((t) => t >= 300 && t <= 360)).toBe(true)
+    expect(day(level, { shelf: 'forty' }).market!.lost).toBe(0)
   })
 })
 
