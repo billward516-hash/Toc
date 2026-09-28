@@ -75,6 +75,7 @@ export function profitScore(goal: ProfitGoal, result: SimResult): ProfitScore {
     area += value * (event.t - before)
     before = event.t
     if (event.type === 'release') value += materials(event.job)
+    else if (event.type === 'finish' && event.scrap) value -= materials(event.job)
     else if (event.type === 'finish' && event.station === last) {
       const product = result.products?.[event.job] ?? ''
       const economics = goal.economics[product]

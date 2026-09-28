@@ -19,11 +19,17 @@ export interface Snapshot {
   carts: number[][]
   working: ActiveJob[][]
   completed: number[]
-  // Stations stopped by a jam at time t.
+  // Stations stopped by a jam or a breakdown at time t, and when each breakdown ends.
   jammed: boolean[]
+  brokenUntil: (number | null)[]
+  // Units each station has scrapped at inspection so far.
+  scrapped: number[]
   shipped: number
   // Shipped units by product, when the line makes several.
   shippedBy?: Record<string, number>
+  // Materials in the stockroom, and deliveries so far, when the line uses them.
+  stock?: number
+  deliveries?: number
 }
 
 // The state of the line at time t, rebuilt from the event log. Replaying from zero keeps
@@ -36,8 +42,13 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
   const completed = new Array<number>(n).fill(0)
   const working: ActiveJob[][] = Array.from({ length: n }, () => [])
   const jammedUntil = new Array<number>(n).fill(0)
+  const brokenUntil = new Array<number>(n).fill(0)
+  const scrapped = new Array<number>(n).fill(0)
   const shippedBy: Record<string, number> | undefined = result.products ? {} : undefined
   let released = 0
+  let shipped = 0
+  let stock = result.supply?.onHand ?? 0
+  let deliveries = 0
 
   for (const event of result.events) {
     if (event.t > t) break
@@ -51,6 +62,7 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
         const queue = waiting[event.station]
         const k = queue.indexOf(event.job)
         if (k >= 0) queue.splice(k, 1)
+        if (event.station === 0) stock--
         working[event.station].push({ job: event.job, machine: event.machine, start: event.t, ready: event.ready ?? event.t, end: event.end })
         break
       }
@@ -61,11 +73,15 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
           1,
         )
         completed[event.station]++
-        if (usesCart[event.station]) carts[event.station].push(event.job)
+        if (event.scrap) scrapped[event.station]++
+        else if (usesCart[event.station]) carts[event.station].push(event.job)
         else if (event.station + 1 < n) waiting[event.station + 1].push(event.job)
-        else if (shippedBy && result.products) {
-          const product = result.products[event.job]
-          shippedBy[product] = (shippedBy[product] ?? 0) + 1
+        else {
+          shipped++
+          if (shippedBy && result.products) {
+            const product = result.products[event.job]
+            shippedBy[product] = (shippedBy[product] ?? 0) + 1
+          }
         }
         break
       }
@@ -75,13 +91,32 @@ export function snapshotAt(result: SimResult, t: number): Snapshot {
         break
       case 'jam':
         jammedUntil[event.station] = event.until
+        if (event.outage) brokenUntil[event.station] = event.until
+        break
+      case 'delivery':
+        stock += event.amount
+        deliveries++
         break
     }
   }
 
   const jammed = jammedUntil.map((until) => t < until)
   const queues = waiting.map((queue) => queue.length)
-  return { t, released, queues, waiting, carts, working, completed, jammed, shipped: completed[n - 1], ...(shippedBy ? { shippedBy } : {}) }
+  return {
+    t,
+    released,
+    queues,
+    waiting,
+    carts,
+    working,
+    completed,
+    jammed,
+    brokenUntil: brokenUntil.map((until) => (t < until ? until : null)),
+    scrapped,
+    shipped,
+    ...(shippedBy ? { shippedBy } : {}),
+    ...(result.supply ? { stock, deliveries } : {}),
+  }
 }
 
 export type Zone = 'dry' | 'healthy' | 'flooding'
@@ -113,7 +148,7 @@ export function bufferZones(result: SimResult, station: number, low: number, hig
     if (event.t > result.horizon) break
     if (event.type === 'release' && station === 0) queue++
     else if (event.type === 'start' && event.station === station) queue--
-    else if (event.type === 'finish' && event.station + 1 === station && !fromCart) queue++
+    else if (event.type === 'finish' && event.station + 1 === station && !fromCart && !event.scrap) queue++
     else if (event.type === 'move' && event.station + 1 === station) queue += event.jobs.length
     else continue
     const next = zoneOf(queue)
@@ -160,7 +195,7 @@ export function steadyShare(result: SimResult, limit: number, upTo = result.hori
     last = event.t
     if (event.type === 'release') change(0, 1)
     else if (event.type === 'start') change(event.station, -1)
-    else if (event.type === 'finish' && event.station + 1 < n && !usesCart[event.station]) change(event.station + 1, 1)
+    else if (event.type === 'finish' && event.station + 1 < n && !usesCart[event.station] && !event.scrap) change(event.station + 1, 1)
     else if (event.type === 'move') change(event.station + 1, event.jobs.length)
   }
   if (crowded > 0) unsteady += upTo - last
@@ -176,7 +211,7 @@ export function leadTimeSoFar(result: SimResult, upTo = result.horizon): number 
   for (const event of result.events) {
     if (event.t > upTo) break
     if (event.type === 'release') releasedAt[event.job] = event.t
-    else if (event.type === 'finish' && event.station === last) {
+    else if (event.type === 'finish' && event.station === last && !event.scrap) {
       total += event.t - releasedAt[event.job]
       shipped++
     }

@@ -381,6 +381,154 @@ describe('priorities', () => {
   })
 })
 
+describe('long breakdowns', () => {
+  const broken: FactoryModel = {
+    ...line([fixed(2), fixed(3)]),
+    stations: [
+      { id: 's0', name: 'Station 0', cycleTime: fixed(2) },
+      { id: 's1', name: 'Station 1', cycleTime: fixed(3), outages: [{ at: fixed(20), lasts: fixed(30) }] },
+    ],
+  }
+  const result = simulate(broken, 1)
+
+  it('stops the station for the whole breakdown, then starts it again', () => {
+    expect(result.events).toContainEqual({ t: 20, type: 'jam', station: 1, until: 50, outage: true })
+    const starts = result.events.filter((e) => e.type === 'start' && e.station === 1).map((e) => e.t)
+    expect(starts.filter((t) => t > 20 && t < 50)).toEqual([])
+    expect(starts).toContain(50)
+    expect(result.output).toBeLessThan(simulate(line([fixed(2), fixed(3)]), 1).output - 8)
+  })
+
+  it('counts the breakdown in capacity', () => {
+    expect(capacity(broken.stations[1], 100)).toBeCloseTo(70 / 3, 10)
+  })
+
+  it('shows the breakdown and when it ends', () => {
+    expect(snapshotAt(result, 30).brokenUntil).toEqual([null, 50])
+    expect(snapshotAt(result, 30).jammed).toEqual([false, true])
+    expect(snapshotAt(result, 60).brokenUntil).toEqual([null, null])
+  })
+})
+
+describe('direct materials', () => {
+  const supplied: FactoryModel = {
+    ...line([fixed(1), fixed(1)], { kind: 'saturate' }, 60),
+    supply: { onHand: 5, deliveries: [{ due: 20, amount: 10 }, { due: 40, amount: 10, late: fixed(10) }] },
+  }
+  const result = simulate(supplied, 1)
+
+  it('starts work only with material on hand, and waits for late deliveries', () => {
+    expect(result.events.filter((e) => e.type === 'delivery')).toEqual([
+      { t: 20, type: 'delivery', amount: 10, due: 20 },
+      { t: 50, type: 'delivery', amount: 10, due: 40 },
+    ])
+    const starts = result.events.filter((e) => e.type === 'start' && e.station === 0).map((e) => e.t)
+    expect(starts).toEqual([0, 1, 2, 3, 4, ...Array.from({ length: 10 }, (_, k) => 20 + k), ...Array.from({ length: 10 }, (_, k) => 50 + k)])
+    expect(result.released).toBe(25)
+    expect(result.output).toBe(24)
+  })
+
+  it('tracks the stockroom over the shift', () => {
+    // 4 + 3 + 2 + 1 after the first starts, then 9 down to 1 after each delivery.
+    expect(result.supply?.onHand).toBe(5)
+    expect(result.supply?.avgStock).toBeCloseTo(100 / 60, 10)
+    expect(snapshotAt(result, 10)).toMatchObject({ stock: 0, deliveries: 0 })
+    expect(snapshotAt(result, 25)).toMatchObject({ stock: 4, deliveries: 1 })
+  })
+})
+
+describe('defects and scrap', () => {
+  const withDefects = (defects: number, inspect: number | null, release: Release = { kind: 'saturate' }): FactoryModel => ({
+    ...line([fixed(1), fixed(2), fixed(1)], release, 100),
+    stations: [fixed(1), fixed(2), fixed(1)].map((cycleTime, i) => ({
+      id: `s${i}`,
+      name: `Station ${i}`,
+      cycleTime,
+      ...(i === 0 ? { defects } : {}),
+      ...(i === inspect ? { inspects: true } : {}),
+    })),
+  })
+
+  it('scraps defective units where the line inspects, after they used every station on the way', () => {
+    const all = simulate(withDefects(1, 2), 1)
+    expect(all.output).toBe(0)
+    expect(all.scrapped).toBe(all.stations[2].completed)
+    expect(all.stations[1].completed).toBeGreaterThan(40)
+    expect(snapshotAt(all, 100).scrapped).toEqual([0, 0, all.scrapped])
+  })
+
+  it('never passes a scrapped unit on, and ships defective units nobody checks', () => {
+    const half = simulate(withDefects(0.5, 1), 3)
+    const end = snapshotAt(half, 100)
+    const inProcess = end.queues.reduce((a, b) => a + b, 0) + end.working.reduce((a, w) => a + w.length, 0)
+    expect(half.scrapped).toBeGreaterThan(10)
+    expect(half.scrapped! + half.output + inProcess).toBe(half.released)
+    expect(half.stations[2].completed).toBe(half.output)
+    const unchecked = simulate(withDefects(1, null), 1)
+    expect(unchecked.escaped).toBe(unchecked.output)
+  })
+
+  it('keeps the rope pulling when work is scrapped before the constraint', () => {
+    const roped = simulate(withDefects(1, 0, { kind: 'rope', constraint: 's2', buffer: 3 }), 1)
+    expect(roped.released).toBeGreaterThan(50)
+    expect(roped.output).toBe(0)
+  })
+})
+
+describe('changing orders', () => {
+  const two = (changes: Partial<FactoryModel>, station: Partial<FactoryModel['stations'][number]> = {}): FactoryModel => ({
+    products: [
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+    ],
+    mix: ['a', 'b'],
+    stations: [{ id: 's0', name: 'Station 0', cycleTime: fixed(2), ...station }],
+    release: { kind: 'interval', every: fixed(1) },
+    horizon: 60,
+    ...changes,
+  })
+
+  it('switches the order pattern at a mix change', () => {
+    const result = simulate(two({ mix: ['a'], mixChanges: [{ at: 10, mix: ['b'] }] }), 1)
+    const released = result.events.filter((e) => e.type === 'release').map((e) => [e.t, result.products![e.job]])
+    expect(released.filter(([t]) => (t as number) < 10).every(([, p]) => p === 'a')).toBe(true)
+    expect(released.filter(([t]) => (t as number) >= 10).every(([, p]) => p === 'b')).toBe(true)
+  })
+
+  it('changes a station\'s priorities during the shift', () => {
+    const result = simulate(two({}, { priority: ['a'], priorityChanges: [{ at: 30, order: ['b'] }] }), 1)
+    const started = result.events.filter((e) => e.type === 'start').map((e) => [e.t, result.products![e.job]])
+    expect(started.filter(([t]) => (t as number) > 2 && (t as number) < 30).every(([, p]) => p === 'a')).toBe(true)
+    expect(started.filter(([t]) => (t as number) >= 30).every(([, p]) => p === 'b')).toBe(true)
+  })
+
+  it('releases rush orders on top of the flow, and lets them jump the queue only where the station expedites', () => {
+    const rush = (expedite: boolean) => simulate(two({ rush: [{ at: 10, count: 2, product: 'b' }] }, { expedite }), 1)
+    const expedited = rush(true)
+    expect(expedited.rush).toHaveLength(2)
+    expect(expedited.events.filter((e) => e.type === 'release' && e.rush).map((e) => e.t)).toEqual([10, 10])
+    const firstAfter = (result: SimResult) => result.events.find((e) => e.type === 'start' && e.t >= 10)
+    expect(expedited.rush).toContain(firstAfter(expedited)!.type === 'start' && (firstAfter(expedited) as { job: number }).job)
+    expect(rush(false).rush).not.toContain((firstAfter(rush(false)) as { job: number }).job)
+  })
+
+  it('rejects impossible disruptions', () => {
+    const broken: FactoryModel = {
+      ...two({ mixChanges: [{ at: -1, mix: ['c'] }], rush: [{ at: 5, count: 0 }], supply: { onHand: -1, deliveries: [{ due: 5, amount: 0 }] } }),
+      stations: [{ id: 's0', name: 'Station 0', cycleTime: fixed(2), defects: 2, outages: [{ at: fixed(-5), lasts: fixed(10) }] }],
+    }
+    expect(validateModel(broken)).toEqual([
+      's0: outage: fixed time must be positive',
+      's0: defects must be a chance from 0 to 1',
+      'a mix change needs a time of at least 0',
+      'mix change: unknown product "c"',
+      'a rush order needs a time of at least 0 and a positive whole count',
+      'supply: on hand must be a whole number of at least 0',
+      'supply: a delivery needs a due time of at least 0 and a positive whole amount',
+    ])
+  })
+})
+
 describe('runBatch', () => {
   it('runs one independent simulation per seed', () => {
     const results = runBatch(variable, [1, 2, 3])
