@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
 import { bufferShare, bufferZones, leadTimeSoFar, snapshotAt, steadyShare, type Snapshot, type ZoneSpan } from '../engine/timeline.ts'
@@ -19,7 +19,7 @@ import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
 import type { Choices, Goal, Lever } from '../levels/types.ts'
 import { goalValues, tenths } from '../levels/values.ts'
-import { BarsChecklist, BarsStarGoals } from './bars.tsx'
+import { BarsChecklist, BarsStarGoals, MANY_DAYS } from './bars.tsx'
 import { barsHint, barsOutcome, barsResultStats, barStats, type Words } from './barTexts.ts'
 import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
@@ -27,7 +27,7 @@ import { Icon, type IconName } from './icons.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
 import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog, stopReasons } from './shiftEvents.ts'
 import { SimulationLog } from './SimLog.tsx'
-import { Explanation, JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
+import { DayDots, Explanation, JamLog, LevelHeader, PlaybackPanel, Stars, type JamEntry, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { productColor, productName } from './products.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
@@ -629,6 +629,28 @@ function breakWindows(model: FactoryModel) {
   return [...windows.values()].sort((a, b) => a.from - b.from)
 }
 
+// A plan's days: as cards, or from MANY_DAYS on, as dots along a line for each measure with the cards
+// folded away (spec §5.4).
+function ManyDays({ count, dots, children }: { count: number; dots: ReactNode[]; children: ReactNode }) {
+  if (count < MANY_DAYS) {
+    return (
+      <>
+        <p className="days-title">Your plan, day by day (day 1 is the one you watched):</p>
+        {children}
+      </>
+    )
+  }
+  return (
+    <>
+      {dots}
+      <details className="day-cards">
+        <summary>Each day (day 1 is the one you watched)</summary>
+        {children}
+      </details>
+    </>
+  )
+}
+
 // What each star asks of an elevate plan, shown before the player plans.
 function ElevateStarGoals({ goal }: { goal: ElevateGoal }) {
   const days = goal.freshDays + 1
@@ -666,6 +688,19 @@ function ElevateChecklist(props: { goal: ElevateGoal; result: SimResult; fresh: 
           : `Spent ${dollars(investment.spend)} for ${gained} more a shift: ${tenths(score.gain)} per $1,000 (goal: ${goal.minGainPer1000})`,
     },
   ]
+  const cards = (
+    <ol className="days compact">
+      {score.days.map((day, i) => (
+        <li key={i} className={day.hit && day.calm ? 'ok' : 'miss'}>
+          <strong>
+            <Icon name={day.hit && day.calm ? 'check' : 'cross'} /> Day {i + 1}
+          </strong>
+          <span>{day.output} shipped</span>
+          <span>{percent(day.steady)} steady</span>
+        </li>
+      ))}
+    </ol>
+  )
   return (
     <div className="checklist">
       <ul>
@@ -675,18 +710,15 @@ function ElevateChecklist(props: { goal: ElevateGoal; result: SimResult; fresh: 
           </li>
         ))}
       </ul>
-      <p className="days-title">Your plan, day by day (day 1 is the one you watched):</p>
-      <ol className="days compact">
-        {score.days.map((day, i) => (
-          <li key={i} className={day.hit && day.calm ? 'ok' : 'miss'}>
-            <strong>
-              <Icon name={day.hit && day.calm ? 'check' : 'cross'} /> Day {i + 1}
-            </strong>
-            <span>{day.output} shipped</span>
-            <span>{percent(day.steady)} steady</span>
-          </li>
-        ))}
-      </ol>
+      <ManyDays
+        count={total}
+        dots={[
+          <DayDots key="shipped" label="Shipped" values={score.days.map((day) => day.output)} goal={goal.target} atLeast format={String} />,
+          <DayDots key="steady" label="Steady" values={score.days.map((day) => day.steady)} goal={goal.minSteady} atLeast format={percent} />,
+        ]}
+      >
+        {cards}
+      </ManyDays>
     </div>
   )
 }
@@ -782,21 +814,29 @@ function ProfitChecklist({ goal, result, fresh }: { goal: ProfitGoal; result: Si
           </li>
         ))}
       </ul>
-      <p className="days-title">Your plan, day by day (day 1 is the one you watched):</p>
-      <ol className="days compact">
-        {days.map((day, i) => {
-          const ok = day.profit >= goal.target && day.shipped >= goal.minShipped && day.inventory <= goal.maxInventory
-          return (
-            <li key={i} className={ok ? 'ok' : 'miss'}>
-              <strong>
-                <Icon name={ok ? 'check' : 'cross'} /> Day {i + 1}
-              </strong>
-              <span>{money(day.profit)} profit</span>
-              <span>{day.shipped} shipped</span>
-            </li>
-          )
-        })}
-      </ol>
+      <ManyDays
+        count={total}
+        dots={[
+          <DayDots key="profit" label="Profit" values={days.map((day) => day.profit)} goal={goal.target} atLeast format={money} />,
+          <DayDots key="shipped" label="Shipped" values={days.map((day) => day.shipped)} goal={goal.minShipped} atLeast format={String} />,
+          <DayDots key="inventory" label="Inventory" values={days.map((day) => day.inventory)} goal={goal.maxInventory} atLeast={false} format={money} />,
+        ]}
+      >
+        <ol className="days compact">
+          {days.map((day, i) => {
+            const ok = day.profit >= goal.target && day.shipped >= goal.minShipped && day.inventory <= goal.maxInventory
+            return (
+              <li key={i} className={ok ? 'ok' : 'miss'}>
+                <strong>
+                  <Icon name={ok ? 'check' : 'cross'} /> Day {i + 1}
+                </strong>
+                <span>{money(day.profit)} profit</span>
+                <span>{day.shipped} shipped</span>
+              </li>
+            )
+          })}
+        </ol>
+      </ManyDays>
     </div>
   )
 }

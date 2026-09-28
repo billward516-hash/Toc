@@ -44,7 +44,7 @@ export const tier5: Level[] = [
     principles: [27, 26],
     requires: ['tier3-read'],
     briefing:
-      "Welcome to the print shop. An order comes in every 3 minutes: a poster, then two flyers, and again. Posters only fit on the big press, and the small press prints flyers slowly. A house rule older than anyone remembers says the big press prints posters only. The shop prints {baseline} orders a shift; it needs {target}. Watch where the orders pile up.",
+      "Welcome to the print shop. An order comes in every 3 minutes: a poster, then two flyers, and again. Posters only fit on the big press, and the small press prints flyers slowly. A house rule older than anyone remembers says the big press prints posters only. The shop prints {baseline} orders a shift, its throughput (what it ships and sells); it needs {target}. Watch where the orders pile up.",
     model: {
       products: [
         { id: 'poster', name: 'Poster' },

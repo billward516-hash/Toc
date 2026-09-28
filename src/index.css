@@ -1674,6 +1674,63 @@ button {
   font-weight: 800;
 }
 
+/* Many days: each measure as dots along a line, the goal dashed. */
+.day-dots {
+  margin: 0;
+}
+
+.day-dots figcaption {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.day-dots svg {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+}
+
+.day-dots .axis {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.day-dots .goal {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+
+.day-dots figcaption span {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.day-dots circle {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+
+.day-dots circle.ok {
+  fill: var(--green);
+}
+
+.day-dots circle.miss {
+  fill: var(--red);
+}
+
+.day-cards summary {
+  width: fit-content;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.day-cards[open] summary {
+  margin-bottom: 8px;
+}
+
 .days {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

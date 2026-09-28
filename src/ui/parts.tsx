@@ -162,7 +162,7 @@ function Scrubber({ t, horizon, onSeek, children }: { t: number; horizon: number
       }}
     >
       {children}
-      <span className="clock-thumb" style={{ left: `${(100 * t) / horizon}%` }} />
+      <i className="clock-thumb" style={{ left: `${(100 * t) / horizon}%` }} />
     </div>
   )
 }
@@ -199,6 +199,43 @@ export function JamLog({ entries, drum }: { entries: JamEntry[]; drum: string })
         </ol>
       )}
     </section>
+  )
+}
+
+// One measure across many days as dots along a line, with the goal dashed: the spec's aggregate view
+// for 7 or more days (§5.4). Green dots cleared the goal, red ones missed it.
+export function DayDots({ label, values, goal, atLeast, format }: { label: string; values: number[]; goal: number; atLeast: boolean; format: (value: number) => string }) {
+  // The line reaches at least a tenth either side of the goal, so small differences look small.
+  const low = Math.min(goal - Math.abs(goal) * 0.1, ...values)
+  const high = Math.max(goal + Math.abs(goal) * 0.1, ...values)
+  const pad = Math.max(1e-9, (high - low) * 0.06)
+  const x = (value: number) => 8 + ((value - (low - pad)) / (high - low + 2 * pad)) * 284
+  const met = (value: number) => (atLeast ? value >= goal : value <= goal)
+  // Days with the same value stack up, three high, then spread sideways.
+  const seen = new Map<number, number>()
+  const dots = values.map((value, day) => {
+    const key = Math.round(x(value))
+    const stack = seen.get(key) ?? 0
+    seen.set(key, stack + 1)
+    return { value, day, cx: x(value) + Math.floor(stack / 3) * 7, cy: 20 - (stack % 3) * 7, ok: met(value) }
+  })
+  const goalText = goal === 0 && !atLeast ? 'none' : `${format(goal)} or ${atLeast ? 'more' : 'less'}`
+  const summary = `${label}: goal ${goalText}, met on ${dots.filter((dot) => dot.ok).length} of ${values.length} days; from ${format(Math.min(...values))} to ${format(Math.max(...values))}`
+  return (
+    <figure className="day-dots">
+      <figcaption>
+        {label} <span>(goal: {goalText})</span>
+      </figcaption>
+      <svg viewBox="0 0 300 30" role="img" aria-label={summary}>
+        <line className="axis" x1={8} x2={292} y1={26} y2={26} />
+        <line className="goal" x1={x(goal)} x2={x(goal)} y1={2} y2={30} />
+        {dots.map((dot) => (
+          <circle key={dot.day} className={dot.ok ? 'ok' : 'miss'} cx={dot.cx} cy={dot.cy} r={3.5}>
+            <title>{`Day ${dot.day + 1}: ${format(dot.value)}`}</title>
+          </circle>
+        ))}
+      </svg>
+    </figure>
   )
 }
 

@@ -105,6 +105,35 @@ export function rowText(bar: Bar, met: number, total: number, reading: Reading, 
   }
 }
 
+// What a bar measures, as a label, and the goal line to draw across the days.
+export function barMeasure(bar: Bar, words: Words, day: SimResult): { label: string; goal: number; atLeast: boolean; format: (value: number) => string } {
+  const whole = (value: number) => String(Math.round(value))
+  switch (bar.metric) {
+    case 'shipped':
+      return { label: 'Shipped', goal: bar.min, atLeast: true, format: whole }
+    case 'shippedOf':
+      return { label: capitalize(words.products(bar.product)), goal: bar.min, atLeast: true, format: whole }
+    case 'steady':
+      return { label: 'Steady', goal: bar.min, atLeast: true, format: percent }
+    case 'leadTime':
+      return { label: 'Lead time', goal: bar.max, atLeast: false, format: (value) => `${Math.round(value)} min` }
+    case 'wip':
+      return { label: 'In process', goal: bar.max, atLeast: false, format: (value) => String(tenths(value)) }
+    case 'stock':
+      return { label: `${capitalize(words.material)} on hand`, goal: bar.max, atLeast: false, format: whole }
+    case 'scrapped':
+      return { label: 'Scrapped', goal: bar.max, atLeast: false, format: whole }
+    case 'rushOnTime':
+      return { label: `Rush orders out by ${clock(bar.due)}`, goal: day.rush?.length ?? 0, atLeast: true, format: whole }
+    case 'spend':
+      return { label: 'Spent', goal: bar.max, atLeast: false, format: dollars }
+    case 'lost':
+      return { label: 'Turned away', goal: bar.max, atLeast: false, format: whole }
+    case 'waste':
+      return { label: 'Thrown out', goal: bar.max, atLeast: false, format: whole }
+  }
+}
+
 // The live dashboard for a bars level: shipped first, then what each bar watches.
 export function barStats(goal: BarsGoal, result: SimResult, snapshot: Snapshot, words: Words, spend: number): Stat[] {
   if (snapshot.shop) return shopStats(result, snapshot.shop, snapshot.t)

@@ -35,7 +35,7 @@ export const tier4: Level[] = [
     principles: [22, 23],
     requires: ['tier3-read'],
     briefing:
-      "Welcome to the candle workshop. Orders come in one candle at a time, switching scents every time: an Orange blossom, then an Ocean breeze, about every 4 minutes. Melt is the slowest step, and every time it switches scents it spends about 8 minutes cleaning the pot. Today the workshop ships {baseline} candles a shift. Watch Melt.",
+      "Welcome to the candle workshop. Orders come in one candle at a time, switching scents every time: an Orange blossom, then an Ocean breeze, about every 4 minutes. Melt is the slowest step, and every time it switches scents it spends about 8 minutes cleaning the pot. Today the workshop ships {baseline} candles a shift: its throughput, as TOC calls what a business ships and sells. Watch Melt.",
     model: workshop(1),
     seed: 1,
     goal: goal('How many candles of one scent should come in together?'),
