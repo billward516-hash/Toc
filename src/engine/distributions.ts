@@ -1,0 +1,47 @@
+export type Dist =
+  | { kind: 'fixed'; value: number }
+  | { kind: 'uniform'; min: number; max: number }
+  | { kind: 'triangular'; min: number; mode: number; max: number }
+
+// Inverse-CDF sampling from one uniform draw: with the same draw, a faster setting gives a
+// proportionally shorter time, which keeps same-seed comparisons fair. Only +, -, *, / and sqrt
+// are used because they give bit-identical results in every browser.
+export function sample(dist: Dist, u: number): number {
+  switch (dist.kind) {
+    case 'fixed':
+      return dist.value
+    case 'uniform':
+      return dist.min + u * (dist.max - dist.min)
+    case 'triangular': {
+      const { min, mode, max } = dist
+      const split = (mode - min) / (max - min)
+      return u < split
+        ? min + Math.sqrt(u * (max - min) * (mode - min))
+        : max - Math.sqrt((1 - u) * (max - min) * (max - mode))
+    }
+  }
+}
+
+export function mean(dist: Dist): number {
+  switch (dist.kind) {
+    case 'fixed':
+      return dist.value
+    case 'uniform':
+      return (dist.min + dist.max) / 2
+    case 'triangular':
+      return (dist.min + dist.mode + dist.max) / 3
+  }
+}
+
+export function problemWith(dist: Dist): string | null {
+  switch (dist.kind) {
+    case 'fixed':
+      return dist.value > 0 ? null : 'fixed time must be positive'
+    case 'uniform':
+      return dist.min > 0 && dist.min <= dist.max ? null : 'uniform needs 0 < min <= max'
+    case 'triangular':
+      return dist.min > 0 && dist.min <= dist.mode && dist.mode <= dist.max && dist.min < dist.max
+        ? null
+        : 'triangular needs 0 < min <= mode <= max and min < max'
+  }
+}
