@@ -516,6 +516,17 @@ button {
   stroke-linejoin: round;
 }
 
+.factory .corner.steadied .ring {
+  fill: var(--blue);
+}
+
+.factory .corner.steadied .bars {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+}
+
 .factory .corner.covered .ring {
   fill: var(--green-deep);
 }
@@ -772,6 +783,16 @@ button {
 
 .result-stats div:first-child {
   background: #e9f8f0;
+}
+
+.result-stats.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.result-stats small {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
 }
 
 .stars {

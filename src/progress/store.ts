@@ -2,6 +2,7 @@ export type ProgressEvent =
   | { type: 'started'; levelId: string }
   | { type: 'answered'; levelId: string; answer: string; correct: boolean }
   | { type: 'ran'; levelId: string; choices: Record<string, string>; shipped: number; met: boolean; stars: number }
+  | { type: 'predicted'; levelId: string; option: string; correct: boolean }
   | { type: 'completed'; levelId: string }
 
 // Every stored event carries who and when, so a later server-side or instructor view can consume

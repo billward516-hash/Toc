@@ -2,6 +2,7 @@ import type { Level } from '../levels/types.ts'
 import type { ProgressEvent } from '../progress/store.ts'
 import { FindTheConstraint } from './FindTheConstraint.tsx'
 import { PlanTheShift } from './PlanTheShift.tsx'
+import { PredictTheRun } from './PredictTheRun.tsx'
 
 interface LevelScreenProps {
   level: Level
@@ -17,6 +18,9 @@ export function LevelScreen({ level, ...flow }: LevelScreenProps) {
     case 'identifyBottleneck':
       return <FindTheConstraint level={level} goal={goal} {...flow} />
     case 'output':
+    case 'steady':
       return <PlanTheShift level={level} goal={goal} {...flow} />
+    case 'predict':
+      return <PredictTheRun level={level} goal={goal} {...flow} />
   }
 }

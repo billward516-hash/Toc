@@ -15,10 +15,9 @@ const PILE_BOTTOM = 160
 const BOX_TOP = PILE_BOTTOM + 42
 const BOX_HEIGHT = 150
 const HEIGHT = BOX_TOP + BOX_HEIGHT + 50
-const BUILDING = 5
 const ACCENTS = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff']
 
-export type Badge = 'upgraded' | 'covered'
+export type Badge = 'upgraded' | 'covered' | 'steadied'
 
 interface FactoryViewProps {
   model: FactoryModel
@@ -26,10 +25,11 @@ interface FactoryViewProps {
   selected?: string | null
   constraint?: string | null
   badges?: Record<string, Badge[]>
+  buildingAt?: number
   onSelect?: (stationId: string) => void
 }
 
-export function FactoryView({ model, snapshot, selected = null, constraint = null, badges = {}, onSelect }: FactoryViewProps) {
+export function FactoryView({ model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, onSelect }: FactoryViewProps) {
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
@@ -52,6 +52,7 @@ export function FactoryView({ model, snapshot, selected = null, constraint = nul
           t={snapshot.t}
           resting={onBreak(station, snapshot.t)}
           badges={badges[station.id] ?? []}
+          buildingAt={buildingAt}
           selected={selected === station.id}
           isConstraint={constraint === station.id}
           onSelect={onSelect}
@@ -81,13 +82,14 @@ interface ColumnProps {
   t: number
   resting: boolean
   badges: Badge[]
+  buildingAt: number
   selected: boolean
   isConstraint: boolean
   onSelect?: (stationId: string) => void
 }
 
 function StationColumn(props: ColumnProps) {
-  const { x, id, name, accent, waiting, working, made, t, resting, badges, selected, isConstraint, onSelect } = props
+  const { x, id, name, accent, waiting, working, made, t, resting, badges, buildingAt, selected, isConstraint, onSelect } = props
   const center = x + COLUMN / 2
   const pileLeft = center - PILE_WIDTH / 2
   const shown = Math.min(waiting, PILE_COLUMNS * PILE_ROWS)
@@ -97,7 +99,11 @@ function StationColumn(props: ColumnProps) {
   const status = busy ? (working.length > 1 ? `${working.length} working` : 'Working') : resting ? 'On break' : 'Waiting'
   const tag = isConstraint ? 'Constraint' : selected ? 'Your pick' : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
-  const extras = [badges.includes('upgraded') && 'upgraded', badges.includes('covered') && 'works through breaks'].filter(Boolean)
+  const extras = [
+    badges.includes('upgraded') && 'upgraded',
+    badges.includes('covered') && 'works through breaks',
+    badges.includes('steadied') && 'standard work',
+  ].filter(Boolean)
 
   return (
     <g
@@ -137,7 +143,7 @@ function StationColumn(props: ColumnProps) {
           />
         )
       })}
-      <text className={`pile-count${waiting >= BUILDING ? ' building' : ''}`} x={center} y={PILE_BOTTOM + 26}>
+      <text className={`pile-count${waiting >= buildingAt ? ' building' : ''}`} x={center} y={PILE_BOTTOM + 26}>
         {waiting} waiting
       </text>
       <rect className="station-box" x={x + 16} y={BOX_TOP} width={COLUMN - 32} height={BOX_HEIGHT} rx={24} />
@@ -157,6 +163,7 @@ function StationColumn(props: ColumnProps) {
       </text>
       {badges.includes('covered') && <CornerBadge kind="covered" cx={x + 32} cy={BOX_TOP + 4} />}
       {badges.includes('upgraded') && <CornerBadge kind="upgraded" cx={x + COLUMN - 32} cy={BOX_TOP + 4} />}
+      {badges.includes('steadied') && <CornerBadge kind="steadied" cx={x + COLUMN - 32} cy={BOX_TOP + 4} />}
       {tag && (
         <g className={`tag ${isConstraint ? 'constraint' : 'pick'}`}>
           <rect x={center - 78} y={TAG_Y - 18} width={156} height={36} rx={18} />
@@ -173,14 +180,14 @@ function CornerBadge({ kind, cx, cy }: { kind: Badge; cx: number; cy: number }) 
   return (
     <g className={`corner ${kind}`}>
       <circle className="ring" cx={cx} cy={cy} r={19} />
-      {kind === 'upgraded' ? (
-        <path d={`M${cx + 2} ${cy - 12}l-9 14h7l-2 10 9-14h-7z`} />
-      ) : (
+      {kind === 'upgraded' && <path d={`M${cx + 2} ${cy - 12}l-9 14h7l-2 10 9-14h-7z`} />}
+      {kind === 'covered' && (
         <>
           <circle cx={cx} cy={cy} r={10} className="face" />
           <path d={`M${cx} ${cy - 6}v6l4 3`} className="hands" />
         </>
       )}
+      {kind === 'steadied' && <path className="bars" d={`M${cx - 9} ${cy - 6}h18M${cx - 9} ${cy}h18M${cx - 9} ${cy + 6}h18`} />}
     </g>
   )
 }

@@ -1,18 +1,21 @@
 import { useMemo, useState } from 'react'
 import type { FactoryModel } from '../engine/model.ts'
 import { simulate, type SimResult } from '../engine/simulate.ts'
-import { snapshotAt } from '../engine/timeline.ts'
-import { feedbackForRun, maxStars } from '../levels/graph.ts'
-import { applyLevers } from '../levels/levers.ts'
+import { snapshotAt, steadyShare } from '../engine/timeline.ts'
+import { feedbackForRun, goalMet, maxStars } from '../levels/graph.ts'
+import { applyLevers, leverValues, valueLabel } from '../levels/levers.ts'
 import { principleNames } from '../levels/principles.ts'
 import { fillTemplate } from '../levels/template.ts'
-import type { Choices, Lever } from '../levels/types.ts'
+import type { Choices, Goal, Lever } from '../levels/types.ts'
+import { goalValues } from '../levels/values.ts'
 import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
-import { Icon } from './icons.tsx'
-import { LevelHeader, PlaybackPanel, Stars } from './parts.tsx'
+import { Icon, type IconName } from './icons.tsx'
+import { LevelHeader, PlaybackPanel, Stars, type Stat } from './parts.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
+
+type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' }>
 
 interface Run {
   plan: Choices
@@ -21,7 +24,7 @@ interface Run {
   met: boolean
 }
 
-export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output'>) {
+export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext }: LevelFlowProps<'output' | 'steady'>) {
   const { model, levers, seed } = level
   const baseline = useMemo(() => simulate(model, seed), [model, seed])
   const [speed, setSpeed] = useState(1)
@@ -33,13 +36,20 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
 
   const shown = run ?? { model, result: baseline }
   const snapshot = useMemo(() => snapshotAt(shown.result, playback.t), [shown.result, playback.t])
-  const values = { baseline: baseline.output, target: goal.target }
+  const values = goalValues(goal, baseline, run?.result)
   const stars = maxStars(level)
   const ready = levers.every((lever) => choices[lever.id] !== undefined)
   const windows = breakWindows(model)
-  const name = (id: string) => model.stations.find((s) => s.id === id)?.name ?? id
   const showResult = run !== null && playback.finished && !dismissed
   const popup = run ? feedbackForRun(level, run.met, run.plan) : undefined
+  const pileLimit = goal.kind === 'steady' ? goal.pileLimit : 5
+
+  const stats: Stat[] = [{ label: 'Shipped', value: snapshot.shipped }]
+  if (goal.kind === 'steady') {
+    stats.push({ label: 'Steady', value: `${Math.floor(100 * steadyShare(shown.result, goal.pileLimit, playback.t))}%` })
+  }
+  stats.push({ label: 'In process', value: snapshot.released - snapshot.shipped })
+  if (goal.kind === 'output') stats.push({ label: 'Goal', value: goal.target })
 
   const start = () => {
     setBriefing(false)
@@ -50,7 +60,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   const runPlan = () => {
     const planModel = applyLevers(model, levers, choices)
     const result = simulate(planModel, seed)
-    const met = result.output >= goal.target
+    const met = goalMet(goal, result)
     onRecord({ type: 'ran', levelId: level.id, choices, shipped: result.output, met, stars: met ? stars : 0 })
     if (met) onRecord({ type: 'completed', levelId: level.id })
     setRun({ plan: choices, model: planModel, result, met })
@@ -65,19 +75,11 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
 
   return (
     <div className="screen level-screen">
-      <LevelHeader
-        level={level}
-        stats={[
-          { label: 'Shipped', value: snapshot.shipped },
-          { label: 'In process', value: snapshot.released - snapshot.shipped },
-          { label: 'Goal', value: goal.target },
-        ]}
-        onExit={onExit}
-      />
+      <LevelHeader level={level} stats={stats} onExit={onExit} />
 
       <p className={`viewing${run ? ' mine' : ''}`}>{run ? 'Running your plan' : 'Running the factory as it is today'}</p>
       <div className="floor">
-        <FactoryView model={shown.model} snapshot={snapshot} badges={run ? badgesFor(levers, run.plan) : {}} />
+        <FactoryView model={shown.model} snapshot={snapshot} badges={run ? badgesFor(levers, run.plan) : {}} buildingAt={pileLimit} />
       </div>
       <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 
@@ -95,16 +97,14 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
                   <i className="swatch dot resting" /> On break
                 </span>
               )}
-              {run && levers.some((l) => l.kind === 'upgrade') && (
-                <span>
-                  <Icon name="bolt" /> Upgraded
-                </span>
-              )}
-              {run && levers.some((l) => l.kind === 'coverBreak') && (
-                <span>
-                  <Icon name="clock" /> Works through breaks
-                </span>
-              )}
+              {run &&
+                levers
+                  .filter((l) => l.kind !== 'releasePace')
+                  .map((lever) => (
+                    <span key={lever.id}>
+                      <Icon name={leverIcon(lever)} /> {badgeLegend[lever.kind]}
+                    </span>
+                  ))}
             </>
           }
         />
@@ -116,13 +116,13 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
               <ul className="plan-summary">
                 {levers.map((lever) => (
                   <li key={lever.id}>
-                    <Icon name={lever.kind === 'upgrade' ? 'bolt' : 'clock'} /> {lever.label}: <strong>{name(run.plan[lever.id])}</strong>
+                    <Icon name={leverIcon(lever)} /> {lever.label}: <strong>{valueLabel(lever, run.plan[lever.id], model)}</strong>
                   </li>
                 ))}
               </ul>
               {playback.finished ? (
                 <p className="result">
-                  Shipped {run.result.output}, goal {goal.target}. {run.met ? 'Goal met!' : 'Not there yet.'}
+                  {outcomeText(goal, run.result)} {run.met ? 'Goal met!' : 'Not there yet.'}
                   {stars > 0 && <Stars earned={run.met ? stars : 0} max={stars} />}
                 </p>
               ) : (
@@ -142,23 +142,21 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           ) : (
             <>
               <p className="prompt">{goal.prompt}</p>
-              <p className="hint">
-                Today the factory ships <strong>{baseline.output}</strong> a shift. The goal is <strong>{goal.target}</strong>.
-              </p>
+              <p className="hint">{planningHint(goal, baseline)}</p>
               {levers.map((lever) => (
                 <fieldset key={lever.id} className="lever">
                   <legend>
-                    <Icon name={lever.kind === 'upgrade' ? 'bolt' : 'clock'} /> {lever.label}
+                    <Icon name={leverIcon(lever)} /> {lever.label}
                   </legend>
                   <div className="chips">
-                    {lever.stations.map((id) => (
+                    {leverValues(lever).map((value) => (
                       <button
-                        key={id}
-                        className={`chip${choices[lever.id] === id ? ' on' : ''}`}
-                        aria-pressed={choices[lever.id] === id}
-                        onClick={() => setChoices({ ...choices, [lever.id]: id })}
+                        key={value}
+                        className={`chip${choices[lever.id] === value ? ' on' : ''}`}
+                        aria-pressed={choices[lever.id] === value}
+                        onClick={() => setChoices({ ...choices, [lever.id]: value })}
                       >
-                        {name(id)}
+                        {valueLabel(lever, value, model)}
                       </button>
                     ))}
                   </div>
@@ -208,18 +206,13 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
           }
         >
           <div className="result-stats">
-            <div>
-              <span>Shipped</span>
-              <strong>{run.result.output}</strong>
-            </div>
-            <div>
-              <span>Before</span>
-              <strong>{baseline.output}</strong>
-            </div>
-            <div>
-              <span>Goal</span>
-              <strong>{goal.target}</strong>
-            </div>
+            {resultStats(goal, run.result, baseline).map((stat) => (
+              <div key={stat.label}>
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+                {stat.detail && <small>{stat.detail}</small>}
+              </div>
+            ))}
           </div>
           {stars > 0 && <Stars earned={run.met ? stars : 0} max={stars} />}
           {popup && <p>{fillTemplate(popup.body, run.model, snapshotAt(run.result, model.horizon), values)}</p>}
@@ -235,13 +228,60 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext 
   )
 }
 
+const badgeLegend: Record<Exclude<Lever['kind'], 'releasePace'>, string> = {
+  upgrade: 'Upgraded',
+  coverBreak: 'Works through breaks',
+  steady: 'Standard work',
+}
+
+function leverIcon(lever: Lever): IconName {
+  switch (lever.kind) {
+    case 'upgrade':
+      return 'bolt'
+    case 'steady':
+      return 'even'
+    case 'coverBreak':
+    case 'releasePace':
+      return 'clock'
+  }
+}
+
 function badgesFor(levers: Lever[], plan: Choices): Record<string, Badge[]> {
   const badges: Record<string, Badge[]> = {}
   for (const lever of levers) {
+    if (lever.kind === 'releasePace') continue
     const station = plan[lever.id]
-    badges[station] = [...(badges[station] ?? []), lever.kind === 'upgrade' ? 'upgraded' : 'covered']
+    const badge: Badge = lever.kind === 'upgrade' ? 'upgraded' : lever.kind === 'coverBreak' ? 'covered' : 'steadied'
+    badges[station] = [...(badges[station] ?? []), badge]
   }
   return badges
+}
+
+const percent = (share: number) => `${Math.floor(100 * share)}%`
+
+function planningHint(goal: PlanGoal, baseline: SimResult): string {
+  if (goal.kind === 'output') return `Today the factory ships ${baseline.output} a shift. The goal is ${goal.target}.`
+  return `Today the line is steady ${percent(steadyShare(baseline, goal.pileLimit))} of the shift. The goal: steady at least ${percent(goal.minSteady)} of the shift while shipping at least ${goal.minShipped}.`
+}
+
+function outcomeText(goal: PlanGoal, result: SimResult): string {
+  if (goal.kind === 'output') return `Shipped ${result.output}, goal ${goal.target}.`
+  return `Steady ${percent(steadyShare(result, goal.pileLimit))} of the shift, shipped ${result.output}.`
+}
+
+function resultStats(goal: PlanGoal, result: SimResult, baseline: SimResult): Stat[] {
+  if (goal.kind === 'output') {
+    return [
+      { label: 'Shipped', value: result.output },
+      { label: 'Before', value: baseline.output },
+      { label: 'Goal', value: goal.target },
+    ]
+  }
+  return [
+    { label: 'Steady', value: percent(steadyShare(result, goal.pileLimit)) },
+    { label: 'Shipped', value: result.output },
+    { label: 'Goal', value: percent(goal.minSteady), detail: `and ${goal.minShipped} shipped` },
+  ]
 }
 
 function breakWindows(model: FactoryModel) {

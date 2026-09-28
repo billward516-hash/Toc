@@ -3,8 +3,9 @@ import { mean } from '../engine/distributions.ts'
 import { capacity } from '../engine/model.ts'
 import { simulate } from '../engine/simulate.ts'
 import { snapshotAt } from '../engine/timeline.ts'
-import { feedbackForRun, validateLevels } from './graph.ts'
-import { allPlans, applyLevers } from './levers.ts'
+import { feedbackForPrediction, feedbackForRun, goalMet, validateLevels } from './graph.ts'
+import { allPlans, applyLevers, steadyTwin } from './levers.ts'
+import { goalValues } from './values.ts'
 import { levels } from './index.ts'
 import { principleNames } from './principles.ts'
 import { fillTemplate } from './template.ts'
@@ -55,36 +56,49 @@ describe.each(levels.filter((l) => l.goal.kind === 'identifyBottleneck'))('spot-
   })
 })
 
-describe.each(levels.filter((l) => l.goal.kind === 'output'))('plan level $id', (level) => {
-  if (level.goal.kind !== 'output') return
-  const { target } = level.goal
+describe.each(levels.filter((l) => l.goal.kind === 'output' || l.goal.kind === 'steady'))('plan level $id', (level) => {
+  const { goal, model, levers } = level
   const intended = (plan: Choices) =>
     level.popups.some(
       (p) => p.trigger.kind === 'ran' && p.trigger.met && Object.entries(p.trigger.choices ?? {}).every(([k, v]) => plan[k] === v),
     )
-  const shipped = (plan: Choices, seed: number) => simulate(applyLevers(level.model, level.levers, plan), seed).output
+  const run = (plan: Choices, seed: number) => simulate(applyLevers(model, levers, plan), seed)
+  const plans = allPlans(levers)
+  // Output levels must work on any day. Steady levels are about variation itself, so only the
+  // level's own day is exact, and the intended plan must hold on nearly every other day.
+  const exact = goal.kind === 'output'
 
-  it('misses the target before any changes, whatever the seed', () => {
-    for (const seed of seeds(level, 20)) expect(simulate(level.model, seed).output, `seed ${seed}`).toBeLessThan(target)
-  })
-
-  it('meets the target with the intended plan and only that plan, whatever the seed', () => {
-    const plans = allPlans(level.levers)
-    expect(plans.some(intended)).toBe(true)
-    for (const plan of plans) {
-      for (const seed of seeds(level, 20)) {
-        expect(shipped(plan, seed) >= target, `${JSON.stringify(plan)} seed ${seed}`).toBe(intended(plan))
-      }
+  it('misses the goal before any changes', () => {
+    for (const seed of exact ? seeds(level, 20) : [level.seed]) {
+      expect(goalMet(goal, simulate(model, seed)), `seed ${seed}`).toBe(false)
     }
   })
 
-  it('grows the biggest pile in front of the constraint for every plan, so reading the factory still works', () => {
-    for (const plan of [{}, ...allPlans(level.levers)]) {
-      const model = applyLevers(level.model, level.levers, plan)
-      const capacities = model.stations.map((s) => capacity(s, model.horizon))
+  it('meets the goal on its own day with the intended plan and only that plan', () => {
+    expect(plans.some(intended)).toBe(true)
+    for (const plan of plans) expect(goalMet(goal, run(plan, level.seed)), JSON.stringify(plan)).toBe(intended(plan))
+  })
+
+  it('keeps the intended plan working on other days', () => {
+    for (const plan of plans.filter(intended)) {
+      const wins = Array.from({ length: 100 }, (_, i) => i + 1).filter((seed) => goalMet(goal, run(plan, seed))).length
+      expect(wins).toBeGreaterThanOrEqual(exact ? 100 : 95)
+    }
+  })
+
+  it.runIf(exact)('never lets another plan meet the goal, whatever the day', () => {
+    for (const plan of plans.filter((p) => !intended(p))) {
+      for (const seed of seeds(level, 20)) expect(goalMet(goal, run(plan, seed)), `${JSON.stringify(plan)} seed ${seed}`).toBe(false)
+    }
+  })
+
+  it.runIf(exact)('grows the biggest pile in front of the constraint for every plan, so reading the factory still works', () => {
+    for (const plan of [{}, ...plans]) {
+      const planModel = applyLevers(model, levers, plan)
+      const capacities = planModel.stations.map((s) => capacity(s, planModel.horizon))
       const constraint = capacities.indexOf(Math.min(...capacities))
       for (const seed of seeds(level, 20)) {
-        const piles = snapshotAt(simulate(model, seed), model.horizon).queues
+        const piles = snapshotAt(simulate(planModel, seed), planModel.horizon).queues
         const where = `${JSON.stringify(plan)} seed ${seed}`
         // When the first station is the constraint, nothing should pile up anywhere.
         if (constraint === 0) expect(Math.max(...piles), where).toBeLessThanOrEqual(5)
@@ -94,15 +108,37 @@ describe.each(levels.filter((l) => l.goal.kind === 'output'))('plan level $id', 
   })
 
   it('has feedback for every plan, with every number filled in', () => {
-    const baseline = simulate(level.model, level.seed)
-    const values = { baseline: baseline.output, target }
-    expect(fillTemplate(level.briefing, level.model, snapshotAt(baseline, 0), values)).not.toMatch(/[{}]/)
-    for (const plan of allPlans(level.levers)) {
-      const result = simulate(applyLevers(level.model, level.levers, plan), level.seed)
-      const popup = feedbackForRun(level, result.output >= target, plan)
+    const baseline = simulate(model, level.seed)
+    expect(fillTemplate(level.briefing, model, snapshotAt(baseline, 0), goalValues(goal, baseline))).not.toMatch(/[{}]/)
+    for (const plan of plans) {
+      const result = run(plan, level.seed)
+      const popup = feedbackForRun(level, goalMet(goal, result), plan)
       expect(popup, JSON.stringify(plan)).toBeDefined()
-      expect(fillTemplate(popup!.body, level.model, snapshotAt(result, result.horizon), values)).not.toMatch(/[{}]/)
+      const text = fillTemplate(popup!.body, model, snapshotAt(result, result.horizon), goalValues(goal, baseline, result))
+      expect(text).not.toMatch(/[{}]/)
     }
+  })
+})
+
+describe.each(levels.filter((l) => l.goal.kind === 'predict'))('prediction level $id', (level) => {
+  if (level.goal.kind !== 'predict') return
+  const { goal } = level
+  const twin = simulate(steadyTwin(level.model), level.seed)
+  const real = simulate(level.model, level.seed)
+
+  it('has feedback for every option, with every number filled in', () => {
+    const values = goalValues(goal, twin, real)
+    for (const option of goal.options) {
+      expect(fillTemplate(option.label, level.model, snapshotAt(real, 0), values)).not.toMatch(/[{}]/)
+      const popup = feedbackForPrediction(level, option.id)
+      expect(popup, option.id).toBeDefined()
+      expect(fillTemplate(popup!.body, level.model, snapshotAt(real, real.horizon), values)).not.toMatch(/[{}]/)
+    }
+  })
+
+  it.runIf(level.id === 'tier2-dice')('ships fewer than its perfect-day twin on every day, and clearly fewer on its own day', () => {
+    for (let seed = 1; seed <= 100; seed++) expect(simulate(level.model, seed).output, `seed ${seed}`).toBeLessThan(twin.output)
+    expect(twin.output - real.output).toBeGreaterThanOrEqual(8)
   })
 })
 

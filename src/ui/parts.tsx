@@ -8,6 +8,7 @@ const SPEEDS = [1, 4]
 export interface Stat {
   label: string
   value: number | string
+  detail?: string
 }
 
 export function LevelHeader({ level, stats, onExit }: { level: Level; stats: Stat[]; onExit: () => void }) {
