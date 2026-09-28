@@ -23,8 +23,12 @@ export interface Station {
   outages?: Outage[]
   // Chance that a unit made here comes out defective. It shows only where the line inspects.
   defects?: number
-  // Checks each unit it finishes and scraps the defective ones.
+  // Checks each unit it finishes and scraps the defective ones, or with `reworkTo`, sends them back to
+  // that earlier station to be made again from there.
   inspects?: boolean
+  reworkTo?: string
+  // After each changeover, the first this-many units a machine makes come out bad and are scrapped here.
+  changeoverScrap?: number
   // Rush orders jump the queue here.
   expedite?: boolean
   // A machine keeps running the product it last ran while any is waiting, to save changeovers.
@@ -44,10 +48,12 @@ export interface Product {
   name: string
 }
 
-// A planned stop: the station finishes the part in hand, then starts nothing new until `to`.
+// A planned stop: the station finishes the part in hand, then starts nothing new until `to`. A stop
+// other than a break says why, such as "No operator" or "Maintenance".
 export interface Break {
   from: number
   to: number
+  reason?: string
 }
 
 // Unplanned stops: the station runs for a time drawn from `every`, then jams for a time drawn from
@@ -65,8 +71,10 @@ export interface Outage {
 }
 
 // One event that stops several stations at the same moment, such as a power surge: at a time drawn
-// from `at`, each named station breaks down for a time drawn from its `lasts`.
+// from `at`, each named station breaks down for a time drawn from its `lasts`. A named incident, such
+// as "Power cut", shows its name instead of a breakdown.
 export interface Incident {
+  name?: string
   at: Dist
   outages: { station: string; lasts: Dist }[]
 }
@@ -120,7 +128,11 @@ export function timeFor(station: Station, machine: Machine, product: string | un
 }
 
 export function onBreak(station: Station, t: number): boolean {
-  return station.breaks?.some((b) => t >= b.from && t < b.to) ?? false
+  return breakAt(station, t) !== undefined
+}
+
+export function breakAt(station: Station, t: number): Break | undefined {
+  return station.breaks?.find((b) => t >= b.from && t < b.to)
 }
 
 // Units of a single product a station could finish in the horizon if it never ran out of work,
@@ -235,6 +247,14 @@ export function validateModel(model: FactoryModel): string[] {
     }
     if (station.defects !== undefined && !(station.defects >= 0 && station.defects <= 1)) {
       problems.push(`${station.id}: defects must be a chance from 0 to 1`)
+    }
+    if (station.reworkTo !== undefined) {
+      const back = model.stations.findIndex((s) => s.id === station.reworkTo)
+      if (!station.inspects) problems.push(`${station.id}: only a station that inspects can send work back`)
+      if (!(back >= 0 && back <= index)) problems.push(`${station.id}: rework must go back to this station or an earlier one`)
+    }
+    if (station.changeoverScrap !== undefined && !(Number.isInteger(station.changeoverScrap) && station.changeoverScrap >= 1 && station.changeover)) {
+      problems.push(`${station.id}: changeover scrap needs a changeover and a positive whole number`)
     }
     const change = station.changeover && problemWith(station.changeover)
     if (change) problems.push(`${station.id}: changeover: ${change}`)

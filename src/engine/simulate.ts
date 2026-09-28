@@ -8,12 +8,13 @@ export type SimEvent =
   | { t: number; type: 'release'; job: number; rush?: true }
   // With a changeover, the machine starts working on the job at `ready`, not at `t`.
   | { t: number; type: 'start'; job: number; station: number; machine: number; end: number; ready?: number }
-  // A scrapped unit leaves the line here instead of moving on.
-  | { t: number; type: 'finish'; job: number; station: number; scrap?: true }
+  // A scrapped unit leaves the line here instead of moving on; a unit sent back for rework goes to the
+  // `rework` station's queue.
+  | { t: number; type: 'finish'; job: number; station: number; scrap?: true; rework?: number }
   // Finished units leaving a station's cart for the next station, when it moves work in batches.
   | { t: number; type: 'move'; station: number; jobs: number[] }
-  // A stop until `until`: a jam, or a long breakdown.
-  | { t: number; type: 'jam'; station: number; until: number; outage?: true }
+  // A stop until `until`: a jam, or a long breakdown, maybe from a named incident such as a power cut.
+  | { t: number; type: 'jam'; station: number; until: number; outage?: true; cause?: string }
   // Direct materials reaching the stockroom.
   | { t: number; type: 'delivery'; amount: number; due: number }
   // At the shop counter: a customer buys a finished unit, or finds none of what they want and leaves.
@@ -43,9 +44,11 @@ export interface SimResult {
   shippedBy?: Record<string, number>
   // Materials in the stockroom at the start and on average, when the line uses them.
   supply?: { onHand: number; avgStock: number }
-  // Units scrapped at inspection, and defective units shipped all the same, when the line makes defects.
+  // Units scrapped (at inspection or after a changeover), and defective units shipped all the same,
+  // when the line makes defects; units sent back for rework, when it reworks them.
   scrapped?: number
   escaped?: number
+  reworked?: number
   // Job numbers of rush orders, when there are any.
   rush?: number[]
   // The shop counter's day, when the line sells to customers.
@@ -75,7 +78,7 @@ type Pending =
   | { kind: 'finish'; station: number; machine: number; job: number }
   | { kind: 'resume'; station: number }
   | { kind: 'jam'; station: number }
-  | { kind: 'outage'; station: number; until: number }
+  | { kind: 'outage'; station: number; until: number; cause?: string }
   | { kind: 'delivery'; amount: number; due: number }
   | { kind: 'rush'; count: number; product?: string }
   | { kind: 'customer'; product?: string }
@@ -129,6 +132,11 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
   const defective: boolean[] = []
   let scrapped = 0
   let escaped = 0
+  let reworked = 0
+  // The station where a unit was spoiled by coming first after a changeover, and how many more each
+  // machine will spoil.
+  const spoiledAt: number[] = []
+  const spoilLeft = machines.map((ms) => ms.map(() => 0))
   const rushJobs: number[] = []
   const isRush: boolean[] = []
   const { supply } = model
@@ -234,6 +242,11 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
       const switching = station.changeover && lastProduct[i][m] !== undefined && lastProduct[i][m] !== product
       const ready = switching ? now + sample(station.changeover!, changeoverDraws[i]()) : now
       if (switching) changeoverTime[i] += Math.min(ready, horizon) - now
+      if (switching && station.changeoverScrap) spoilLeft[i][m] = station.changeoverScrap
+      if (spoilLeft[i][m] > 0) {
+        spoilLeft[i][m]--
+        spoiledAt[job] = i
+      }
       lastProduct[i][m] = product
       const end = ready + sample(timeFor(station, machine, product), cycleDraws[i]())
       events.push({ t: now, type: 'start', job, station: i, machine: m, end, ...(switching ? { ready } : {}) })
@@ -262,9 +275,9 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     agenda.push(jammedUntil[i] + sample(jams.every, jamDraws[i]()), { kind: 'jam', station: i })
   }
 
-  const breakDown = (i: number, until: number) => {
+  const breakDown = (i: number, until: number, cause?: string) => {
     jammedUntil[i] = Math.max(jammedUntil[i], until)
-    events.push({ t: now, type: 'jam', station: i, until: jammedUntil[i], outage: true })
+    events.push({ t: now, type: 'jam', station: i, until: jammedUntil[i], outage: true, ...(cause ? { cause } : {}) })
     agenda.push(jammedUntil[i], { kind: 'resume', station: i })
   }
 
@@ -295,13 +308,20 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     completed[i]++
     const station = stations[i]
     if (station.defects && defectDraws[i]() < station.defects) defective[job] = true
-    const scrap = station.inspects === true && defective[job] === true
-    events.push({ t: now, type: 'finish', job, station: i, ...(scrap ? { scrap: true as const } : {}) })
+    const caught = station.inspects === true && defective[job] === true
+    const back = caught && station.reworkTo !== undefined ? stations.findIndex((s) => s.id === station.reworkTo) : -1
+    const scrap = (caught && back < 0) || spoiledAt[job] === i
+    events.push({ t: now, type: 'finish', job, station: i, ...(scrap ? { scrap: true as const } : back >= 0 ? { rework: back } : {}) })
     const transfer = station.transfer ?? 1
     if (scrap) {
       wip--
       scrapped++
       scrappedJob[job] = true
+    } else if (back >= 0) {
+      // Made again from there, so it can come out defective again.
+      defective[job] = false
+      reworked++
+      arrive(back, job)
     } else if (i + 1 < n && transfer > 1) {
       // The cart leaves when it's full, or when the last unit of a multi-unit lot is done.
       carts[i].push(job)
@@ -322,10 +342,13 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     }
     tryStart(i)
     // The rope counts work until the constraint finishes it, or until it's scrapped before getting there.
-    if (i === constraint || (scrap && i < constraint)) {
+    // Work sent back to the constraint or before it counts again.
+    const passed = i === constraint || (scrap && i < constraint)
+    const again = back >= 0 && back <= constraint && constraint <= i
+    if (passed && !again) {
       aheadOfConstraint--
       fillRope()
-    }
+    } else if (again && !passed) aheadOfConstraint++
   }
 
   stations.forEach((station, i) => {
@@ -350,7 +373,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     const at = sample(incident.at, incidentDraws())
     for (const outage of incident.outages) {
       const i = stations.findIndex((st) => st.id === outage.station)
-      agenda.push(at, { kind: 'outage', station: i, until: at + sample(outage.lasts, incidentDraws()) })
+      agenda.push(at, { kind: 'outage', station: i, until: at + sample(outage.lasts, incidentDraws()), cause: incident.name })
     }
   }
   for (const delivery of supply?.deliveries ?? []) {
@@ -395,7 +418,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     } else if (payload.kind === 'jam') {
       jam(payload.station)
     } else if (payload.kind === 'outage') {
-      breakDown(payload.station, payload.until)
+      breakDown(payload.station, payload.until, payload.cause)
     } else if (payload.kind === 'delivery') {
       stock += payload.amount
       events.push({ t: now, type: 'delivery', amount: payload.amount, due: payload.due })
@@ -413,12 +436,13 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
 
   const shippedBy: Record<string, number> = {}
   for (const event of events) {
-    if (event.type === 'finish' && event.station === n - 1 && !event.scrap && model.mix) {
+    if (event.type === 'finish' && event.station === n - 1 && !event.scrap && event.rework === undefined && model.mix) {
       const product = products[event.job]
       shippedBy[product] = (shippedBy[product] ?? 0) + 1
     }
   }
-  const makesDefects = stations.some((s) => s.defects !== undefined || s.inspects)
+  const makesDefects = stations.some((s) => s.defects !== undefined || s.inspects || s.changeoverScrap)
+  const reworks = stations.some((s) => s.reworkTo !== undefined)
   // Everything started and neither sold nor scrapped is thrown out at the end of the day.
   const unstarted = new Set(queues[0])
   const wasteBy: Record<string, number> = {}
@@ -438,6 +462,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     ...(model.mix ? { products, shippedBy } : {}),
     ...(supply ? { supply: { onHand: supply.onHand, avgStock: stockArea / horizon } } : {}),
     ...(makesDefects ? { scrapped, escaped } : {}),
+    ...(reworks ? { reworked } : {}),
     ...(rushJobs.length > 0 ? { rush: rushJobs } : {}),
     ...(market ? { market: { customers, sold: sales, lost: lostSales, waste, ...byProduct } } : {}),
     output: shipped,

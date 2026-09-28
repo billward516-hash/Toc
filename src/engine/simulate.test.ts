@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Dist } from './distributions.ts'
-import { capacity, validateModel, type FactoryModel, type Market, type Release } from './model.ts'
+import { breakAt, capacity, validateModel, type FactoryModel, type Market, type Release } from './model.ts'
 import { runBatch, simulate, type SimResult } from './simulate.ts'
 import { bufferZones, snapshotAt, steadyShare } from './timeline.ts'
 
@@ -650,6 +650,109 @@ describe('the shop counter', () => {
     expect(validateModel(shop({ kind: 'plan', quantity: 5 }, { wants: { a: fixed(1), z: fixed(0) } }, flavors))).toEqual([
       'market: wants unknown product "z"',
       'market: wants z: fixed time must be positive',
+    ])
+  })
+})
+
+describe('everyday problems', () => {
+  const stations = (...specs: Partial<FactoryModel['stations'][number]>[]) =>
+    specs.map((spec, i) => ({ id: `s${i}`, name: `Station ${i}`, cycleTime: fixed(1), ...spec }))
+  const reworkOf = (result: SimResult) => result.events.flatMap((e) => (e.type === 'finish' && e.rework !== undefined ? [e] : []))
+
+  it('says why a planned stop happens, and stops the station just like a break', () => {
+    const plain = line([fixed(2), fixed(1)], { kind: 'saturate' }, 60)
+    const stop = { from: 10, to: 30 }
+    const withBreak = { ...plain, stations: plain.stations.map((st, i) => (i === 0 ? { ...st, breaks: [stop] } : st)) }
+    const withReason = { ...plain, stations: plain.stations.map((st, i) => (i === 0 ? { ...st, breaks: [{ ...stop, reason: 'No operator' }] } : st)) }
+    expect(simulate(withReason, 1).events).toEqual(simulate(withBreak, 1).events)
+    expect(breakAt(withReason.stations[0], 20)?.reason).toBe('No operator')
+    expect(breakAt(withReason.stations[0], 30)).toBeUndefined()
+  })
+
+  it('names the incident behind each stop', () => {
+    const cut: FactoryModel = { ...line([fixed(1), fixed(1)]), incidents: [{ name: 'Power cut', at: fixed(10), outages: [{ station: 's0', lasts: fixed(5) }, { station: 's1', lasts: fixed(5) }] }] }
+    const stops = simulate(cut, 1).events.filter((e) => e.type === 'jam')
+    expect(stops).toEqual([
+      { t: 10, type: 'jam', station: 0, until: 15, outage: true, cause: 'Power cut' },
+      { t: 10, type: 'jam', station: 1, until: 15, outage: true, cause: 'Power cut' },
+    ])
+  })
+
+  it('sends defective units back to be made again, and ships them once they pass', () => {
+    const model: FactoryModel = { ...line([]), stations: stations({ defects: 0.3 }, {}, { inspects: true, reworkTo: 's1' }), horizon: 200 }
+    const result = simulate(model, 2)
+    const sent = reworkOf(result)
+    expect(result.reworked).toBe(sent.length)
+    expect(sent.length).toBeGreaterThan(20)
+    expect(result.scrapped).toBe(0)
+    // Made again from Station 1, which makes no defects, so each goes back only once.
+    expect(new Set(sent.map((e) => e.job)).size).toBe(sent.length)
+    const first = sent[0]
+    const then = snapshotAt(result, first.t)
+    expect(then.waiting[1].includes(first.job) || then.working[1].some((w) => w.job === first.job)).toBe(true)
+    expect(result.events.some((e) => e.type === 'start' && e.station === 1 && e.job === first.job && e.t >= first.t)).toBe(true)
+    const end = snapshotAt(result, 200)
+    const inProcess = end.queues.reduce((a, b) => a + b, 0) + end.working.reduce((a, w) => a + w.length, 0)
+    expect(result.output + inProcess).toBe(result.released)
+    expect(end.sentBack).toEqual([0, 0, sent.length])
+  })
+
+  it('can send a unit back more than once when the redo can come out defective again', () => {
+    const model: FactoryModel = { ...line([]), stations: stations({ defects: 0.5 }, { inspects: true, reworkTo: 's0' }), horizon: 200 }
+    const jobs = reworkOf(simulate(model, 3)).map((e) => e.job)
+    expect(jobs.length).toBeGreaterThan(new Set(jobs).size)
+  })
+
+  it('keeps a rope counting work sent back to the constraint, releasing only while fewer than its length are ahead of it', () => {
+    const model: FactoryModel = {
+      ...line([]),
+      stations: stations({}, { cycleTime: fixed(2), defects: 0.3 }, {}, { inspects: true, reworkTo: 's1' }),
+      release: { kind: 'rope', constraint: 's1', buffer: 3 },
+      horizon: 300,
+    }
+    const result = simulate(model, 4)
+    expect(reworkOf(result).length).toBeGreaterThan(10)
+    // Work ahead of the constraint: released, or sent back to it, and not yet through it.
+    let ahead = 0
+    for (const e of result.events) {
+      if (e.type === 'release') {
+        expect(ahead, `t ${e.t}`).toBeLessThan(3)
+        ahead++
+      } else if (e.type === 'finish') {
+        if (e.station === 1) ahead--
+        if (e.rework !== undefined && e.rework <= 1) ahead++
+      }
+    }
+    const end = snapshotAt(result, 300)
+    expect(end.queues[0] + end.queues[1] + end.working[0].length + end.working[1].length).toBe(ahead)
+  })
+
+  it('scraps the first unit after each changeover where the station spoils it', () => {
+    const model: FactoryModel = {
+      products: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' },
+      ],
+      mix: ['a', 'a', 'a', 'b', 'b', 'b'],
+      stations: stations({ cycleTime: fixed(2), changeover: fixed(3), changeoverScrap: 1 }, {}),
+      release: { kind: 'interval', every: fixed(3) },
+      horizon: 120,
+    }
+    const result = simulate(model, 1)
+    const afterChange = result.events.flatMap((e) => (e.type === 'start' && e.ready !== undefined ? [e.job] : []))
+    const spoiled = result.events.flatMap((e) => (e.type === 'finish' && e.scrap ? [e.job] : []))
+    expect(afterChange.length).toBeGreaterThan(5)
+    expect(spoiled).toEqual(afterChange.filter((job) => result.events.some((e) => e.type === 'finish' && e.job === job && e.station === 0)))
+    expect(result.scrapped).toBe(spoiled.length)
+    expect(snapshotAt(result, 120).scrapped[0]).toBe(spoiled.length)
+  })
+
+  it('rejects impossible rework and changeover scrap', () => {
+    const model: FactoryModel = { ...line([]), stations: stations({ changeoverScrap: 1 }, { reworkTo: 's0' }, { inspects: true, reworkTo: 's3' }) }
+    expect(validateModel(model)).toEqual([
+      's0: changeover scrap needs a changeover and a positive whole number',
+      's1: only a station that inspects can send work back',
+      's2: rework must go back to this station or an earlier one',
     ])
   })
 })
