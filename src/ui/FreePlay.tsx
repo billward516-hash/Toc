@@ -365,7 +365,7 @@ function RunsTable({ current, earlier }: { current: Run | null; earlier: Run[] }
   return (
     <section className="runs" aria-label="Your runs">
       <h3>Your runs</h3>
-      <table className="sandbox-table runs-table">
+      <table className="data-table runs-table">
         <thead>
           <tr>
             <th scope="col">Run</th>
@@ -399,7 +399,7 @@ function StationTable({ run }: { run: Run }) {
   return (
     <section className="runs" aria-label={`Each station in run ${run.number}`}>
       <h3>Each station in run {run.number}</h3>
-      <table className="sandbox-table station-table">
+      <table className="data-table station-table">
         <thead>
           <tr>
             <th scope="col">Station</th>

@@ -199,6 +199,12 @@ const icons = {
       <circle cx={16} cy={8} r={1.4} />
     </>
   ),
+  info: (
+    <>
+      <circle cx={12} cy={12} r={8.5} />
+      <path d="M12 11v5.5M12 7.8v.2" />
+    </>
+  ),
   // Corners pointing out, to fill the screen; pointing in, to leave full screen.
   expand: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />,
   shrink: <path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" />,

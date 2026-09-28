@@ -13,17 +13,26 @@ export interface Stat {
   detail?: string
 }
 
-export function LevelHeader({ level, stats, onExit }: { level: Level; stats: Stat[]; onExit: () => void }) {
-  return <ScreenHeader chip={`Tier ${level.tier}`} title={level.title} stats={stats} onExit={onExit} />
+export function LevelHeader({ level, stats, onExit, onBriefing }: { level: Level; stats: Stat[]; onExit: () => void; onBriefing: () => void }) {
+  return <ScreenHeader chip={`Tier ${level.tier}`} title={level.title} stats={stats} onExit={onExit} onBriefing={onBriefing} />
 }
 
-// A play screen's title, with a way back to the levels and the numbers that matter as the shift plays.
-export function ScreenHeader({ chip, title, stats, onExit }: { chip: string; title: string; stats: Stat[]; onExit: () => void }) {
+// A play screen's title, with a way back to the levels, the level's briefing to reread, and the
+// numbers that matter as the shift plays.
+export function ScreenHeader(props: { chip: string; title: string; stats: Stat[]; onExit: () => void; onBriefing?: () => void }) {
+  const { chip, title, stats, onExit, onBriefing } = props
   return (
     <header className="level-header">
-      <button className="btn small" onClick={onExit}>
-        <Icon name="back" /> Levels
-      </button>
+      <div className="header-buttons">
+        <button className="btn small" onClick={onExit}>
+          <Icon name="back" /> Levels
+        </button>
+        {onBriefing && (
+          <button className="btn small" onClick={onBriefing}>
+            <Icon name="info" /> Briefing
+          </button>
+        )}
+      </div>
       <div className="level-title">
         <span className="tier-chip">{chip}</span>
         <h1>{title}</h1>

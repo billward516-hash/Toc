@@ -43,6 +43,7 @@ export default function App() {
     window.scrollTo(0, 0)
   }, [open, free])
 
+  const history = useMemo(() => (open ? events.filter((e) => e.levelId === open.id) : []), [events, open])
   const completed = useMemo(() => completedLevels(events), [events])
   const stars = useMemo(() => bestStars(events), [events])
 
@@ -80,6 +81,7 @@ export default function App() {
         level={open}
         nextLevel={nextLevel}
         onRecord={record}
+        history={history}
         onExit={() => setOpen(null)}
         onNext={setOpen}
         preferences={preferences}

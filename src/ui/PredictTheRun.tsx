@@ -19,6 +19,7 @@ import { SimulationLog } from './SimLog.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { showFloor } from './scroll.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
+import { useReread } from './useReread.ts'
 
 // Watch one day, predict another, then watch it: a perfect-day twin and the real line by default, or
 // the line and the same line after a change, such as a breakdown. The second can be several days in
@@ -41,6 +42,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
   const stops = useMemo(() => problemStops(shown.model, shown.result, unit), [shown.model, shown.result, unit])
   const stopTimes = useMemo(() => (preferences.pauseAtProblems ? stops.map((stop) => stop.at) : []), [stops, preferences.pauseAtProblems])
   const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed, stopTimes)
+  const reread = useReread(playback)
   const [briefing, setBriefing] = useState(true)
   const [choice, setChoice] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState(false)
@@ -95,6 +97,7 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
               ]
         }
         onExit={onExit}
+        onBriefing={reread.show}
       />
 
       <p className={`viewing${locked ? ' mine' : ''}`}>
@@ -230,6 +233,21 @@ export function PredictTheRun({ level, goal, nextLevel, onRecord, onExit, onNext
           }
         >
           <p>{level.briefing}</p>
+        </Dialog>
+      )}
+
+      {reread.open && (
+        <Dialog
+          kicker="Briefing"
+          title={level.title}
+          actions={
+            <button className="btn primary big" onClick={reread.close}>
+              Back to the level
+            </button>
+          }
+        >
+          <p>{level.briefing}</p>
+          <p className="task">Your task: {goal.prompt}</p>
         </Dialog>
       )}
 

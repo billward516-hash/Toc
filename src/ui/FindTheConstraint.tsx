@@ -14,6 +14,7 @@ import { hasDisruptions, shiftLog } from './shiftEvents.ts'
 import { SimulationLog } from './SimLog.tsx'
 import type { LevelFlowProps } from './types.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
+import { useReread } from './useReread.ts'
 
 interface Feedback {
   correct: boolean
@@ -26,6 +27,7 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
   const result = useMemo(() => simulate(model, level.seed), [model, level.seed])
   const [speed, setSpeed] = useState(1)
   const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed)
+  const reread = useReread(playback)
   const snapshot = useMemo(() => snapshotAt(result, playback.t), [result, playback.t])
   const [briefing, setBriefing] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
@@ -72,6 +74,7 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           { label: 'In process', value: snapshot.released - snapshot.shipped },
         ]}
         onExit={onExit}
+        onBriefing={reread.show}
       />
 
       <div className="floor">
@@ -151,6 +154,21 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           }
         >
           <p>{level.briefing}</p>
+        </Dialog>
+      )}
+
+      {reread.open && (
+        <Dialog
+          kicker="Briefing"
+          title={level.title}
+          actions={
+            <button className="btn primary big" onClick={reread.close}>
+              Back to the level
+            </button>
+          }
+        >
+          <p>{level.briefing}</p>
+          <p className="task">Your task: {goal.prompt}</p>
         </Dialog>
       )}
 

@@ -480,6 +480,12 @@ button {
   gap: 14px;
 }
 
+.header-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .level-title {
   flex: 1;
   min-width: 200px;
@@ -2195,7 +2201,7 @@ button {
   font-weight: 900;
 }
 
-.sandbox-table {
+.data-table {
   width: 100%;
   border-collapse: separate;
   font-size: 16px;
@@ -2207,31 +2213,31 @@ button {
   overflow: hidden;
 }
 
-.sandbox-table th,
-.sandbox-table td {
+.data-table th,
+.data-table td {
   padding: 7px 8px;
   text-align: right;
   border-bottom: 2px solid #eee4d0;
 }
 
-.sandbox-table tr:last-child th,
-.sandbox-table tr:last-child td {
+.data-table tr:last-child th,
+.data-table tr:last-child td {
   border-bottom: 0;
 }
 
-.sandbox-table th:first-child,
-.sandbox-table .changes {
+.data-table th:first-child,
+.data-table .changes {
   text-align: left;
 }
 
-.sandbox-table thead th {
+.data-table thead th {
   font-size: 13px;
   color: var(--muted);
   vertical-align: bottom;
   background: #f7f2e7;
 }
 
-.sandbox-table small {
+.data-table small {
   display: block;
   font-size: 12px;
   font-weight: 700;
@@ -2244,17 +2250,17 @@ button {
   font-weight: 700;
 }
 
-.runs-table tr.current {
+.data-table tr.current {
   background: var(--blue-soft);
 }
 
 @media (max-width: 600px) {
-  .sandbox-table {
+  .data-table {
     font-size: 14px;
   }
 
-  .sandbox-table th,
-  .sandbox-table td {
+  .data-table th,
+  .data-table td {
     padding: 6px 4px;
   }
 
@@ -2310,4 +2316,106 @@ button {
   margin: 0;
   font-size: 18px;
   font-weight: 900;
+}
+
+/* Read by screen readers, not shown. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A wide table scrolls sideways inside its card on a narrow screen. */
+.table-scroll {
+  /* Positioned, so hidden screen-reader text in the table stays inside it too. */
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Plans you've tried on a level, side by side. */
+.plans-tried {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  /* Lets the table scroll inside the card rather than widen it. */
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 3px dashed #e3d9c4;
+}
+
+.plans-tried h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.plans-table th[scope='row'] .choice {
+  display: block;
+  font-weight: 800;
+}
+
+.plans-table th[scope='row'] .choice + .choice {
+  margin-top: 4px;
+}
+
+.plans-table .choice small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.plans-table td {
+  white-space: nowrap;
+}
+
+.plans-table td svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.plans-table td.ok {
+  color: var(--green-deep);
+  font-weight: 800;
+}
+
+.plans-table td.miss {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.plans-table .outcome {
+  text-align: left;
+}
+
+.plans-table .outcome .stars {
+  display: flex;
+}
+
+.plans-table .outcome .met {
+  font-weight: 800;
+  color: var(--green-deep);
+}
+
+.plans-table .outcome .unmet {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.plans-table .outcome small {
+  font-size: 12px;
+}
+
+/* A briefing reread during a level: the task, after the premise. */
+.task {
+  padding: 10px 14px;
+  font-weight: 700;
+  background: var(--blue-soft);
+  border-radius: 14px;
 }

@@ -24,6 +24,7 @@ import { barsHint, barsOutcome, barsResultStats, barStats, type Words } from './
 import { Dialog } from './Dialog.tsx'
 import { FactoryView, type Badge } from './FactoryView.tsx'
 import { Icon, type IconName } from './icons.tsx'
+import { PlansTried } from './PlansTried.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
 import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog, stopReasons } from './shiftEvents.ts'
 import { SimulationLog } from './SimLog.tsx'
@@ -32,6 +33,7 @@ import type { LevelFlowProps } from './types.ts'
 import { productColor, productName } from './products.ts'
 import { reveal, showFloor } from './scroll.ts'
 import { MINUTES_PER_SECOND, usePlayback } from './usePlayback.ts'
+import { useReread } from './useReread.ts'
 
 type PlanGoal = Extract<Goal, { kind: 'output' | 'steady' | 'buffer' | 'elevate' | 'flow' | 'profit' | 'bars' }>
 type BufferGoal = Extract<Goal, { kind: 'buffer' }>
@@ -50,7 +52,7 @@ interface Run {
   stars: number
 }
 
-export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext, preferences, onPreferences }: LevelFlowProps<PlanGoal['kind']>) {
+export function PlanTheShift({ level, goal, nextLevel, onRecord, history, onExit, onNext, preferences, onPreferences }: LevelFlowProps<PlanGoal['kind']>) {
   const { model, levers, seed } = level
   const unit = level.unit ?? 'robots'
   const baseline = useMemo(() => simulate(model, seed), [model, seed])
@@ -62,6 +64,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
   const stops = useMemo(() => problemStops(shown.model, shown.result, unit, band), [shown.model, shown.result, unit, band])
   const stopTimes = useMemo(() => (preferences.pauseAtProblems ? stops.map((stop) => stop.at) : []), [stops, preferences.pauseAtProblems])
   const playback = usePlayback(model.horizon, MINUTES_PER_SECOND * speed, stopTimes)
+  const reread = useReread(playback)
   const [briefing, setBriefing] = useState(true)
   const [choices, setChoices] = useState<Choices>({})
   const [dismissed, setDismissed] = useState(false)
@@ -82,11 +85,14 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
     [goal, shown.result, drum],
   )
   const jams = model.stations.some((s) => s.jams) && zones ? jamLog(shown.model, shown.result, zones, playback.t) : null
-  const words: Words = {
-    unit,
-    material: model.supply?.name ?? 'material',
-    products: (id) => `${productName(model, id).toLowerCase()}s`,
-  }
+  const words: Words = useMemo(
+    () => ({
+      unit,
+      material: model.supply?.name ?? 'material',
+      products: (id) => `${productName(model, id).toLowerCase()}s`,
+    }),
+    [unit, model],
+  )
   const spend = run?.investment.spend ?? 0
   const context = { words, spend }
 
@@ -108,6 +114,17 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
     stats.push({ label: goal.kind === 'buffer' ? 'On the floor' : 'In process', value: snapshot.released - snapshot.shipped })
   }
   if (goal.kind === 'output' || goal.kind === 'elevate' || goal.kind === 'flow') stats.push({ label: 'Goal', value: goal.target })
+
+  // What each star asks, shown while planning and in the briefing.
+  const starGoals = (
+    <>
+      {goal.kind === 'buffer' && <StarGoals goal={goal} />}
+      {goal.kind === 'elevate' && <ElevateStarGoals goal={goal} />}
+      {goal.kind === 'flow' && <FlowStarGoals goal={goal} />}
+      {goal.kind === 'profit' && <ProfitStarGoals goal={goal} />}
+      {goal.kind === 'bars' && <BarsStarGoals goal={goal} words={words} />}
+    </>
+  )
 
   const start = () => {
     setBriefing(false)
@@ -140,7 +157,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
 
   return (
     <div className="screen level-screen">
-      <LevelHeader level={level} stats={stats} onExit={onExit} />
+      <LevelHeader level={level} stats={stats} onExit={onExit} onBriefing={reread.show} />
 
       <p className={`viewing${run ? ' mine' : ''}`}>{run ? 'Running your plan' : 'Running the factory as it is today'}</p>
       <div className="floor">
@@ -263,16 +280,13 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
                   Change my plan
                 </button>
               </div>
+              {playback.finished && <PlansTried level={level} goal={goal} history={history} words={words} baseline={baseline} current={run.plan} />}
             </>
           ) : (
             <>
               <p className="prompt">{fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values)}</p>
               <p className="hint">{planningHint(goal, baseline, context)}</p>
-              {goal.kind === 'buffer' && <StarGoals goal={goal} />}
-              {goal.kind === 'elevate' && <ElevateStarGoals goal={goal} />}
-              {goal.kind === 'flow' && <FlowStarGoals goal={goal} />}
-              {goal.kind === 'profit' && <ProfitStarGoals goal={goal} />}
-              {goal.kind === 'bars' && <BarsStarGoals goal={goal} words={words} />}
+              {starGoals}
               {levers.map((lever) => (
                 <fieldset key={lever.id} className="lever">
                   <legend>
@@ -303,6 +317,7 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
               <button className="btn primary big" disabled={!ready} onClick={runPlan}>
                 Run the shift with my plan <Icon name="play" />
               </button>
+              <PlansTried level={level} goal={goal} history={history} words={words} baseline={baseline} current={choices} onUse={setChoices} />
             </>
           )}
         </section>
@@ -319,6 +334,22 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, onExit, onNext,
           }
         >
           <p>{fillTemplate(level.briefing, model, snapshotAt(baseline, 0), values)}</p>
+        </Dialog>
+      )}
+
+      {reread.open && (
+        <Dialog
+          kicker="Briefing"
+          title={level.title}
+          actions={
+            <button className="btn primary big" onClick={reread.close}>
+              Back to the level
+            </button>
+          }
+        >
+          <p>{fillTemplate(level.briefing, model, snapshotAt(baseline, 0), values)}</p>
+          <p className="task">Your task: {fillTemplate(goal.prompt, model, snapshotAt(baseline, 0), values)}</p>
+          {starGoals}
         </Dialog>
       )}
 
