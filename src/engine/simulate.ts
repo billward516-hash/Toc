@@ -1,6 +1,6 @@
 import { sample } from './distributions.ts'
 import { EventQueue } from './eventQueue.ts'
-import { validateModel, type FactoryModel } from './model.ts'
+import { onBreak, validateModel, type FactoryModel } from './model.ts'
 import { stream } from './random.ts'
 
 export type SimEvent =
@@ -26,7 +26,7 @@ export interface SimResult {
   stations: StationStats[]
 }
 
-type Pending = { kind: 'release' } | { kind: 'finish'; station: number; job: number }
+type Pending = { kind: 'release' } | { kind: 'finish'; station: number; job: number } | { kind: 'resume'; station: number }
 
 export function simulate(model: FactoryModel, seed: number): SimResult {
   const problems = validateModel(model)
@@ -74,6 +74,7 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
 
   const tryStart = (i: number) => {
     const station = stations[i]
+    if (onBreak(station, now)) return
     while (busy[i] < (station.servers ?? 1)) {
       let job = queues[i].shift()
       if (job === undefined) {
@@ -115,6 +116,9 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     }
   }
 
+  stations.forEach((station, i) => {
+    for (const b of station.breaks ?? []) agenda.push(b.to, { kind: 'resume', station: i })
+  })
   if (release.kind === 'rope') fillRope()
   else if (release.kind === 'interval') agenda.push(0, { kind: 'release' })
   else tryStart(0)
@@ -124,6 +128,8 @@ export function simulate(model: FactoryModel, seed: number): SimResult {
     advance(t)
     if (payload.kind === 'finish') {
       finish(payload.station, payload.job)
+    } else if (payload.kind === 'resume') {
+      tryStart(payload.station)
     } else if (release.kind === 'interval') {
       arrive(0, newJob())
       agenda.push(now + sample(release.every, releaseDraws()), { kind: 'release' })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Dist } from './distributions.ts'
-import type { FactoryModel, Release } from './model.ts'
+import { capacity, type FactoryModel, type Release } from './model.ts'
 import { runBatch, simulate, type SimResult } from './simulate.ts'
 
 const fixed = (value: number): Dist => ({ kind: 'fixed', value })
@@ -100,6 +100,37 @@ describe('release policies', () => {
     const doubled = line([fixed(2), fixed(6)], { kind: 'saturate' }, 120)
     doubled.stations[1].servers = 2
     expect(simulate(doubled, 1).output).toBe(38)
+  })
+})
+
+describe('planned breaks', () => {
+  const withBreak = (station: number) => {
+    const model = line([fixed(2), fixed(5), fixed(3)])
+    model.stations[station].breaks = [{ from: 40, to: 60 }]
+    return model
+  }
+
+  it('costs output when the constraint stops', () => {
+    // Paint finishes the part in hand at 42, then idles until 60: 20 minutes, 4 robots.
+    expect(simulate(withBreak(1), 1).output).toBe(15)
+  })
+
+  it('costs nothing when a station with spare capacity stops', () => {
+    expect(simulate(withBreak(2), 1).output).toBe(19)
+  })
+
+  it('counts breaks and parallel servers in capacity', () => {
+    const paint = { id: 'paint', name: 'Paint', cycleTime: fixed(5), breaks: [{ from: 40, to: 60 }] }
+    expect(capacity(paint, 100)).toBe(16)
+    expect(capacity({ ...paint, servers: 2 }, 100)).toBe(32)
+    expect(capacity({ ...paint, breaks: [{ from: 90, to: 200 }] }, 100)).toBe(18)
+  })
+
+  it('never starts work during a break', () => {
+    const result = simulate(withBreak(1), 1)
+    const startsAtPaint = result.events.flatMap((e) => (e.type === 'start' && e.station === 1 ? [e.t] : []))
+    expect(startsAtPaint.some((t) => t >= 40 && t < 60)).toBe(false)
+    expect(startsAtPaint).toContain(60)
   })
 })
 

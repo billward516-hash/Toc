@@ -22,6 +22,18 @@ export function sample(dist: Dist, u: number): number {
   }
 }
 
+// Scaling keeps the same draw mapping to a proportionally shorter or longer time.
+export function scale(dist: Dist, factor: number): Dist {
+  switch (dist.kind) {
+    case 'fixed':
+      return { kind: 'fixed', value: dist.value * factor }
+    case 'uniform':
+      return { kind: 'uniform', min: dist.min * factor, max: dist.max * factor }
+    case 'triangular':
+      return { kind: 'triangular', min: dist.min * factor, mode: dist.mode * factor, max: dist.max * factor }
+  }
+}
+
 export function mean(dist: Dist): number {
   switch (dist.kind) {
     case 'fixed':

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mean, problemWith, sample, type Dist } from './distributions.ts'
+import { mean, problemWith, sample, scale, type Dist } from './distributions.ts'
 
 const uniform: Dist = { kind: 'uniform', min: 2, max: 6 }
 const triangular: Dist = { kind: 'triangular', min: 2, mode: 3, max: 6 }
@@ -30,6 +30,14 @@ describe('sample', () => {
     for (const u of [0.01, 0.2, 0.5, 0.8, 0.99]) {
       expect(sample(faster, u)).toBeLessThan(sample(triangular, u))
     }
+  })
+})
+
+describe('scale', () => {
+  it('makes every draw proportionally faster', () => {
+    const faster = scale(triangular, 0.75)
+    for (const u of [0.1, 0.25, 0.6, 0.95]) expect(sample(faster, u)).toBeCloseTo(0.75 * sample(triangular, u), 12)
+    expect(mean(faster)).toBeCloseTo(0.75 * mean(triangular), 12)
   })
 })
 
