@@ -212,6 +212,28 @@ const icons = {
   minus: <path d="M5 12h14" />,
   // A factory with a sawtooth roof and a chimney.
   build: <path d="M3 20h18M4 20V11l4-3v3l4-3v3l4-3V4h3v16" />,
+  // Two people, for a class.
+  group: (
+    <>
+      <circle cx={9} cy={8} r={3.2} />
+      <path d="M3.5 19.5c0-3.3 2.5-5.7 5.5-5.7s5.5 2.4 5.5 5.7" />
+      <circle cx={16.8} cy={9} r={2.5} />
+      <path d="M16.6 13.9c2.4.1 4.1 2.2 4.1 5" />
+    </>
+  ),
+  // A TV on its stand.
+  screen: (
+    <>
+      <rect x={3} y={4.5} width={18} height={12} rx={2} />
+      <path d="M9 20h6M12 16.5V20" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx={12} cy={12} r={2.8} />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof icons

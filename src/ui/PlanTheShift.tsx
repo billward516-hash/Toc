@@ -22,8 +22,9 @@ import { goalValues, tenths } from '../levels/values.ts'
 import { BarsChecklist, BarsStarGoals, MANY_DAYS } from './bars.tsx'
 import { barsHint, barsOutcome, barsResultStats, barStats, type Words } from './barTexts.ts'
 import { Dialog } from './Dialog.tsx'
-import { FactoryView, type Badge } from './FactoryView.tsx'
-import { Icon, type IconName } from './icons.tsx'
+import { FactoryView } from './FactoryView.tsx'
+import { Icon } from './icons.tsx'
+import { badgesFor, leverIcon } from './leverLooks.ts'
 import { PlansTried } from './PlansTried.tsx'
 import { ShiftLog } from './ShiftLog.tsx'
 import { canGoWrong, haltLabels, hasDisruptions, problemStops, shiftLog, stopReasons } from './shiftEvents.ts'
@@ -419,58 +420,6 @@ const badgeLegend: Record<Lever['kind'], string | null> = {
   priority: null,
   menu: null,
   option: null,
-}
-
-const stationBadge: Partial<Record<Lever['kind'], Badge>> = {
-  upgrade: 'upgraded',
-  coverBreak: 'covered',
-  steady: 'steadied',
-  maintain: 'maintained',
-  quickChange: 'quick',
-}
-
-function leverIcon(lever: Lever): IconName {
-  switch (lever.kind) {
-    case 'upgrade':
-      return 'bolt'
-    case 'steady':
-      return 'even'
-    case 'coverBreak':
-    case 'releasePace':
-      return 'clock'
-    case 'maintain':
-      return 'wrench'
-    case 'ropeTo':
-    case 'ropeLength':
-      return 'rope'
-    case 'machineRule':
-      return 'rule'
-    case 'buy':
-      return 'money'
-    case 'lotSize':
-      return 'stack'
-    case 'quickChange':
-      return 'swap'
-    case 'transferSize':
-      return 'cart'
-    case 'priority':
-      return 'sort'
-    case 'menu':
-      return 'tag'
-    case 'option':
-      return lever.icon ?? 'rule'
-  }
-}
-
-function badgesFor(levers: Lever[], plan: Choices): Record<string, Badge[]> {
-  const badges: Record<string, Badge[]> = {}
-  for (const lever of levers) {
-    const badge = stationBadge[lever.kind]
-    if (!badge) continue
-    const station = plan[lever.id]
-    badges[station] = [...(badges[station] ?? []), badge]
-  }
-  return badges
 }
 
 // Days the player hasn't seen, for the third star: anything but the level's own day.

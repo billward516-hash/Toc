@@ -8,17 +8,19 @@ interface DialogProps {
   actions: ReactNode
 }
 
-const FOCUSABLE = 'button:not(:disabled), [href], summary, [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), [href], summary, [tabindex]:not([tabindex="-1"])'
 
 export function Dialog({ kicker, title, tone = 'info', children, actions }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
-  // Focus the main action without scrolling to it, so a long dialog opens at its title. On closing,
-  // focus goes back to where it was, if that's still on the page.
+  // Focus the main action without scrolling to it, so a long dialog opens at its title, or a field
+  // marked data-autofocus, for a dialog that asks for something. On closing, focus goes back to where
+  // it was, if that's still on the page.
   useEffect(() => {
     const before = document.activeElement
-    ref.current?.querySelector<HTMLButtonElement>('.dialog-actions button')?.focus({ preventScroll: true })
+    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus]') ?? ref.current?.querySelector<HTMLElement>('.dialog-actions button')
+    first?.focus({ preventScroll: true })
     return () => {
       if (before instanceof HTMLElement && before.isConnected) before.focus({ preventScroll: true })
     }

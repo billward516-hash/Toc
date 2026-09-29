@@ -164,7 +164,7 @@ export function bestStars(events: readonly StoredEvent[]): Map<string, number> {
   return best
 }
 
-function browserStorage(): KeyValue | null {
+export function browserStorage(): KeyValue | null {
   try {
     return globalThis.localStorage ?? null
   } catch {

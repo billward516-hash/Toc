@@ -299,15 +299,29 @@ Single HTML5 codebase running in-browser across tablet (primary target), laptop,
 
 - **v1 ships single-learner, local persistence** (localStorage/IndexedDB) — progress, stars, and scores stored per-device.
 - **Data model must be shaped for classroom use from day one**, even though the instructor-facing features are v1.5+: every score/progress event should be tagged with a learner ID and timestamp, even in single-learner mode, so the same event stream can later feed a server-side/instructor view without a data-model rewrite.
-- **v1.5 (architecture-ready, not built):** server-side persistence, learner accounts, cohort/class grouping, instructor view (roster, per-learner scores, assignable level subsets).
+- **v1.5 (architecture-ready, not built):** server-side persistence, learner accounts, cohort/class grouping, instructor view (roster, per-learner scores, assignable level subsets). *Class mode (§8.4) now gives a live class an instructor view: roster, progress, and answers, with the class sent to one level at a time. Accounts, standing rosters, and progress kept across classes remain v1.5.*
 - Persistence should be written against an interface (e.g., `saveProgress(learnerId, event)`) so swapping localStorage for a backend API later doesn't touch game logic.
 
 ### 8.3 Real-Classroom Use (v1)
 
-- v1 has no accounts (§8.2), so learner identification for a real class is handled without any server dependency: **each learner enters a nickname once per device**, stored only in that device's localStorage and never transmitted — this satisfies the `learnerId` tagging §8.2 already requires, without collecting anything sensitive.
+- v1 has no accounts (§8.2), so learner identification for a real class is handled without any server dependency: **each learner enters a nickname once per device**, stored only in that device's localStorage and never transmitted — this satisfies the `learnerId` tagging §8.2 already requires, without collecting anything sensitive. *Since class mode (§8.4), a nickname leaves the device only when its player joins a class.*
 - Because storage is local-only and per-device, a classroom set of shared/rotating tablets should assign one learner per device per session (or accept that switching users on one device means re-entering a nickname and starting fresh progress on that device) until v1.5's server-side accounts exist.
 - No name validation, account creation, or password is introduced — keeps friction at zero for a first-time class rollout.
 - *As built (week 1):* the home screen asks "What should we call you?" until a nickname is saved, and the first nickname goes to the learner already on the device, keeping any progress made so far. "Switch player" serves shared tablets: a nickname already played on the device picks up that player's progress (matched ignoring case and extra spaces), and a new one starts fresh. Nicknames are capped at 24 characters and live only in the device's localStorage.
+
+### 8.4 Class Mode (added 2026-09-28, owner's request)
+
+The owner asked for a class key like the party games a group plays on a TV from their phones, so an instructor can follow the class's progress and put everyone's answers side by side for discussion. It builds, for a live class, the instructor view §8.2 planned for v1.5.
+
+- **Hosting.** On the TV (a laptop or tablet connected to it), **Host a class** opens a class with a six-digit code, digits only so no code spells a word, and a QR code that opens the game with the code filled in. The class screen has three tabs:
+  - **Join:** the QR code, the game's address, the class code in large type, and who has joined, each shown online or offline, with a way to remove anyone.
+  - **Progress:** students against levels, grouped by tier, with each level marked finished (with its stars), tried in class, or open on the student's screen; each student's current level and totals. Only tiers someone has reached get columns, and each level's number opens its answers.
+  - **Answers:** any level's results. For a level with a right answer (find the constraint, predict the run): a tally of each student's first answer and a row per student, with the right answer hidden until the instructor shows it. For a planning level: every distinct plan the class ran, best first, with its numbers on the level's own day, its best stars, and how many students ran it; any plan, or the factory as it is, plays on the big screen for the class to watch. **Send everyone here** prompts every student to that level, which opens even for a student who hasn't unlocked it. **Show names** switches between nicknames and "Student 1, 2, …" in the order they joined, for talking over answers without naming anyone.
+  - **End class** deletes the class. The hosting device remembers its class, so a reload goes back to it, and the home screen offers the way back while it's open.
+- **Joining.** Students scan the QR code, or tap **Join a class** and type the code, then play as usual on their own phones. The home screen says they're in the class and what the instructor sees, with **Leave class**. Results since the class began go to it as they happen; after a dropped connection everything is sent again, without duplicates. Switching player on the device leaves the class. Students hear when the instructor removes them or ends the class; their own progress stays on their devices either way.
+- **Privacy (decided by the owner, 2026-09-28).** §12.1's rule that nothing a learner enters leaves the device still holds everywhere but inside a class, which a student joins by choice after being told what the instructor will see. A class receives only what its screen shows: the nickname, levels finished with their stars, the level open now, and each answer, prediction, and plan run during the class. No accounts, emails, or passwords: each device gets an anonymous ID from Firebase. Students can't read each other's entries; only the hosting device reads the whole class. Ending the class deletes it; a class nobody ended is deleted the next time anyone hosts a class, once it's 12 hours old. The owner will check the school's rules on apps that handle student information.
+- **Service.** Firebase Realtime Database with anonymous sign-in, on a project in the owner's personal Google account (the free Spark plan: up to 100 connections at once, no card). The project's web settings go in the repository variable `FIREBASE_CONFIG`, which the build reads; they aren't secret, but keeping them out of the repository keeps secret scanners from flagging them. Without the variable the game builds without class mode. The database's rules are in `firebase/database.rules.json`, pasted into the Firebase console whenever they change. Firebase's code and the class screen load only on devices that join or host a class, so the game itself grew by about 14 KB.
+- **Tests.** `npm run test:class` runs the class code against Firebase's emulators, rules and all: joining, results arriving once however often they're sent, students unable to read or change each other's entries or the class, removal, leaving, clearing away old classes, and ending. A whole class was also played in a browser against the emulators, a TV and two phones: joining by QR code and by typing, answers and plans arriving, the class sent to a level, a plan played on the big screen, reloads on both sides, a mistyped code, removal, leaving, and ending.
 
 ---
 
@@ -318,7 +332,7 @@ To avoid a rewrite when future scope is tackled, the following seams must exist 
 | Seam | v1 behavior | Future behavior it must support |
 |---|---|---|
 | Level schema `allowedChanges` | Populated with parametric operations only (Tiers 0–4) or parametric + topological (Tiers 5–6) | Could include full topology operations for any level without a schema change |
-| Persistence interface | Backed by localStorage | Swappable for a server-side API without touching game/UI logic |
+| Persistence interface | Backed by localStorage; a class (§8.4) also receives the same events as they're saved | Swappable for a server-side API without touching game/UI logic |
 | Simulation engine vs. rendering | Decoupled; engine emits an event stream, renderer consumes it | A future instructor-facing analytics view can consume the same event stream the player UI does |
 | Level dependency model | Simple prerequisite graph for Tiers 0–6 branching | Extensible to more complex prerequisite/skill-tree structures without redesign |
 | Seed/batch execution (`runBatch`) | Used for multi-seed scoring in Tiers 3–6 | Reusable for future sandbox/instructor-configured stress tests |
@@ -328,7 +342,7 @@ To avoid a rewrite when future scope is tackled, the following seams must exist 
 ## 10. Explicitly Out of Scope for v1
 
 - Full from-scratch factory construction (may exist later as capstone tier or sandbox mode; not required for v1). *Free play ships for straight lines of up to six stations (§4.7); several products, routing, and a graded capstone stay out.*
-- Server-side accounts, cohort management, instructor dashboard (architecture must support; not built)
+- Server-side accounts, cohort management, instructor dashboard (architecture must support; not built) *Class mode (§8.4) builds a live instructor view without accounts; accounts and standing cohorts stay out.*
 - TOC Thinking Processes tools (evaporating cloud, current reality tree, etc.)
 - Commissioned/illustrated art assets (using stylized SVG/CSS cartoon style instead)
 - Native mobile app packaging (browser-based only)
@@ -357,13 +371,13 @@ Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES en
 - **Ownership:** a personal project, built on the author's own time and equipment through personal accounts. Provenance is recorded in `independence/` (see its README).
 - First intended use: **a real class/training the author teaches.** Real students, real stakes.
 - Timeline: **three weeks, 2026-09-27 to 2026-10-17**, worked outside employer hours only. That's tight for the full Tiers 0–3 scope as specced (a DES engine with seeded PRNG and batch execution, four tiers of hand-tuned preset content, skill-tree UI, live T/I/OE-style dashboard, buffer-penetration meter, pop-up system, and — starting Tier 3 — multi-seed robustness scoring), so §12.6's first two cuts apply by default. Week-by-week plan in §12.7.
-- Because real (likely under-18) students are involved, §8.3 applies: no server transmission of any learner-entered data in v1.
+- Because real (likely under-18) students are involved, §8.3 applies: no server transmission of any learner-entered data in v1. *Decided 2026-09-28 (owner): relaxed for class mode only, which sends a class the least its screen needs and deletes it when the class ends (§8.4).*
 
 ### 12.2 Technology Stack
 
 - **React** for application/UI state; the simulation engine stays a framework-agnostic module (§4.6).
 - Visual rendering: **SVG/CSS**, per §7 — confirmed sufficient at the stated simulation scale (§4.1: "a dozen stations, a few hundred parts in flight").
-- **Hosting: GitHub Pages** on the owner's personal GitHub account, published by GitHub Actions from the default branch after lint, tests, and a type-checked build pass. Free Pages requires the repository to stay public. *Decided 2026-09-28:* no offline/PWA mode; the owner says the classroom's wifi is reliable. Once the page has loaded, the game needs no connection anyway, since every run is computed in the browser and progress is stored on the device (§8).
+- **Hosting: GitHub Pages** on the owner's personal GitHub account, published by GitHub Actions from the default branch after lint, tests, and a type-checked build pass. Free Pages requires the repository to stay public. *Decided 2026-09-28:* no offline/PWA mode; the owner says the classroom's wifi is reliable. Once the page has loaded, the game needs no connection anyway, since every run is computed in the browser and progress is stored on the device (§8). Class mode (§8.4) adds Firebase, on the owner's personal Google account, for the time a class runs; it's the one part of the game that needs a connection throughout.
 
 ### 12.3 First Milestone (MVP Scope)
 
@@ -372,7 +386,7 @@ Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES en
 
 ### 12.4 Student Identification
 
-- Self-entered nickname, local-only — see §8.3.
+- Self-entered nickname, local-only — see §8.3. In a class, the nickname goes to the instructor's screen until the class ends (§8.4).
 
 ### 12.5 Theme Strategy
 

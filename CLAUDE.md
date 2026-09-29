@@ -9,8 +9,9 @@ Personal project. The design spec and source of truth is `docs/TOC-Factory-Game-
 - Level content lives in `src/levels/`. `levels.test.ts` checks every level still teaches its lesson across many seeds, so run the tests after tuning any level.
 - With `saturate` release, keep the first station slower than every non-constraint station, or piles form in front of the wrong stations (see spec §4.7).
 - Free play's line builder (`src/sandbox/`) turns a few settings per station into an engine model; its default line is tested like a level.
+- Class mode (`src/classroom/`, spec §8.4) runs on Firebase, and Firebase's code loads only when a device hosts or joins a class. Outside a class nothing a learner enters leaves the device, and a class receives only what its screen shows. `npm run test:class` tests it against Firebase's emulators (needs firebase-tools and Java). The database rules are `firebase/database.rules.json`; when they change, the owner must paste them into the Firebase console.
 - Style follows the Vite template: no semicolons, single quotes, explicit `.ts`/`.tsx` import extensions.
-- Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages once Pages is turned on for the repository (until then each run ends with a "Not published" warning).
+- Deployment: `.github/workflows/deploy.yml` lints, tests, and builds every push, and publishes the default branch to GitHub Pages once Pages is turned on for the repository (until then each run ends with a "Not published" warning). The build reads the Firebase web settings from the repository variable `FIREBASE_CONFIG`; without it the game builds without class mode.
 
 ## Independence log (every session)
 

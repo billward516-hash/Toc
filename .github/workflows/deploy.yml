@@ -27,7 +27,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # Class mode connects to the Firebase project pasted into the repository's FIREBASE_CONFIG
+      # variable (Settings, Secrets and variables, Actions, Variables). Without it, the game builds
+      # without class mode.
       - run: npm run build
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
       # Publish the default branch once the repository has Pages turned on (Settings, Pages, Source:
       # GitHub Actions). Until then the build still gets checked, and the run says why nothing went out.
       - id: pages

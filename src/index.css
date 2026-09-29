@@ -2419,3 +2419,650 @@ button {
   background: var(--blue-soft);
   border-radius: 14px;
 }
+
+/* Class mode: joining a class from a phone, and hosting one on a TV. */
+
+.class-cards {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 900px) {
+  .class-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .class-cards .form-error {
+    grid-column: 1 / -1;
+  }
+}
+
+.level-card.class-card .level-number,
+.class-icon {
+  color: #fff;
+  background: var(--blue);
+}
+
+.level-card.host-card .level-number {
+  background: var(--green-deep);
+}
+
+.level-card.class-card .level-number svg,
+.class-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.class-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 18px;
+  background: var(--blue-soft);
+  border: 3px solid var(--blue);
+  border-radius: 22px;
+}
+
+.class-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+}
+
+.class-text {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.class-text strong {
+  font-size: 19px;
+}
+
+/* A level the class was sent to, on the student's home screen. */
+.level-card.sent {
+  border-color: var(--blue);
+  box-shadow: 0 5px 0 var(--blue);
+}
+
+.class-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
+.level-state .class-tag svg {
+  width: 16px;
+  height: 16px;
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.join-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.join-form input {
+  min-height: 52px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+}
+
+.join-form .code-input {
+  font-size: 30px;
+  letter-spacing: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.form-error {
+  font-weight: 800;
+  color: var(--red);
+}
+
+/* The instructor's screen, meant to be read across a room. */
+.host-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.host-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: #f1eadc;
+  border-radius: 18px;
+}
+
+.host-tab {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 18px;
+  font-weight: 900;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.host-tab.on {
+  color: #fff;
+  background: var(--ink);
+}
+
+.host-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.join-panel {
+  display: grid;
+  gap: 16px;
+}
+
+/* The QR code beside how to join and the code itself, both big enough to read from the back. */
+.join-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 32px;
+}
+
+.qr {
+  width: clamp(200px, min(30vw, 46vh), 400px);
+  height: auto;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+}
+
+.join-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: clamp(18px, 1.7vw, 28px);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.join-steps h2 {
+  font-size: clamp(24px, 2.6vw, 40px);
+  font-weight: 900;
+}
+
+.big-code {
+  font-size: clamp(52px, min(7.5vw, 12vh), 128px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .join-card {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 20px;
+  }
+}
+
+.roster h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+.roster-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  font-size: 18px;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 999px;
+}
+
+.roster-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  font-size: 19px;
+  font-weight: 800;
+  background: #f7f2e7;
+  border: 2px solid #e3d9c4;
+  border-radius: 999px;
+}
+
+.presence {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: var(--disabled);
+  border-radius: 50%;
+}
+
+.presence.on {
+  background: var(--green);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-btn:hover {
+  color: var(--red);
+  background: #fde8e9;
+}
+
+.board-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.class-board th,
+.class-board td {
+  text-align: center;
+}
+
+.class-board th:first-child,
+.class-board .now-col {
+  text-align: left;
+}
+
+.class-board tbody th {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.class-board tbody th .presence {
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.class-board .now-col {
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.class-board .tier-start {
+  border-left: 2px solid #e3d9c4;
+}
+
+.class-board small svg {
+  width: 13px;
+  height: 13px;
+  vertical-align: -1px;
+}
+
+.level-link {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 6px;
+  font: inherit;
+  font-weight: 900;
+  color: var(--blue);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.level-link.wide {
+  padding: 2px 0;
+  text-align: left;
+}
+
+.cell {
+  min-width: 38px;
+}
+
+.cell.done {
+  color: var(--green-deep);
+  background: #e6f6ee;
+}
+
+.cell.tried {
+  background: #fff1d1;
+}
+
+.cell.here {
+  box-shadow: inset 0 0 0 3px var(--blue);
+}
+
+.cell svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: -3px;
+}
+
+.cell-stars {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.board-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.cell-key {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.cell-key svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cell-key.done {
+  color: var(--green-deep);
+  background: #e6f6ee;
+}
+
+.cell-key.tried {
+  background: #fff1d1;
+}
+
+.cell-key.here {
+  box-shadow: inset 0 0 0 3px var(--blue);
+}
+
+.answers-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.answers-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.level-picker {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 800;
+}
+
+.level-picker select {
+  max-width: 640px;
+  min-height: 50px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+}
+
+.sent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.sent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
+.sent-tag svg {
+  width: 20px;
+  height: 20px;
+}
+
+.answer-counts {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.answer-counts strong {
+  color: var(--ink);
+}
+
+.class-question {
+  font-size: clamp(20px, 1.8vw, 28px);
+  line-height: 1.35;
+}
+
+.tally {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tally li {
+  display: grid;
+  grid-template-columns: minmax(110px, 2fr) 5fr auto;
+  align-items: center;
+  gap: 12px;
+  font-size: clamp(18px, 1.6vw, 24px);
+  font-weight: 800;
+}
+
+.tally-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tally-bar {
+  height: 28px;
+  overflow: hidden;
+  background: #f1eadc;
+  border-radius: 10px;
+}
+
+.tally-bar i {
+  display: block;
+  height: 100%;
+  background: var(--part);
+  border-radius: 10px;
+  transition: width 300ms ease;
+}
+
+.tally li.right .tally-bar i {
+  background: var(--green);
+}
+
+.tally-count {
+  min-width: 2ch;
+  font-size: 1.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.right-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: 14px;
+  color: #fff;
+  background: var(--green-deep);
+  border-radius: 999px;
+}
+
+.right-tag svg {
+  width: 16px;
+  height: 16px;
+}
+
+.class-picks th,
+.class-picks td {
+  text-align: left;
+}
+
+.class-picks td.ok {
+  font-weight: 800;
+  color: var(--green-deep);
+}
+
+.class-picks td.miss {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.class-picks svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
+}
+
+.class-plans .ran .names {
+  max-width: 260px;
+  white-space: normal;
+}
+
+.replay {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.replay-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.replay-title {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.replay-title h2 {
+  font-size: clamp(22px, 2.4vw, 32px);
+  font-weight: 900;
+}
+
+.class-gone {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.class-gone h1 {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+@media (min-width: 1400px) {
+  .host .data-table {
+    font-size: 19px;
+  }
+
+  .host .data-table thead th {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tally-bar i {
+    transition: none;
+  }
+}
