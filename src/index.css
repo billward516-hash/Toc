@@ -3066,3 +3066,669 @@ button {
     transition: none;
   }
 }
+
+/* The course guides: the learner's Course guide and the trainer's guide. */
+
+.guide-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.guide-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guide-tabs {
+  flex-wrap: wrap;
+}
+
+.guide-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-weight: 700;
+  color: var(--amber-ink);
+  background: #fff1d1;
+  border-radius: 14px;
+}
+
+.guide-warning svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+
+.guide-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* Guide pages read in columns on a wide screen, and one after another on a narrow one. */
+.guide-columns {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .guide-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.guide-card h2 {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.guide-card h3,
+.session h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.guide-card p,
+.session-summary {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.plain-list.numbered {
+  list-style: decimal;
+}
+
+.plain-list li::marker {
+  color: var(--blue);
+  font-weight: 900;
+}
+
+/* The learner's course map. */
+.course-tiers {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1000px) {
+  .course-tiers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.course-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.course-tier header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.course-tier h2 {
+  flex: 1;
+  min-width: 180px;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.tier-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.tier-progress svg {
+  width: 16px;
+  height: 16px;
+}
+
+.objectives-title {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.course-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.course-levels li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 10px;
+  background: #f7f2e7;
+  border-radius: 14px;
+}
+
+.course-levels li.completed {
+  background: #e6f6ee;
+}
+
+.level-num {
+  flex: none;
+  min-width: 40px;
+  padding: 2px 8px;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+  background: var(--amber);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+}
+
+.course-levels .level-name {
+  flex: 1;
+  min-width: 160px;
+  font-weight: 800;
+}
+
+.course-levels .stars svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Principles found and still to find. */
+.principles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.principles li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+}
+
+.principles li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.principles li svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+}
+
+.principles strong {
+  font-size: 18px;
+}
+
+.principles small {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.principles li.found {
+  background: #e6f6ee;
+}
+
+.principles li.found svg {
+  color: var(--green-deep);
+}
+
+.principles li.ahead {
+  color: var(--muted);
+  background: #f7f2e7;
+}
+
+/* Key terms. */
+.terms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.terms dt {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.terms dd {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.guide-card.ahead h2 {
+  color: var(--muted);
+}
+
+.guide-card.ahead .terms {
+  opacity: 0.8;
+}
+
+.later-tag {
+  margin-left: 8px;
+  padding: 2px 9px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  background: #f1eadc;
+  border-radius: 999px;
+}
+
+/* The learner's notes. */
+.notes-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 3px dashed #e3d9c4;
+}
+
+.note label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.note label .tier-chip {
+  align-self: flex-start;
+}
+
+.prompt-line {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.note textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  resize: vertical;
+}
+
+.print-only {
+  display: none;
+}
+
+/* The trainer's steps: what to say, ask, do, and look for, each labeled in words as well as color. */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+.step-kind {
+  justify-self: start;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-radius: 999px;
+}
+
+.step.say .step-kind {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.step.ask .step-kind {
+  color: var(--amber-ink);
+  background: #fff1d1;
+}
+
+.step.do .step-kind {
+  color: var(--green-deep);
+  background: #e6f6ee;
+}
+
+.step.look .step-kind {
+  color: #5b3fc4;
+  background: #f0ebff;
+}
+
+.step.tip .step-kind {
+  color: var(--muted);
+  background: #f1eadc;
+}
+
+.step-body p {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.step.say .step-body p:first-child {
+  font-style: italic;
+  font-weight: 700;
+}
+
+.guide-card .step-body p,
+.session .step-body p {
+  font-size: 17px;
+}
+
+.step-note {
+  margin-top: 2px;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--muted);
+}
+
+/* Sessions in the trainer's guide. */
+.session-list .level-state {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.session-list .level-state small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.session-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.session-steps {
+  display: flex;
+  gap: 8px;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.session-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.session-head h2 {
+  flex: 1;
+  min-width: 220px;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 900;
+}
+
+.session-length {
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.session-columns {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1000px) {
+  .session-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.segment {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.segment h4 {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.segment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.segment-head h3 {
+  flex: 1;
+  min-width: 180px;
+  font-size: 21px;
+}
+
+.segment-time {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.segment.play {
+  border-left-width: 10px;
+  border-left-color: var(--blue);
+}
+
+.principles-line {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--muted);
+}
+
+.idea {
+  padding: 10px 14px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+  background: var(--blue-soft);
+  border-radius: 14px;
+}
+
+.answer-box {
+  padding: 10px 14px;
+  background: #e6f6ee;
+  border-radius: 14px;
+}
+
+.answer-box h4 {
+  margin: 0 0 4px;
+  color: var(--green-deep);
+}
+
+.watch-list {
+  margin-top: 4px;
+}
+
+.answer-line {
+  display: block;
+}
+
+.answer-table th,
+.answer-table td {
+  text-align: left;
+  vertical-align: top;
+}
+
+.answer-table td:last-child {
+  color: var(--muted);
+}
+
+.formats th,
+.formats td,
+.run-of-show th,
+.run-of-show td {
+  text-align: left;
+  vertical-align: top;
+}
+
+.formats td:first-of-type {
+  white-space: nowrap;
+}
+
+.run-of-show small {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.whole-session {
+  padding-top: 16px;
+  border-top: 4px solid var(--ink);
+}
+
+/* On paper: the page itself, without buttons or tabs, and each session on a new sheet. */
+@media print {
+  :root {
+    --paper: #fff;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .print-hide,
+  .header-buttons,
+  .guide-tabs,
+  .guide-bar,
+  .session-nav,
+  .guide-warning,
+  .btn,
+  .overlay {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .screen {
+    max-width: none;
+    padding: 0;
+  }
+
+  .card {
+    box-shadow: none;
+    border-width: 2px;
+    break-inside: avoid-page;
+  }
+
+  .segment.play,
+  .whole-session {
+    break-before: page;
+  }
+
+  .note-print {
+    min-height: 5em;
+    white-space: pre-wrap;
+    border-bottom: 1px solid #999;
+  }
+
+  .guide-columns,
+  .session-columns,
+  .course-tiers {
+    display: block;
+  }
+
+  .guide-columns > *,
+  .session-columns > *,
+  .course-tiers > * {
+    margin-bottom: 12px;
+  }
+
+  .step {
+    break-inside: avoid;
+  }
+}

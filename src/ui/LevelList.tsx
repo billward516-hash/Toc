@@ -21,13 +21,15 @@ interface LevelListProps {
   onPreferences: (preferences: Preferences) => void
   onOpen: (level: Level) => void
   onFreePlay: () => void
+  // Opens the course guide for learners, or the trainer's guide.
+  onGuide: (guide: 'course' | 'trainer') => void
 }
 
 // Explanations can be folded away once the player has finished the core lessons (spec §6).
 const CORE_DONE = 'tier3-read'
 
 export function LevelList(props: LevelListProps) {
-  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay } = props
+  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay, onGuide } = props
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -42,6 +44,14 @@ export function LevelList(props: LevelListProps) {
           forecasts that are always wrong.
         </p>
       </header>
+      <nav className="guide-links" aria-label="Guides">
+        <button className="btn small" onClick={() => onGuide('course')}>
+          <Icon name="book" /> Course guide
+        </button>
+        <button className="btn small" onClick={() => onGuide('trainer')}>
+          <Icon name="clipboard" /> Trainer guide
+        </button>
+      </nav>
       {player}
       {classCards}
       <ProgressMap levels={levels} tierNames={tierNames} completed={completed} stars={stars} />

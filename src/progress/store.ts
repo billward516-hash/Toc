@@ -152,6 +152,23 @@ export function saveSandbox(learnerId: string, setup: unknown, storage: KeyValue
   write(storage, `${PREFIX}:sandbox:${learnerId}`, setup)
 }
 
+// A player's own notes for the course, one per tier, kept on the device and never sent anywhere.
+export type Notes = Record<string, string>
+
+export function loadNotes(learnerId: string, storage: KeyValue | null = browserStorage()): Notes {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(`${PREFIX}:notes:${learnerId}`) ?? '{}')
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  } catch {
+    return {}
+  }
+}
+
+export function saveNotes(learnerId: string, notes: Notes, storage: KeyValue | null = browserStorage()) {
+  write(storage, `${PREFIX}:notes:${learnerId}`, notes)
+}
+
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {
   return new Set(events.filter((e) => e.type === 'completed').map((e) => e.levelId))
 }

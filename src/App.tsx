@@ -13,9 +13,11 @@ import {
   completedLevels,
   devicePlayers,
   loadOrCreateLearner,
+  loadNotes,
   loadPreferences,
   loadSandbox,
   localProgressStore,
+  saveNotes,
   savePreferences,
   saveSandbox,
   type Preferences,
@@ -28,8 +30,10 @@ import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
 import { PlayerBar } from './ui/PlayerBar.tsx'
 
-// The instructor's screen loads only on a device that hosts a class.
+// The instructor's screen loads only on a device that hosts a class, and the guides only when opened.
 const HostClass = lazy(() => import('./ui/HostClass.tsx').then((module) => ({ default: module.HostClass })))
+const CourseGuide = lazy(() => import('./ui/CourseGuide.tsx').then((module) => ({ default: module.CourseGuide })))
+const TrainerGuide = lazy(() => import('./ui/TrainerGuide.tsx').then((module) => ({ default: module.TrainerGuide })))
 
 export default function App() {
   const [learner, setLearner] = useState(() => loadOrCreateLearner())
@@ -38,6 +42,8 @@ export default function App() {
   const [loaded, setLoaded] = useState<StoredEvent[]>([])
   const [open, setOpen] = useState<Level | null>(null)
   const [free, setFree] = useState(false)
+  // The course guide for learners, or the trainer's guide, when one is open.
+  const [guide, setGuide] = useState<'course' | 'trainer' | null>(null)
   // Settings changed this session, by player, over what's stored on the device.
   const [changed, setChanged] = useState<ReadonlyMap<string, Preferences>>(new Map())
   const preferences = useMemo(() => changed.get(learner.id) ?? loadPreferences(learner.id), [changed, learner.id])
@@ -59,7 +65,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [open, free, hostView])
+  }, [open, free, hostView, guide])
 
   // The class code has done its job once read; a reload shouldn't ask to join again.
   useEffect(() => {
@@ -129,6 +135,35 @@ export default function App() {
         <HostClass code={hosting} levels={levels} tierNames={tierNames} onBack={() => setHostView(false)} onClosed={stopHosting} />
       </Suspense>
     )
+  } else if (guide) {
+    screen = (
+      <Suspense
+        fallback={
+          <div className="screen guide">
+            <p className="hint">Opening the guide…</p>
+          </div>
+        }
+      >
+        {guide === 'trainer' ? (
+          <TrainerGuide onExit={() => setGuide(null)} />
+        ) : (
+          <CourseGuide
+            key={learner.id}
+            levels={levels}
+            tierNames={tierNames}
+            completed={completed}
+            stars={stars}
+            initialNotes={loadNotes(learner.id)}
+            onSaveNotes={(notes) => saveNotes(learner.id, notes)}
+            onOpen={(level) => {
+              setGuide(null)
+              setOpen(level)
+            }}
+            onExit={() => setGuide(null)}
+          />
+        )}
+      </Suspense>
+    )
   } else if (free) {
     screen = (
       <FreePlay
@@ -179,6 +214,7 @@ export default function App() {
         onPreferences={setPreferences}
         onOpen={setOpen}
         onFreePlay={() => setFree(true)}
+        onGuide={setGuide}
       />
     )
   }

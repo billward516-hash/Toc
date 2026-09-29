@@ -323,6 +323,25 @@ The owner asked for a class key like the party games a group plays on a TV from 
 - **Service.** Firebase Realtime Database with anonymous sign-in, on a project in the owner's personal Google account (the free Spark plan: up to 100 connections at once, no card). The project's web settings go in the repository variable `FIREBASE_CONFIG`, which the build reads; they aren't secret, but keeping them out of the repository keeps secret scanners from flagging them. Without the variable the game builds without class mode. The database's rules are in `firebase/database.rules.json`, pasted into the Firebase console whenever they change. Firebase's code and the class screen load only on devices that join or host a class, so the game itself grew by about 14 KB.
 - **Tests.** `npm run test:class` runs the class code against Firebase's emulators, rules and all: joining, results arriving once however often they're sent, students unable to read or change each other's entries or the class, removal, leaving, clearing away old classes, and ending. A whole class was also played in a browser against the emulators, a TV and two phones: joining by QR code and by typing, answers and plans arriving, the class sent to a level, a plan played on the big screen, reloads on both sides, a mistyped code, removal, leaving, and ending.
 
+### 8.5 Course Guides and the Trainer's Script (added 2026-09-29, owner's request)
+
+The owner asked for "a user and trainer module including script for instructing the course", so the game can be taught as a class with class mode (§8.4). Two guides open from buttons under the home screen's heading. Both work outside a class, need no sign-in, and print cleanly.
+
+- **Course guide (for learners).** Five tabs:
+  - **Get started:** how a level works, reading the factory, goals and stars, and what stays on the device.
+  - **Course map:** each tier's objectives, its levels with their stars, and Play or Replay on each, with a locked level shown as locked.
+  - **Principles:** every principle the course teaches. The wording of ones not yet found is held back, so finding them is still a discovery; a locked one says only which level to look in.
+  - **Key terms:** about fifty terms, grouped by the tier that introduces them and dimmed until the learner reaches that tier.
+  - **My notes:** a box for each tier, under that tier's reflection question. Notes stay on the device (`toc-factory:notes:<learnerId>`) and are never sent anywhere, a class included; they print.
+- **Trainer guide (for instructors).** Four tabs:
+  - **Start here:** what the course is, what to do before the first class, running a class on the class screen, how each level runs, facilitation tips, what to do when something goes wrong, and closing the course. It lists the ways to run it, with lengths worked out from the script: a taster of about an hour, Foundations (Tiers 0 to 3) in under four hours, Foundations plus one branch, and the full course of about 13 hours.
+  - **Sessions:** one page per tier (11 in all), with previous and next.
+  - **Answer key:** every level's right answer or best plan.
+  - **Whole script:** print all of it, save it as a text file, or copy it.
+- **The script.** One session per tier, covering all 42 levels, running from 47 to 107 minutes of core time (Tier 2 has an optional 12-minute dice-line demo with volunteers). A session gives what it teaches, what to prepare, and a run-of-show table with clock times, then its segments: an opening talk, one segment per level, and a close. A level's segment gives the key idea, the setup to say, what to watch, the mistakes to expect, the debrief, and the answer. Every step is marked **Say** (read out), **Ask**, **Do**, **Look for**, or **Tip**, with a note on what to listen for. Each session also says how to shorten it and how to extend it. The steps that repeat for every level (send the class to the level, let them play for so many minutes while watching Progress, read the tally or the plans table, show the right answer) are added the same way each time, in the class screen's own words and level numbers (0.1, 3.2).
+- **Numbers come from the game.** The script is data in `src/course/`, not prose typed into a screen. Its numbers are placeholders (`{baseline}`, `{shipped}`, `{lead}`, `{wip}`, …) filled from the engine when shown, so retuning a level changes the script instead of leaving a stale figure. Tests (`src/course/course.test.ts`) check that every level is played exactly once and in order; that no placeholder is left unfilled; that each planning level's stated answer is a plan the level accepts, stays within budget, and earns full stars over several fresh days; that each session closes with the reflection question and the next step the learner guide gives for that tier; and that session and course lengths add up.
+- **Who can see it.** The trainer guide has the answers, so it carries a warning to keep it on the instructor's own device or on paper, not on the class screen. But the guides are part of the game, so they are as public as the game and its repository: this keeps the answers out of the way, not secret. See §11, item 7.
+
 ---
 
 ## 9. Explicit Architectural Seams (Build Now vs. Support Later)
@@ -359,6 +378,7 @@ The following were raised during scoping but do not yet have a final decision an
 4. Whether the capstone/sandbox mode ships in v1 or is deferred entirely to v1.5. *Decided: an ungraded free play mode ships in v1 (§4.7).*
 5. Specific downtime/failure parameters (MTBF/MTTR ranges) per tier. *Set for Tier 3 (jams) and Tiers 7 and 10 (long breakdowns, a power cut) in §4.7.*
 6. Prices, budgets, and floor-space limits for Tier 5–6 equipment (§3.4). *Prices and budgets are set for Tier 5 (§4.7); floor space isn't built, and Tier 6's levels buy no equipment.*
+7. Whether the trainer's script and answer key should sit behind a login or licence. *Undecided. They ship inside the game (§8.5), so anyone who opens the game or the repository can read them. That is fine for teaching your own classes. If the owner later sells or licenses the training, the script would have to move to a private copy or behind a sign-in step, which isn't built.*
 
 Items 2, 3, 5, and 6 are intentionally left for empirical tuning once the DES engine exists to tune against, rather than upfront guesses — they're playtesting outputs, not scoping inputs. Item 4 was deferred past the MVP milestone (§12.3); free play came after Tier 10.
 

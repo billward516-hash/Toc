@@ -228,6 +228,20 @@ const icons = {
       <path d="M9 20h6M12 16.5V20" />
     </>
   ),
+  // An open book, for the course guide.
+  book: (
+    <>
+      <path d="M12 6.5C10.6 5 8.4 4.5 4.5 4.5v13c3.9 0 6.1.5 7.5 2 1.4-1.5 3.6-2 7.5-2v-13c-3.9 0-6.1.5-7.5 2z" />
+      <path d="M12 6.5v13" />
+    </>
+  ),
+  // A clipboard with lines on it, for the trainer's guide.
+  clipboard: (
+    <>
+      <rect x={5.5} y={5} width={13} height={16} rx={2.2} />
+      <path d="M9 5V4.2C9 3.5 9.5 3 10.2 3h3.6c.7 0 1.2.5 1.2 1.2V5M9 11h6M9 15h4" />
+    </>
+  ),
   eye: (
     <>
       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />

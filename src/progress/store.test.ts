@@ -6,9 +6,11 @@ import {
   completedLevels,
   devicePlayers,
   loadOrCreateLearner,
+  loadNotes,
   loadPreferences,
   loadSandbox,
   localProgressStore,
+  saveNotes,
   savePreferences,
   saveSandbox,
   type KeyValue,
@@ -156,5 +158,25 @@ describe('free play', () => {
     expect(loadSandbox('alex', storage)).toBeNull()
     storage.data.set('toc-factory:sandbox:alex', '{oops')
     expect(loadSandbox('alex', storage)).toBeNull()
+  })
+})
+
+describe('notes', () => {
+  it("keeps each player's notes, and starts from none", () => {
+    const storage = memory()
+    expect(loadNotes('sam', storage)).toEqual({})
+    saveNotes('sam', { '0': 'The espresso machine.', '3': '' }, storage)
+    expect(loadNotes('sam', storage)).toEqual({ '0': 'The espresso machine.', '3': '' })
+    expect(loadNotes('alex', storage)).toEqual({})
+  })
+
+  it('reads damaged or odd notes as none, and keeps only text', () => {
+    const storage = memory()
+    storage.data.set('toc-factory:notes:sam', '{oops')
+    expect(loadNotes('sam', storage)).toEqual({})
+    storage.data.set('toc-factory:notes:sam', '["a"]')
+    expect(loadNotes('sam', storage)).toEqual({})
+    storage.data.set('toc-factory:notes:sam', JSON.stringify({ '0': 'kept', '1': 7, '2': null }))
+    expect(loadNotes('sam', storage)).toEqual({ '0': 'kept' })
   })
 })
