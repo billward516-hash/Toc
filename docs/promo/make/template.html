@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --ink:#1f2544; --paper:#fff7e6; --blue:#3f63f5; --green:#22b573; --green-deep:#13804f; --amber:#ffb020; --red:#e5383f; --muted:#62688a; --part:#5b8cff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); }
+  body { width: 800px; height: 450px; overflow: hidden; position: relative; font-family: "DejaVu Sans", Verdana, sans-serif; color: var(--ink); }
+  #app { position: absolute; inset: 0; }
+  .red { color: var(--red); } .green { color: var(--green-deep); } .blue { color: var(--blue); } .cyan { color: #0a7fa0; }
+
+  /* the caption over the game */
+  .caption { position: absolute; left: 28px; right: 28px; top: 10px; height: 74px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+  .caption .big { font-weight: 800; font-size: 34px; line-height: 1.08; letter-spacing: -0.4px; white-space: nowrap; }
+  .caption .sub { font-weight: 700; font-size: 19px; color: var(--muted); white-space: nowrap; }
+
+  .floor { position: absolute; left: 28px; top: 88px; width: 744px; height: 346px; }
+  .floor img { width: 744px; height: 346px; display: block; }
+  .wash { position: absolute; left: 28px; top: 88px; width: 744px; height: 346px; background: rgba(255,247,230,.72); }
+
+  .ring { position: absolute; border: 4px solid var(--red); border-radius: 14px; }
+  .ring.good { border-color: var(--green); }
+  .ring.pulse { box-shadow: 0 0 0 7px rgba(229,56,63,.30); }
+  .ring.good.pulse { box-shadow: 0 0 0 7px rgba(34,181,115,.32); }
+  .tag { position: absolute; transform: translateX(-50%); color: #fff; background: var(--red); font-weight: 800; font-size: 17px; line-height: 1; padding: 5px 11px 6px; border-radius: 999px; white-space: nowrap; border: 2px solid var(--ink); }
+  .tag.good { background: var(--green-deep); }
+
+  .chip { position: absolute; background: #fff; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); text-align: center; padding: 6px 0 5px; }
+  .chip small { display: block; font-weight: 800; font-size: 10.5px; letter-spacing: .08em; color: var(--muted); }
+  .chip b { display: block; font-size: 34px; line-height: 1.05; }
+  .chip i { display: block; font-style: normal; font-weight: 700; font-size: 12px; color: var(--muted); }
+
+  /* the result card, in the game's own style */
+  .card { position: absolute; left: 150px; top: 104px; width: 500px; background: #fff; border: 4px solid var(--ink); border-radius: 26px; padding: 18px 22px 16px; box-shadow: 0 8px 0 rgba(31,37,68,.28); }
+  .badge { display: inline-block; font-weight: 800; font-size: 15px; letter-spacing: .07em; padding: 5px 13px 6px; border-radius: 999px; border: 3px solid var(--ink); background: var(--amber); color: var(--ink); }
+  .badge.ok { background: var(--green-deep); color: #fff; }
+  .card h2 { margin: 9px 0 11px; font-size: 27px; line-height: 1.1; letter-spacing: -.3px; white-space: nowrap; }
+  .stats { display: flex; gap: 10px; }
+  .stat { flex: 1; text-align: center; border: 3px solid var(--ink); border-radius: 15px; background: #f6f1e6; padding: 6px 0 5px; }
+  .stat.first { background: #e7f6ee; }
+  .stat em { display: block; font-style: normal; font-weight: 800; font-size: 14px; color: var(--muted); }
+  .stat b { display: block; font-size: 38px; line-height: 1.12; }
+  .star { margin-top: 8px; height: 34px; }
+
+  .title-card .t { position: absolute; left: 28px; font-weight: 800; letter-spacing: -.8px; white-space: nowrap; line-height: 1.05; }
+  .title-card .t1 { top: 26px; font-size: 44px; }
+  .title-card .t2 { top: 80px; font-size: 44px; }
+  .pile { position: absolute; left: 28px; top: 158px; width: 744px; height: 172px; border: 4px dashed #e3d8bd; border-radius: 22px; background: #faf5ea; padding: 14px 18px; display: grid; grid-template-columns: repeat(16, 38px); grid-auto-rows: 38px; gap: 6px 7px; align-content: center; justify-content: center; }
+  .part { background: var(--part); border: 3px solid var(--ink); border-radius: 10px; }
+  .brand { position: absolute; left: 28px; bottom: 26px; display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 25px; }
+  .brand img { width: 52px; height: 52px; border-radius: 13px; }
+  .brand span { color: var(--muted); font-weight: 700; }
+
+  .end { position: absolute; inset: 0; text-align: center; }
+  .end img { position: absolute; left: 325px; top: 38px; width: 150px; height: 150px; border-radius: 34px; box-shadow: 0 8px 0 rgba(31,37,68,.25); }
+  .end .name { position: absolute; left: 0; right: 0; top: 204px; font-weight: 800; font-size: 54px; letter-spacing: -1px; }
+  .end .line { position: absolute; left: 0; right: 0; top: 272px; font-weight: 800; font-size: 26px; }
+  .end .small { position: absolute; left: 0; right: 0; top: 312px; font-weight: 700; font-size: 19px; color: var(--muted); }
+  .end .pill { position: absolute; left: 50%; top: 356px; transform: translateX(-50%); white-space: nowrap; background: var(--blue); color: #fff; font-weight: 800; font-size: 24px; padding: 11px 28px 13px; border-radius: 999px; border: 3px solid var(--ink); box-shadow: 0 5px 0 var(--ink); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+  // Where things sit on the captured game (CSS pixels of the capture), and how it is scaled into the frame.
+  const S = 744 / 1148, FX = 28, FY = 88
+  const Q = { x: 598.6, y: 139.8, w: 149.5, h: 122.1 }   // the pile in front of Assemble
+  const STAR = '<svg class="star" viewBox="0 0 24 24" width="34" height="34"><path d="M12 2.6l2.9 6.1 6.7.9-4.9 4.7 1.2 6.7L12 17.7l-5.9 3.3 1.2-6.7L2.4 9.6l6.7-.9z" fill="FILL" stroke="STROKE" stroke-width="1.7" stroke-linejoin="round"/></svg>'
+  const clockText = (m) => `${Math.floor(m / 60)}:${String(Math.round(m % 60)).padStart(2, '0')}`
+
+  function fit() {
+    for (const el of document.querySelectorAll('[data-fit]')) {
+      let size = parseFloat(getComputedStyle(el).fontSize)
+      const max = Number(el.dataset.fit)
+      while (el.scrollWidth > max && size > 12) { size -= 1; el.style.fontSize = size + 'px' }
+    }
+  }
+
+  function caption(c) {
+    return `<div class="caption"><div class="big" data-fit="744">${c.big}</div>${c.sub ? `<div class="sub" data-fit="744">${c.sub}</div>` : ''}</div>`
+  }
+
+  function overlays(d) {
+    let html = ''
+    if (d.ring) {
+      const x = FX + (Q.x - 6) * S, y = FY + (Q.y - 6) * S, w = (Q.w + 12) * S, h = (Q.h + 12) * S
+      html += `<div class="ring ${d.ring.tone}${d.ring.pulse ? ' pulse' : ''}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"></div>`
+      html += `<div class="tag ${d.ring.tone}" style="left:${x + w / 2}px;top:${y - 29}px">${d.ring.label}</div>`
+    }
+    if (d.minute !== undefined) {
+      html += `<div class="chip" style="left:654px;top:184px;width:104px"><small>SHIFT CLOCK</small><b>${clockText(d.minute)}</b><i>of 8:00</i></div>`
+    }
+    return html
+  }
+
+  window.render = async (d) => {
+    const app = document.getElementById('app')
+    if (d.kind === 'title') {
+      const parts = Array.from({ length: 48 }, () => '<div class="part"></div>').join('')
+      app.innerHTML = `<div class="title-card">
+        <div class="t t1" data-fit="744">Speed up the wrong machine…</div>
+        <div class="t t2" data-fit="744">…and <span class="red">nothing changes.</span></div>
+        <div class="pile">${parts}</div>
+        <div class="brand"><img src="assets/icon.png"><div>TOC Factory <span>· a free factory game</span></div></div></div>`
+    } else if (d.kind === 'floor') {
+      app.innerHTML = `${caption(d.caption)}<div class="floor"><img src="${d.src}"></div>${overlays(d)}`
+    } else if (d.kind === 'reveal') {
+      const c = d.card
+      const star = STAR.replace('FILL', c.ok ? '#ffb020' : 'none').replace('STROKE', c.ok ? '#1f2544' : '#ecd49a')
+      app.innerHTML = `${caption(d.caption)}<div class="floor"><img src="${d.src}"></div><div class="wash"></div>
+        <div class="card"><span class="badge ${c.ok ? 'ok' : ''}">${c.badge}</span><h2 data-fit="450">${c.title}</h2>
+        <div class="stats">${c.stats.map(([k, v], i) => `<div class="stat ${i === 0 ? 'first' : ''}"><em>${k}</em><b>${v}</b></div>`).join('')}</div>${star}</div>`
+    } else if (d.kind === 'end') {
+      app.innerHTML = `<div class="end"><img src="assets/icon.png"><div class="name">TOC Factory</div>
+        <div class="line">Find the one step holding everything back.</div>
+        <div class="small">A free Theory of Constraints game</div>
+        <div class="pill">Play free in your browser</div></div>`
+    }
+    await Promise.all([...app.querySelectorAll('img')].map((i) => i.decode().catch(() => {})))
+    fit()
+  }
+</script>
+</body>
+</html>
