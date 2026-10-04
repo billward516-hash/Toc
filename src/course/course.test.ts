@@ -8,6 +8,7 @@ import type { Level } from '../levels/types.ts'
 import { answerLines } from './answers.ts'
 import { levelFiller } from './facts.ts'
 import { glossary } from './glossary.ts'
+import { gettingStarted } from './learner.ts'
 import { scriptMarkdown } from './markdown.ts'
 import { levelNumber } from './numbering.ts'
 import { branches, formats, overview } from './overview.ts'
@@ -98,6 +99,8 @@ describe('the script quotes the game, not a memory of it', () => {
       section.blocks.flatMap((block) => (block.kind === 'p' ? [block.text] : block.kind === 'list' ? block.items : stepText(block.steps))),
     )
     for (const text of words) expect(fillCourse(text), text).not.toMatch(/[{}]/)
+    const learnerWords = gettingStarted.flatMap((section) => section.blocks.flatMap((block) => (block.kind === 'p' ? [block.text] : block.kind === 'list' ? block.items : stepText(block.steps))))
+    for (const text of learnerWords) expect(fillCourse(text), text).not.toMatch(/[{}]/)
     expect(courseNumbers().levels).toBe(String(levels.length))
   })
 

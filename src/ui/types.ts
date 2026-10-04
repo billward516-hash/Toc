@@ -1,6 +1,9 @@
 import type { Goal, Level } from '../levels/types.ts'
 import type { Preferences, ProgressEvent, StoredEvent } from '../progress/store.ts'
 
+// The pages opened from the buttons under the home screen's heading.
+export type Guide = 'course' | 'trainer' | 'exam'
+
 export interface LevelFlowProps<K extends Goal['kind']> {
   level: Level
   goal: Extract<Goal, { kind: K }>

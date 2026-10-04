@@ -29,11 +29,14 @@ import { FreePlay } from './ui/FreePlay.tsx'
 import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
 import { PlayerBar } from './ui/PlayerBar.tsx'
+import type { Guide } from './ui/types.ts'
 
-// The instructor's screen loads only on a device that hosts a class, and the guides only when opened.
+// The instructor's screen loads only on a device that hosts a class, and the guides and the exam (with
+// its bank of questions) only when opened.
 const HostClass = lazy(() => import('./ui/HostClass.tsx').then((module) => ({ default: module.HostClass })))
 const CourseGuide = lazy(() => import('./ui/CourseGuide.tsx').then((module) => ({ default: module.CourseGuide })))
 const TrainerGuide = lazy(() => import('./ui/TrainerGuide.tsx').then((module) => ({ default: module.TrainerGuide })))
+const Exam = lazy(() => import('./ui/Exam.tsx').then((module) => ({ default: module.Exam })))
 
 export default function App() {
   const [learner, setLearner] = useState(() => loadOrCreateLearner())
@@ -42,8 +45,8 @@ export default function App() {
   const [loaded, setLoaded] = useState<StoredEvent[]>([])
   const [open, setOpen] = useState<Level | null>(null)
   const [free, setFree] = useState(false)
-  // The course guide for learners, or the trainer's guide, when one is open.
-  const [guide, setGuide] = useState<'course' | 'trainer' | null>(null)
+  // The course guide for learners, the trainer's guide, or the exam, when one is open.
+  const [guide, setGuide] = useState<Guide | null>(null)
   // Settings changed this session, by player, over what's stored on the device.
   const [changed, setChanged] = useState<ReadonlyMap<string, Preferences>>(new Map())
   const preferences = useMemo(() => changed.get(learner.id) ?? loadPreferences(learner.id), [changed, learner.id])
@@ -146,6 +149,8 @@ export default function App() {
       >
         {guide === 'trainer' ? (
           <TrainerGuide onExit={() => setGuide(null)} />
+        ) : guide === 'exam' ? (
+          <Exam key={learner.id} learnerId={learner.id} onExit={() => setGuide(null)} onStudy={() => setGuide('course')} />
         ) : (
           <CourseGuide
             key={learner.id}

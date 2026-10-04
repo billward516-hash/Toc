@@ -1,0 +1,90 @@
+import { choice, forTier, truth } from './make.ts'
+
+// Tier 7, When things break: breakdowns, late material, and bad parts.
+export const tier7 = forTier(7, [
+  choice(
+    '7-1',
+    'tier7-constraint-down',
+    "The constraint breaks down for 30 minutes, with a big buffer of parts waiting in front of it. What does the buffer do for the factory's output during the breakdown?",
+    'Nothing: while the constraint is stopped, the factory loses that time for good',
+    [
+      'It keeps output going, because the parts in it are still being worked on',
+      'It makes up the lost time as soon as the constraint restarts, by letting it run faster',
+      'It lets the stations after the constraint keep shipping at full speed all through the stop',
+    ],
+    'The buffer protects the constraint from stops upstream. It cannot replace time the constraint itself is down, and no other station can make that time up, because the constraint sets the pace for everything.',
+  ),
+  choice(
+    '7-2',
+    'tier7-constraint-down',
+    'Every station except the constraint has spare time to catch up, and a healthy buffer sits in front of the constraint. Each of these stops lasts 20 minutes. Which one costs the factory output?',
+    'The constraint stops',
+    ['A station before the constraint stops', 'A station after the constraint stops', 'None of them, because every stop is made up later'],
+    'Only time lost at the constraint costs output. The buffer covers a stop before it, and a station after it catches up using its spare time. Time lost at the constraint is lost for good.',
+  ),
+  choice(
+    '7-3',
+    'tier7-repair-order',
+    'Two machines break at once and there is one repair crew. Machine P feeds the constraint, and the pile of parts in front of the constraint is already empty. Machine Q is after the constraint and has plenty of spare time. Which should be fixed first?',
+    'Machine P, because it would starve the constraint',
+    ['Machine Q, because it is closer to shipping and so matters most to customers', 'Whichever machine broke down first, because it has waited longest', 'Whichever one is quicker to repair, wherever it is'],
+    'Fix first the one that would starve the constraint. Machine Q has spare time to catch up later, so waiting for it costs nothing.',
+  ),
+  choice(
+    '7-4',
+    'tier7-late-truck',
+    "A bakery's flour delivery is sometimes late by up to 3 hours. The constraint uses 20 kg of flour an hour. About how much flour should be kept on hand to ride out the longest usual delay?",
+    'About 60 kg',
+    ['About 20 kg', 'About 120 kg', 'About 160 kg'],
+    'A late delivery stops the line like a breakdown. Covering a 3-hour delay takes 3 × 20 = 60 kg. 20 kg lasts only one hour, and 120 kg or 160 kg is more than any usual delay needs, so it is money sitting still.',
+  ),
+  choice(
+    '7-5',
+    'tier7-where-scrap-hurts',
+    'Why is scrap found after the constraint more costly than scrap found before it?',
+    "The constraint's limited time was already spent on the part, and cannot be won back",
+    [
+      'Defects found late are harder to trace back to their cause',
+      'Parts that reach the end of the line were made from more expensive materials',
+      'Stations after the constraint work more slowly than the ones before it',
+    ],
+    "Time at the constraint is the factory's scarcest time. A part scrapped after it has already used some, so that time is wasted for the whole factory. A part scrapped before it only costs the spare time of an earlier station.",
+  ),
+  choice(
+    '7-6',
+    'tier7-catch-it-early',
+    'To keep the constraint from spending its limited time on bad parts, where is the best place to inspect them?',
+    'Just before the constraint, so that bad parts never reach it and waste its time',
+    ['At the very end of the line, just before shipping', 'Right after the constraint, so its work is checked while fresh', 'At the constraint itself, while it works on each part'],
+    "Checking before the constraint keeps it from spending its limited time on parts that will be thrown away. Checking at the end, or after the constraint, finds the problem once the constraint's time is already gone.",
+  ),
+  choice(
+    '7-7',
+    'tier7-bad-day',
+    'On a bad day there is money for only one fix. Which one should it be?',
+    'The fix that keeps the constraint working',
+    ['The one for the station that looks the busiest, since it must work hardest', 'The cheapest one, because that leaves money for the next bad day', 'The one for the fastest machine, so it can catch up on lost time'],
+    'Only time lost at the constraint costs output, so spend first on what keeps the constraint working. An upgrade anywhere else buys nothing the customer will see.',
+  ),
+  truth(
+    '7-8',
+    'tier7-constraint-down',
+    'Every minute the constraint is down is lost for the whole factory.',
+    true,
+    'The constraint decides how much the factory can ship, and no other station can make up the minutes it loses.',
+  ),
+  truth(
+    '7-9',
+    'tier7-late-truck',
+    'To protect against late deliveries, a factory should keep enough material to cover the average delay.',
+    false,
+    'An average delay is beaten about half the time, and each time the line stops. Keep enough for the longest delay you usually see, and no more, because material on hand is money sitting still.',
+  ),
+  truth(
+    '7-10',
+    'tier7-where-scrap-hurts',
+    "A part scrapped before the constraint wastes as much of the constraint's time as a part scrapped after it.",
+    false,
+    "A part scrapped before the constraint never reaches it, so the constraint's time is not spent on it. Only the materials, and a little spare time at an earlier station, are lost.",
+  ),
+])

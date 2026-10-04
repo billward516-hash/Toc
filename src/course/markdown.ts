@@ -1,4 +1,4 @@
-import { duration, fillCourse, formatMinutes } from './summary.ts'
+import { duration, fillCourse, fillStep, formatMinutes } from './summary.ts'
 import { branches, formats, overview } from './overview.ts'
 import { clockAt, resolvedSession, type ResolvedPlay, type ResolvedSession } from './resolve.ts'
 import { sessions } from './sessions/index.ts'
@@ -80,7 +80,7 @@ export function scriptMarkdown(): string {
     for (const block of section.blocks) {
       if (block.kind === 'p') lines.push(fillCourse(block.text), '')
       else if (block.kind === 'list') lines.push(...block.items.map((item) => `- ${fillCourse(item)}`), '')
-      else lines.push(...block.steps.map(step), '')
+      else lines.push(...block.steps.map((s) => step(fillStep(s))), '')
     }
     if (section.id === 'about') {
       lines.push('**Ways to run it**', '')

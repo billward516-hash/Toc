@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { fillCourse } from '../course/summary.ts'
+import { fillCourse, fillStep } from '../course/summary.ts'
 import type { Block, Step, StepKind } from '../course/types.ts'
 
 const LABEL: Record<StepKind, string> = { say: 'Say', ask: 'Ask', do: 'Do', look: 'Look for', tip: 'Tip' }
@@ -27,7 +27,7 @@ export function Blocks({ blocks }: { blocks: Block[] }) {
     <>
       {blocks.map((block, i) => {
         if (block.kind === 'p') return <p key={i}>{fillCourse(block.text)}</p>
-        if (block.kind === 'steps') return <Steps key={i} steps={block.steps} />
+        if (block.kind === 'steps') return <Steps key={i} steps={block.steps.map(fillStep)} />
         const items = block.items.map((item, k) => <li key={k}>{fillCourse(item)}</li>)
         return block.ordered ? (
           <ol key={i} className="plain-list numbered">

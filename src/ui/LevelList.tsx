@@ -6,6 +6,7 @@ import type { Preferences } from '../progress/store.ts'
 import { FullScreenButton } from './FullScreen.tsx'
 import { Icon } from './icons.tsx'
 import { Stars } from './parts.tsx'
+import type { Guide } from './types.ts'
 
 interface LevelListProps {
   levels: Level[]
@@ -21,8 +22,8 @@ interface LevelListProps {
   onPreferences: (preferences: Preferences) => void
   onOpen: (level: Level) => void
   onFreePlay: () => void
-  // Opens the course guide for learners, or the trainer's guide.
-  onGuide: (guide: 'course' | 'trainer') => void
+  // Opens the course guide for learners, the trainer's guide, or the exam.
+  onGuide: (guide: Guide) => void
 }
 
 // Explanations can be folded away once the player has finished the core lessons (spec §6).
@@ -50,6 +51,9 @@ export function LevelList(props: LevelListProps) {
         </button>
         <button className="btn small" onClick={() => onGuide('trainer')}>
           <Icon name="clipboard" /> Trainer guide
+        </button>
+        <button className="btn small" onClick={() => onGuide('exam')}>
+          <Icon name="award" /> Exam and certificate
         </button>
       </nav>
       {player}

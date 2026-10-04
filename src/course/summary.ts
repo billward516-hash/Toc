@@ -1,7 +1,9 @@
+import { EXAM } from '../exam/config.ts'
+import { correctToPass } from '../exam/rules.ts'
 import { levels } from '../levels/index.ts'
 import type { Level } from '../levels/types.ts'
 import { sessions } from './sessions/index.ts'
-import type { PlaySegment, Segment, Session } from './types.ts'
+import type { PlaySegment, Segment, Session, Step } from './types.ts'
 
 export const isPlay = (segment: Segment): segment is PlaySegment => segment.kind === 'play'
 
@@ -64,6 +66,12 @@ export function courseNumbers(): Record<string, string> {
     sessions: String(sessions.length),
     tiers: String(new Set(levels.map((l) => l.tier)).size),
     hours: duration(total),
+    // The exam, so the guides never disagree with it.
+    examQuestions: String(EXAM.length),
+    examBank: String(EXAM.bank),
+    examPass: String(EXAM.passPercent),
+    examToPass: String(correctToPass()),
+    examExtra: String(EXAM.maxExtra),
   }
 }
 
@@ -71,3 +79,6 @@ export const fillCourse = (text: string): string => {
   const numbers = courseNumbers()
   return text.replace(/\{(\w+)\}/g, (token, name: string) => numbers[name] ?? token)
 }
+
+// A step of the overview, with the course's numbers filled in.
+export const fillStep = (step: Step): Step => ({ ...step, text: fillCourse(step.text), ...(step.note ? { note: fillCourse(step.note) } : {}) })

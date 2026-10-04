@@ -248,6 +248,13 @@ const icons = {
       <circle cx={12} cy={12} r={2.8} />
     </>
   ),
+  // A medal on a ribbon, for the exam and its certificate.
+  award: (
+    <>
+      <circle cx={12} cy={9} r={5.5} />
+      <path d="M8.6 13.4L7 21l5-2.8 5 2.8-1.6-7.6" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof icons

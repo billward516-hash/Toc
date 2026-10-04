@@ -166,12 +166,52 @@ export const overview: OverviewSection[] = [
             'Name one place you will look for a constraint this week. What will you look at to find it?',
             'Ask for something concrete and measurable, not a hunch. Have them write it in Notes in the Course guide.',
           ),
+          say(
+            'If you would like a certificate, there is an exam: {examQuestions} questions, multiple choice and true or false, and you need {examPass}% to pass. Open Exam and certificate on the home screen of your own device. Everyone gets different questions, you see the reason after every answer, and nothing you answer comes to me or anyone else.',
+          ),
           act('Show the Progress tab on the TV, and thank the room.'),
           say(
             'I am going to end the class now. The screen forgets all the names and answers. Your own progress stays on your own device, so you can keep playing, and there is a Free play mode where you can build a line of your own.',
           ),
           act('Tap End class.'),
           tip('Ask what to change. Note what ran long and what fell flat, while it is fresh.'),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'exam',
+    title: 'The exam and certificate',
+    blocks: [
+      {
+        kind: 'p',
+        text: 'The game has an exam of its own, for your learners or for anyone else: {examQuestions} questions, multiple choice and true or false, drawn at random from a bank of {examBank}. Passing takes {examPass}%, which is {examToPass} right. Nobody has to have played the game or been in your class first, and a pass earns a certificate they can save as a PDF.',
+      },
+      {
+        kind: 'list',
+        items: [
+          'Every exam is different. The questions are drawn at random and the answers are shuffled, so two people next to each other are not answering the same thing in the same order, and fewer than half of their questions are alike.',
+          'Learners see at once whether each answer was right, with the reason and where in the game the idea is taught.',
+          'Someone who finishes just short of the pass mark gets up to {examExtra} extra questions, one at a time, and passes the moment their overall score reaches {examPass}%. Someone further short sees which topics to look at again, and can take a new exam straight away. A retake favors questions they have not met.',
+          'There is no timer, and the exam is saved as they go, so a phone that locks or a tab that reloads does not lose their place.',
+        ],
+      },
+      { kind: 'p', text: 'Ways to use it:' },
+      {
+        kind: 'list',
+        items: [
+          'To close a course: give learners the last half hour, or set it as homework, after the closing steps above.',
+          'On its own, for people who learned the Theory of Constraints somewhere else, or who want to see what they know before they start.',
+          'Before and after: have the room take it before the first session and again after the last. Every attempt draws new questions.',
+        ],
+      },
+      { kind: 'p', text: 'What you can and cannot see:' },
+      {
+        kind: 'list',
+        items: [
+          'The exam is not part of the class screen. Your class screen cannot see anyone\'s answers, scores, or certificates, and nothing about the exam leaves a learner\'s device.',
+          'The certificate shows the name the learner typed, the date, the score, and an ID. To confirm a pass, ask to see it or have it sent to you.',
+          'The game cannot check who took the exam or whether they had help, and anyone can make a certificate of this kind. Treat it as a record that the learner sat the exam in good faith, not as a verified credential. If you need a verified result, have learners take the exam while you watch the room.',
         ],
       },
     ],

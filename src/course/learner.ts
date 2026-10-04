@@ -62,6 +62,7 @@ export const gettingStarted: OverviewSection[] = [
           'Explanations: once you have finished Tier 3, you can fold each explanation behind a Why? button, from the home screen.',
           'Free play: build a line of your own and run it. There are no stars or scores. Things to try has ready-made experiments.',
           'Full screen: on an iPad, the Full screen button on the home screen hides the browser bars. Adding the game to your Home Screen makes it open full screen.',
+          'Exam and certificate: on the home screen. It has {examQuestions} questions, you need {examPass}% to pass, and you see the reason after every answer. A pass earns a certificate you can save as a PDF. You do not need to finish the levels first.',
         ],
       },
     ],
@@ -74,7 +75,8 @@ export const gettingStarted: OverviewSection[] = [
         kind: 'list',
         items: [
           'Your progress is saved on this device, under your nickname. Nothing is sent anywhere.',
-          'Switch player lets several people share a device. Each nickname keeps its own progress.',
+          'Switch player lets several people share a device. Each nickname keeps its own progress, exam results, and certificate.',
+          'Your exam answers, your results, and the name on your certificate stay on this device too. Nothing about the exam is sent anywhere, even in a class.',
           'On an iPad, the game added to the Home Screen keeps its progress separately from Safari. Pick one and stay with it.',
           "If your instructor runs a class, tap Join a class and enter the code on their screen. Until the class ends, their screen shows your nickname, the levels you finish, and your answers. Tap Leave class whenever you like: your own progress stays on your device.",
         ],

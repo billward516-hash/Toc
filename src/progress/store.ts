@@ -169,6 +169,20 @@ export function saveNotes(learnerId: string, notes: Notes, storage: KeyValue | n
   write(storage, `${PREFIX}:notes:${learnerId}`, notes)
 }
 
+// What the exam keeps for a player: the questions seen, finished exams, an exam in progress, and the
+// name on their certificate. It comes back unchecked (null when there's none), for the exam to check.
+export function loadExamRecord(learnerId: string, storage: KeyValue | null = browserStorage()): unknown {
+  try {
+    return JSON.parse(storage?.getItem(`${PREFIX}:exam:${learnerId}`) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+export function saveExamRecord(learnerId: string, record: unknown, storage: KeyValue | null = browserStorage()) {
+  write(storage, `${PREFIX}:exam:${learnerId}`, record)
+}
+
 export function completedLevels(events: readonly StoredEvent[]): Set<string> {
   return new Set(events.filter((e) => e.type === 'completed').map((e) => e.levelId))
 }
