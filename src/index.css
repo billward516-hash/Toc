@@ -4844,3 +4844,24 @@ p.exam-taught,
   font-weight: 900;
   fill: var(--ink);
 }
+
+.lot-floor .queued-lot.hot rect {
+  stroke: var(--red);
+  stroke-width: 3;
+}
+
+.lot-floor .queued-lot.hot text {
+  fill: var(--red);
+}
+
+.lot-floor .tool-set.hot .set-box {
+  stroke: var(--red);
+}
+
+.lot-floor .tool-set.hot .set-label {
+  fill: var(--red);
+}
+
+.promise-table {
+  font-size: 15px;
+}

@@ -1,4 +1,4 @@
-import { DAYS, HORIZON, type LotPlan, type LotResult } from './lots.ts'
+import { capacityPerHour, DAYS, DUE, HORIZON, MIXED, type LotPlan, type LotResult } from './lots.ts'
 
 // The loading lab's lot round: one group of eight tools, run for two weeks. Which lots to make, how many
 // tools to give each, and how many lots to keep in the system decide how much it ships and how long a
@@ -11,9 +11,43 @@ export const LOT_ROUND = {
   start: { size: 1500, toolsPerLot: 8, depth: 4, order: 'first' } satisfies LotPlan,
 }
 
+// The hot-lot round: the same group, with some lots promised much sooner.
+export const HOT_ROUND = {
+  title: 'Hot lots',
+  day: 2,
+  // Every lot should meet its promise, and the group still has to ship.
+  mission: { onTime: 0.9, good: 60000 },
+  // A hot lot needs at least this many finished to count.
+  fewest: 3,
+  start: { size: 1200, toolsPerLot: 4, depth: 4, order: 'first', hot: 0.25, reserve: false } satisfies LotPlan,
+}
+
 export const LIMITS = {
   toolsPerLot: { min: 1, max: 8 },
   depth: { min: 1, max: 12 },
+  // Hot lots as a share of the group's capacity.
+  hot: { min: 0, max: 0.5, step: 0.05 },
+}
+
+// Hot lots a day on average, for a plan.
+export function hotLotsPerDay(plan: LotPlan): number {
+  const size = plan.size === 'mixed' ? (MIXED[0] + MIXED[1]) / 2 : plan.size
+  return ((plan.hot ?? 0) * capacityPerHour() * 24) / size
+}
+
+export interface HotVerdict {
+  hotOk: boolean
+  normalOk: boolean
+  goodOk: boolean
+  passed: boolean
+}
+
+export function judgeHot(result: LotResult): HotVerdict {
+  const { mission, fewest } = HOT_ROUND
+  const hotOk = result.promises.hot.finished >= fewest && result.promises.hot.onTime >= mission.onTime
+  const normalOk = result.promises.normal.finished > 0 && result.promises.normal.onTime >= mission.onTime
+  const goodOk = result.good >= mission.good
+  return { hotOk, normalOk, goodOk, passed: hotOk && normalOk && goodOk }
 }
 
 export interface LotVerdict {
@@ -65,7 +99,58 @@ export function holdHours(result: LotResult): number {
 export function describePlan(plan: LotPlan): string {
   const sets = Math.floor(8 / plan.toolsPerLot)
   const size = plan.size === 'mixed' ? 'mixed 600 and 2400' : `${plan.size}`
-  return `${size}-wafer lots, ${plan.toolsPerLot} ${plan.toolsPerLot === 1 ? 'tool' : 'tools'} each (${sets} at a time), ${plan.depth} in the system`
+  const hot = (plan.hot ?? 0) > 0 ? `; ${Math.round((plan.hot ?? 0) * 100)}% hot lots, ${plan.order === 'hot' ? 'hot first' : 'no priority'}${plan.reserve ? ', one set reserved' : ''}` : ''
+  return `${size}-wafer lots, ${plan.toolsPerLot} ${plan.toolsPerLot === 1 ? 'tool' : 'tools'} each (${sets} at a time), ${plan.depth} in the system${hot}`
+}
+
+// Hours a hot lot held its tools, on average.
+export function hotHoldHours(result: LotResult): number {
+  const hot = result.lots.filter((l) => l.hot && l.end !== null && l.start !== null)
+  return hot.length === 0 ? 0 : hot.reduce((sum, l) => sum + ((l.end ?? 0) - (l.start ?? 0)), 0) / hot.length / 60
+}
+
+// What to try next after a run of the hot-lot round.
+export function hotAdvice(result: LotResult): string {
+  const verdict = judgeHot(result)
+  if (verdict.passed) return 'Mission done.'
+  const { plan, promises } = result
+  const split = timeSplit(result)
+  if ((plan.hot ?? 0) === 0 || promises.hot.finished < HOT_ROUND.fewest) {
+    return 'Hardly any hot lots came through, so there was nothing to test the promise on. Send some hot lots in.'
+  }
+  if (!verdict.hotOk) {
+    const took = Math.round(promises.hot.cycleHours)
+    if (plan.order !== 'hot') {
+      return `Hot lots are promised ${DUE.hot} hours but waited their turn like any other: ${took} hours on average, ${Math.round(promises.hot.onTime * 100)}% on time. A promise is kept by running hot lots first.`
+    }
+    const hold = Math.round(hotHoldHours(result))
+    if (!plan.reserve && hold > DUE.hot / 2) {
+      return `Even first in line, a hot lot can't interrupt the lot being run out. It waits for one to finish, then runs ${hold} hours itself: ${took} hours in all. Smaller lots shorten both the wait and the run.`
+    }
+    if (!plan.reserve) {
+      return `Hot lots go first, but each still waits for a running lot to finish (${took} hours in all, ${Math.round(promises.hot.onTime * 100)}% on time). Smaller lots shorten that wait, or reserve a set so there is always one free for a hot lot.`
+    }
+    return `Even with a set reserved, hot lots took ${took} hours: they queue behind each other, or each runs too long. Lots that are smaller or spread over more tools run sooner.`
+  }
+  if (!verdict.normalOk) {
+    return `Hot lots took the front of the queue and the other lots paid: they averaged ${Math.round(promises.normal.cycleHours)} hours against a ${DUE.normal}-hour promise (${Math.round(promises.normal.onTime * 100)}% on time). Send fewer hot lots, keep fewer lots in the system, or don't hold a set idle for them.`
+  }
+  if (plan.reserve && split.starved > 0.05) {
+    return `The reserved set stood idle ${Math.round(split.starved * 100)}% of the time. That is what a lane kept free for hot lots costs: shipping fell short. Reserve nothing, or send enough hot lots to use it.`
+  }
+  return lotAdvice(result)
+}
+
+// How the fortnight went with hot lots, in words.
+export function whatHappenedHot(result: LotResult): string {
+  const { promises, plan } = result
+  const hot = Math.round(promises.hot.cycleHours)
+  const normal = Math.round(promises.normal.cycleHours)
+  return `${promises.hot.finished} hot lots took ${hot} hours on average against ${DUE.hot} promised; the other ${promises.normal.finished} took ${normal} against ${DUE.normal}. ${
+    plan.order === 'hot'
+      ? 'Going first costs the other lots little, since a hot lot only jumps the queue, but it cannot interrupt a lot that is running out: it still waits for one to finish.'
+      : 'With no priority, a hot lot waits in line like any other lot.'
+  }`
 }
 
 // What to try next.

@@ -18,8 +18,8 @@ import {
   type Round,
 } from '../loading/rounds.ts'
 import { queueSeries } from '../loading/series.ts'
-import { describePlan, LOT_ROUND } from '../loading/lotRound.ts'
-import { runLots } from '../loading/lots.ts'
+import { describePlan, HOT_ROUND, LOT_ROUND } from '../loading/lotRound.ts'
+import { DUE, runLots } from '../loading/lots.ts'
 import { STEPS } from '../sandbox/setup.ts'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
@@ -46,8 +46,8 @@ interface RoundLog {
   detail: string
 }
 
-// Rounds in all: the line rounds, then the lot round.
-const TOTAL = ROUNDS.length + 1
+// Rounds in all: the line rounds, then the lot round and the hot-lot round.
+const TOTAL = ROUNDS.length + 2
 
 // The loading lab: three short rounds that each ask how many orders the line can take before robots
 // wait too long, on a line with one bottleneck, two, and five, then a round on lots and tools.
@@ -66,14 +66,17 @@ export function LoadingLab({ onExit }: { onExit: () => void }) {
       />
     )
   }
-  if (index === ROUNDS.length) {
+  if (index >= ROUNDS.length) {
+    const mode = index === ROUNDS.length ? 'lots' : 'hot'
     return (
       <LotRound
-        key="lots"
+        key={mode}
+        mode={mode}
         number={index + 1}
         total={TOTAL}
         onFinish={(entry) => {
-          setLog([...log, { id: 'lots', title: 'Lots and tools', tries: entry.tries, passed: entry.passed, detail: entry.passed ? `. Winning plan: ${describePlan(entry.plan)}` : '' }])
+          const title = mode === 'lots' ? LOT_ROUND.title : HOT_ROUND.title
+          setLog([...log, { id: mode, title, tries: entry.tries, passed: entry.passed, detail: entry.passed ? `. Winning plan: ${describePlan(entry.plan)}` : '' }])
           setIndex(index + 1)
         }}
         onExit={onExit}
@@ -529,7 +532,17 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
   const high = at(lines.one, 19)
   const lots = useMemo(() => {
     const at = (toolsPerLot: number, depth: number) => runLots({ size: 1200, toolsPerLot, depth, order: 'first' }, LOT_ROUND.day)
-    return { lean: at(4, 2), crowded: at(4, 8), odd: at(3, 2) }
+    const hot = { size: 600, toolsPerLot: 2, depth: 6, hot: 0.25, reserve: false } as const
+    const hotRun = (order: 'first' | 'hot', extra: { size?: number; toolsPerLot?: number; depth?: number; reserve?: boolean } = {}) => runLots({ ...hot, order, ...extra }, HOT_ROUND.day)
+    return {
+      lean: at(4, 2),
+      crowded: at(4, 8),
+      odd: at(3, 2),
+      noPriority: hotRun('first'),
+      priority: hotRun('hot'),
+      bigLots: hotRun('hot', { size: 1200, toolsPerLot: 4, depth: 4 }),
+      reserved: hotRun('hot', { size: 1200, toolsPerLot: 4, depth: 4, reserve: true }),
+    }
   }, [])
   const gain = Math.round((100 * (high.shipped - mid.shipped)) / mid.shipped)
   return (
@@ -577,6 +590,12 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
             <h3>Lots: queue only what keeps the tools busy</h3>
             <p>
               With wafers always waiting, cycle time is just the lots in the system divided by the lots finished an hour. Two lots in the system gave {Math.round(lots.lean.cycleHours)} hours a lot; eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two tools unused and ran only {Math.round(100 * lots.odd.busy)}% busy. Match lots to the group: one lot per set, as many tools to a lot as split it into whole rounds, and lots no bigger than the cycle time allows.
+            </p>
+          </li>
+          <li>
+            <h3>A shorter promise is a priority, and priority has limits</h3>
+            <p>
+              Hot lots promised {DUE.hot} hours took {Math.round(lots.noPriority.promises.hot.cycleHours)} with no priority ({Math.round(100 * lots.noPriority.promises.hot.onTime)}% on time) and {Math.round(lots.priority.promises.hot.cycleHours)} going first ({Math.round(100 * lots.priority.promises.hot.onTime)}%), at little cost to the other lots. A lot that is running out can't be interrupted, so a hot lot still waits for one to finish and then runs for as long as its own size takes: with 1200-wafer lots on four tools it took {Math.round(lots.bigLots.promises.hot.cycleHours)} hours and was on time {Math.round(100 * lots.bigLots.promises.hot.onTime)}% of the time. Keeping a set free fixes that ({Math.round(100 * lots.reserved.promises.hot.onTime)}% on time) but left the tools {Math.round(100 * lots.reserved.busy)}% busy instead of {Math.round(100 * lots.bigLots.busy)}%. The cheaper cure is smaller lots.
             </p>
           </li>
         </ol>

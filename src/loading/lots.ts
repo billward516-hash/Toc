@@ -31,6 +31,10 @@ export const HORIZON = DAYS * 24 * 60
 // Shortest-first would leave a big lot waiting for ever; one waiting this long (three days) goes first.
 export const AGING = 72 * 60
 
+// Hot lots carry a shorter promise: hours from joining the queue to finishing, for a hot lot and for
+// any other.
+export const DUE = { hot: 14, normal: 40 }
+
 export interface LotPlan {
   // Wafers in every lot, or 'mixed' for a queue of 600s and 2400s.
   size: number | 'mixed'
@@ -39,13 +43,21 @@ export interface LotPlan {
   toolsPerLot: number
   // Lots in the system, waiting or running.
   depth: number
-  order: 'first' | 'shortest'
+  // 'hot' runs hot lots ahead of the others, each kind in the order it came.
+  order: 'first' | 'shortest' | 'hot'
+  // Hot lots promised sooner arrive at random times, on top of the lots kept in the system, making up
+  // this share of the group's capacity (0 to 1), when the plan has any.
+  hot?: number
+  // One set takes hot lots only, standing idle when there are none.
+  reserve?: boolean
 }
 
 export interface Lot {
   id: number
   size: number
   yield: number
+  // Arrived as a hot lot, promised sooner than the rest.
+  hot: boolean
   release: number
   start: number | null
   end: number | null
@@ -57,6 +69,12 @@ export type LotEvent =
   | { t: number; type: 'start'; lot: number; group: number }
   | { t: number; type: 'run'; tool: number; lot: number; wafers: number; end: number }
   | { t: number; type: 'done'; lot: number }
+
+export interface Kept {
+  finished: number
+  onTime: number
+  cycleHours: number
+}
 
 export interface LotResult {
   plan: LotPlan
@@ -77,6 +95,9 @@ export interface LotResult {
   cycleBySize: Record<number, number>
   // Hours the lot that has waited longest has been waiting, at the end.
   oldestWait: number
+  // How hot lots and the others fared against their promises: lots finished, the share on time, and
+  // average cycle hours.
+  promises: { hot: Kept; normal: Kept }
   // The share of the tools' time spent on runs.
   busy: number
   // Wafers the whole group could make in the horizon at full loads.
@@ -102,12 +123,13 @@ export function capacityPerHour(speeds: readonly number[] = SPEEDS): number {
   return speeds.reduce((sum, s) => sum + s, 0)
 }
 
-type Pending = { tool: number; lot: number }
+type Pending = { kind: 'run'; tool: number; lot: number } | { kind: 'hot' }
 
 export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] = SPEEDS): LotResult {
   const { groups, unused } = toolSets(speeds, plan.toolsPerLot)
   const sizeDraws = stream(seed, 'lot-size')
   const yieldDraws = stream(seed, 'lot-yield')
+  const hotDraws = stream(seed, 'lot-hot')
   const runDraws = speeds.map((_, i) => stream(seed, `run:${i}`))
   const lots: Lot[] = []
   const remaining: number[] = []
@@ -118,9 +140,9 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
   const agenda = new EventQueue<Pending>()
   let now = 0
 
-  const release = () => {
+  const release = (hot = false) => {
     const size = plan.size === 'mixed' ? MIXED[sizeDraws() < 0.5 ? 0 : 1] : plan.size
-    const lot: Lot = { id: lots.length, size, yield: YIELD.min + yieldDraws() * (YIELD.max - YIELD.min), release: now, start: null, end: null, group: null }
+    const lot: Lot = { id: lots.length, size, yield: YIELD.min + yieldDraws() * (YIELD.max - YIELD.min), hot, release: now, start: null, end: null, group: null }
     lots.push(lot)
     remaining.push(size)
     inFlight.push(0)
@@ -133,20 +155,26 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     remaining[lot] -= wafers
     inFlight[lot]++
     const minutes = ((60 * LOAD) / speeds[tool]) * (1 + RUN_SPREAD * (2 * runDraws[tool]() - 1))
-    agenda.push(now + minutes, { tool, lot })
+    agenda.push(now + minutes, { kind: 'run', tool, lot })
     events.push({ t: now, type: 'run', tool, lot, wafers, end: now + minutes })
   }
 
-  const pick = (): number => {
-    if (plan.order === 'first') return waiting[0]
-    const aged = waiting.find((id) => now - lots[id].release >= AGING)
+  // The lot a set takes next, if any: the reserved set takes hot lots only.
+  const pick = (group: number): number | undefined => {
+    const reserved = plan.reserve === true && group === 0 && groups.length > 1
+    const pool = reserved ? waiting.filter((id) => lots[id].hot) : waiting
+    if (pool.length === 0) return undefined
+    if (plan.order === 'first') return pool[0]
+    if (plan.order === 'hot') return pool.find((id) => lots[id].hot) ?? pool[0]
+    const aged = pool.find((id) => now - lots[id].release >= AGING)
     if (aged !== undefined) return aged
-    return waiting.reduce((best, id) => (lots[id].size < lots[best].size ? id : best), waiting[0])
+    return pool.reduce((best, id) => (lots[id].size < lots[best].size ? id : best), pool[0])
   }
 
   const dispatch = (group: number) => {
-    if (running[group] !== null || waiting.length === 0) return
-    const id = pick()
+    if (running[group] !== null) return
+    const id = pick(group)
+    if (id === undefined) return
     waiting.splice(waiting.indexOf(id), 1)
     running[group] = id
     lots[id].start = now
@@ -155,13 +183,27 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     for (const tool of groups[group]) if (remaining[id] > 0) startRun(tool, id)
   }
 
+  // The reserved set looks first, so a hot lot doesn't go to another set that would take it later.
+  const dispatchAll = () => groups.forEach((_, g) => dispatch(g))
+
+  // A hot lot comes at a random time: on average, a lot's size in wafers over the hot share of what the
+  // group can make.
+  const meanSize = plan.size === 'mixed' ? (MIXED[0] + MIXED[1]) / 2 : plan.size
+  const nextHot = () => agenda.push(now + ((60 * meanSize) / ((plan.hot ?? 1) * capacityPerHour(speeds))) * (0.1 + 1.8 * hotDraws()), { kind: 'hot' })
+  if ((plan.hot ?? 0) > 0) nextHot()
   for (let k = 0; k < plan.depth; k++) release()
-  groups.forEach((_, g) => dispatch(g))
+  dispatchAll()
 
   for (;;) {
     const next = agenda.pop()
     if (!next || next.t > HORIZON) break
     now = next.t
+    if (next.payload.kind === 'hot') {
+      release(true)
+      dispatchAll()
+      nextHot()
+      continue
+    }
     const { tool, lot } = next.payload
     inFlight[lot]--
     if (remaining[lot] > 0) {
@@ -171,8 +213,9 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
       lots[lot].end = now
       events.push({ t: now, type: 'done', lot })
       running[group] = null
-      release()
-      dispatch(group)
+      // A finished hot lot isn't replaced: only the lots kept in the system are.
+      if (!lots[lot].hot) release()
+      dispatchAll()
     }
   }
   // Time on runs, counting the part of a run still going at the end that is inside the horizon.
@@ -183,6 +226,11 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
   const cycle = (set: Lot[]) => (set.length === 0 ? 0 : set.reduce((sum, l) => sum + ((l.end ?? 0) - l.release), 0) / set.length / 60)
   const cycleBySize: Record<number, number> = {}
   for (const size of new Set(done.map((l) => l.size))) cycleBySize[size] = cycle(done.filter((l) => l.size === size))
+  const promise = (hot: boolean): Kept => {
+    const set = done.filter((l) => l.hot === hot)
+    const due = hot ? DUE.hot : DUE.normal
+    return { finished: set.length, onTime: set.length === 0 ? 1 : set.filter((l) => ((l.end ?? 0) - l.release) / 60 <= due).length / set.length, cycleHours: cycle(set) }
+  }
   const waitingNow = waiting.map((id) => (HORIZON - lots[id].release) / 60)
   return {
     plan,
@@ -198,6 +246,7 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     cycleHours: cycle(done),
     cycleBySize,
     oldestWait: waitingNow.length === 0 ? 0 : Math.max(...waitingNow),
+    promises: { hot: promise(true), normal: promise(false) },
     busy: busyTime / (speeds.length * HORIZON),
     capacity: capacityPerHour(speeds) * DAYS * 24,
   }

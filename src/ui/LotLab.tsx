@@ -1,6 +1,23 @@
 import { useMemo, useState } from 'react'
-import { DAYS_SHOWN, describePlan, holdHours, judgeLots, LIMITS, LOT_ROUND, lotAdvice, lotSnapshotAt, timeSplit, whatHappenedLots, type LotSnapshot } from '../loading/lotRound.ts'
-import { capacityPerHour, HORIZON, LOT_SIZES, runLots, SPEEDS, type LotPlan, type LotResult } from '../loading/lots.ts'
+import {
+  DAYS_SHOWN,
+  describePlan,
+  holdHours,
+  hotAdvice,
+  HOT_ROUND,
+  hotLotsPerDay,
+  judgeHot,
+  judgeLots,
+  LIMITS,
+  LOT_ROUND,
+  lotAdvice,
+  lotSnapshotAt,
+  timeSplit,
+  whatHappenedHot,
+  whatHappenedLots,
+  type LotSnapshot,
+} from '../loading/lotRound.ts'
+import { capacityPerHour, DUE, HORIZON, LOT_SIZES, runLots, SPEEDS, type LotPlan, type LotResult } from '../loading/lots.ts'
 import { Icon } from './icons.tsx'
 import { CycleBar, DepthChart, type DepthPoint } from './LabParts.tsx'
 import { PlaybackPanel, ScreenHeader, type Stat } from './parts.tsx'
@@ -20,7 +37,8 @@ interface Run {
   result: LotResult
 }
 
-const samePlan = (a: LotPlan, b: LotPlan) => a.size === b.size && a.toolsPerLot === b.toolsPerLot && a.depth === b.depth && a.order === b.order
+const samePlan = (a: LotPlan, b: LotPlan) =>
+  a.size === b.size && a.toolsPerLot === b.toolsPerLot && a.depth === b.depth && a.order === b.order && (a.hot ?? 0) === (b.hot ?? 0) && (a.reserve ?? false) === (b.reserve ?? false)
 
 export interface LotLog {
   tries: number
@@ -28,29 +46,36 @@ export interface LotLog {
   plan: LotPlan
 }
 
+export type LotMode = 'lots' | 'hot'
+
 // The lot round: eight tools, two weeks, and a queue that is always full. Choose the lots, the tools
-// each gets, and how many lots to keep in the system.
-export function LotRound({ number, total, onFinish, onExit }: { number: number; total: number; onFinish: (log: LotLog) => void; onExit: () => void }) {
-  const [plan, setPlan] = useState<LotPlan>(LOT_ROUND.start)
+// each gets, and how many lots to keep in the system. In the hot-lot round some lots are promised much
+// sooner, and the plan also says how they are treated.
+export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotMode; number: number; total: number; onFinish: (log: LotLog) => void; onExit: () => void }) {
+  const hotMode = mode === 'hot'
+  const round = hotMode ? HOT_ROUND : LOT_ROUND
+  const passes = (r: LotResult) => (hotMode ? judgeHot(r).passed : judgeLots(r).passed)
+  const [plan, setPlan] = useState<LotPlan>(round.start)
   const [runs, setRuns] = useState<Run[]>([])
   const [speed, setSpeed] = useState(4)
-  const result = useMemo(() => runLots(plan, LOT_ROUND.day), [plan])
+  const result = useMemo(() => runLots(plan, round.day), [plan, round.day])
   const playback = usePlayback(HORIZON, MINUTES_PER_SECOND * speed)
   const snapshot = useMemo(() => lotSnapshotAt(result, playback.t, TOOLS), [result, playback.t])
   const latest = runs.at(-1)
   const ran = latest !== undefined && samePlan(latest.plan, plan)
   const done = ran && playback.finished ? latest : null
-  const passed = runs.some((r) => judgeLots(r.result).passed)
+  const passed = runs.some((r) => passes(r.result))
   const sets = result.groups.length
-  const verdict = done ? judgeLots(done.result) : null
+  const verdict = done && !hotMode ? judgeLots(done.result) : null
+  const hotVerdict = done && hotMode ? judgeHot(done.result) : null
   const sweep = useMemo<DepthPoint[] | null>(() => {
-    if (!done) return null
+    if (!done || hotMode) return null
     return Array.from({ length: LIMITS.depth.max }, (_, k) => {
       const runsAt = Array.from({ length: SWEEP_SEEDS }, (_, s) => runLots({ ...done.plan, depth: k + 1 }, s + 1))
       const mean = (pick: (r: LotResult) => number) => runsAt.reduce((sum, r) => sum + pick(r), 0) / SWEEP_SEEDS
       return { depth: k + 1, cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy) }
     })
-  }, [done])
+  }, [done, hotMode])
 
   const record = () => {
     setRuns((previous) => (previous.at(-1) && samePlan(previous.at(-1)!.plan, plan) ? previous : [...previous, { number: previous.length + 1, plan, result }]))
@@ -89,12 +114,11 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
     { label: 'Lot cycle time', value: snapshot.cycleHours === null ? '–' : `${Math.round(snapshot.cycleHours)} h` },
     { label: 'Tools busy', value: `${Math.round(100 * snapshot.busy)}%` },
   ]
-  const { mission } = LOT_ROUND
   const capacity = capacityPerHour()
 
   return (
     <div className="screen level-screen lab">
-      <ScreenHeader chip={`Loading lab · round ${number} of ${total}`} title={LOT_ROUND.title} stats={stats} onExit={onExit} />
+      <ScreenHeader chip={`Loading lab · round ${number} of ${total}`} title={round.title} stats={stats} onExit={onExit} />
 
       <section className="card lab-brief" aria-label="Round brief">
         <p>
@@ -103,10 +127,23 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
         <p>
           <strong>A lot is committed to its tools and run out before they take another,</strong> so lots never mix. You choose the size of the lots, how many tools each gets, and how many lots to keep in the system. Yield averages about 77%, lot by lot between 69% and 85%.
         </p>
+        {hotMode && (
+          <p>
+            <strong>Some lots are promised sooner.</strong> A hot lot must finish within {DUE.hot} hours of arriving, any other within {DUE.normal}. Hot lots arrive at random, on top of the lots in the system, and take up a share of the group's capacity you can change. You decide how they are treated: whether they go first, and whether a set is kept free for them. A lot already running is never interrupted.
+          </p>
+        )}
         <p className="mission">
           <Icon name="bolt" />
           <span>
-            <strong>Mission:</strong> deliver at least <strong>{mission.good.toLocaleString('en-US')} good wafers</strong> in two weeks, with a lot's average time from joining the queue to finishing no more than <strong>{mission.cycleHours} hours</strong>.
+            {hotMode ? (
+              <>
+                <strong>Mission:</strong> at least <strong>{Math.round(HOT_ROUND.mission.onTime * 100)}%</strong> of the hot lots and of the other lots finished on time, and at least <strong>{HOT_ROUND.mission.good.toLocaleString('en-US')} good wafers</strong> in two weeks.
+              </>
+            ) : (
+              <>
+                <strong>Mission:</strong> deliver at least <strong>{LOT_ROUND.mission.good.toLocaleString('en-US')} good wafers</strong> in two weeks, with a lot's average time from joining the queue to finishing no more than <strong>{LOT_ROUND.mission.cycleHours} hours</strong>.
+              </>
+            )}
           </span>
         </p>
       </section>
@@ -141,26 +178,14 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
             </>
           }
         >
-          {done && verdict && (
+          {done && (verdict || hotVerdict) && (
             <section className="runs lab-result" aria-label={`Run ${done.number}`} aria-live="polite">
               <h3>Run {done.number}</h3>
-              <ul className={`verdict${verdict.passed ? ' won' : ''}`}>
-                <li className={verdict.goodOk ? 'ok' : 'miss'}>
-                  <Icon name={verdict.goodOk ? 'check' : 'cross'} />
-                  <span>
-                    Good wafers <strong>{Math.round(done.result.good).toLocaleString('en-US')}</strong>, at least {mission.good.toLocaleString('en-US')}
-                  </span>
-                </li>
-                <li className={verdict.cycleOk ? 'ok' : 'miss'}>
-                  <Icon name={verdict.cycleOk ? 'check' : 'cross'} />
-                  <span>
-                    Lot cycle time <strong>{Math.round(done.result.cycleHours)} h</strong>, no more than {mission.cycleHours}
-                  </span>
-                </li>
-              </ul>
+              {hotVerdict ? <HotVerdictList result={done.result} verdict={hotVerdict} /> : verdict && <LotVerdictList result={done.result} verdict={verdict} />}
               <CycleBar cycle={done.result.cycleHours} waiting={Math.max(0, done.result.cycleHours - holdHours(done.result))} labels={['Holding its tools', 'Waiting for a set']} unit="h" />
-              <p>{whatHappenedLots(done.result)}</p>
-              <p className="advice">{lotAdvice(done.result)}</p>
+              <p>{hotMode ? whatHappenedHot(done.result) : whatHappenedLots(done.result)}</p>
+              <p className="advice">{hotMode ? hotAdvice(done.result) : lotAdvice(done.result)}</p>
+              {hotMode && <PromiseTable result={done.result} />}
               <TimeSplitBar result={done.result} />
               {done.plan.size === 'mixed' && <BySize result={done.result} />}
             </section>
@@ -168,7 +193,7 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
           {sweep && done && (
             <section className="runs" aria-label="Cycle time against lots in the system">
               <h3>The same lots at other queue depths</h3>
-              <DepthChart points={sweep} sets={done.result.groups.length} current={done.plan.depth} limit={mission.cycleHours} />
+              <DepthChart points={sweep} sets={done.result.groups.length} current={done.plan.depth} limit={LOT_ROUND.mission.cycleHours} />
               <p className="hint">Average of {SWEEP_SEEDS} fortnights. Past one lot per set, extra lots in the system make no more wafers; they only add waiting.</p>
             </section>
           )}
@@ -181,20 +206,38 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
                     <th scope="col">Run</th>
                     <th scope="col">Plan</th>
                     <th scope="col">Good</th>
-                    <th scope="col">Cycle</th>
+                    {hotMode ? (
+                      <>
+                        <th scope="col">Hot on time</th>
+                        <th scope="col">Others on time</th>
+                      </>
+                    ) : (
+                      <th scope="col">Cycle</th>
+                    )}
                     <th scope="col">Mission</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[...runs].reverse().map((r) => {
                     const v = judgeLots(r.result)
+                    const h = judgeHot(r.result)
+                    const won = hotMode ? h.passed : v.passed
+                    const why = hotMode ? (!h.hotOk ? 'Hot late' : !h.normalOk ? 'Others late' : 'Too few') : !v.goodOk ? 'Too few' : 'Too slow'
+                    const pct = (x: number) => `${Math.round(x * 100)}%`
                     return (
-                      <tr key={r.number} className={v.passed ? 'current' : undefined}>
+                      <tr key={r.number} className={won ? 'current' : undefined}>
                         <th scope="row">{r.number}</th>
                         <td className="changes">{describePlan(r.plan)}</td>
                         <td>{Math.round(r.result.good / 1000)}k</td>
-                        <td>{Math.round(r.result.cycleHours)} h</td>
-                        <td>{v.passed ? 'Done' : !v.goodOk ? 'Too few' : 'Too slow'}</td>
+                        {hotMode ? (
+                          <>
+                            <td>{pct(r.result.promises.hot.onTime)}</td>
+                            <td>{pct(r.result.promises.normal.onTime)}</td>
+                          </>
+                        ) : (
+                          <td>{Math.round(r.result.cycleHours)} h</td>
+                        )}
+                        <td>{won ? 'Done' : why}</td>
                       </tr>
                     )
                   })}
@@ -221,11 +264,13 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
                 onChange={(event) => change({ size: Number(event.target.value) })}
               />
             </div>
-            <div className="chips">
-              <button className={`chip${plan.size === 'mixed' ? ' on' : ''}`} aria-pressed={plan.size === 'mixed'} onClick={() => change({ size: plan.size === 'mixed' ? 1500 : 'mixed' })}>
-                Mixed 600 and 2400
-              </button>
-            </div>
+            {!hotMode && (
+              <div className="chips">
+                <button className={`chip${plan.size === 'mixed' ? ' on' : ''}`} aria-pressed={plan.size === 'mixed'} onClick={() => change({ size: plan.size === 'mixed' ? 1500 : 'mixed' })}>
+                  Mixed 600 and 2400
+                </button>
+              </div>
+            )}
           </fieldset>
           <fieldset className="lever">
             <legend>
@@ -260,7 +305,51 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
               <strong>{plan.depth}</strong> {plan.depth === 1 ? 'lot' : 'lots'} for {sets} {sets === 1 ? 'set' : 'sets'}: {plan.depth < sets ? `${sets - plan.depth} ${sets - plan.depth === 1 ? 'set has' : 'sets have'} nothing to run` : plan.depth === sets ? 'one for each set, none waiting' : `${plan.depth - sets} always waiting`}.
             </p>
           </fieldset>
-          {plan.size === 'mixed' && (
+          {hotMode && (
+            <>
+              <fieldset className="lever">
+                <legend>
+                  <Icon name="alert" /> Hot lots: {Math.round((plan.hot ?? 0) * 100)}% of the group's capacity
+                </legend>
+                <div className="dial" role="group" aria-label="Hot lots">
+                  <input
+                    type="range"
+                    min={LIMITS.hot.min}
+                    max={LIMITS.hot.max}
+                    step={LIMITS.hot.step}
+                    value={plan.hot ?? 0}
+                    aria-valuetext={`${Math.round((plan.hot ?? 0) * 100)}% of capacity`}
+                    onChange={(event) => change({ hot: Math.round(Number(event.target.value) * 100) / 100 })}
+                  />
+                </div>
+                <p className="hint">About {hotLotsPerDay(plan).toFixed(1)} hot lots a day, arriving at random.</p>
+              </fieldset>
+              <fieldset className="lever">
+                <legend>
+                  <Icon name="sort" /> Which lot goes next
+                </legend>
+                <div className="chips">
+                  {(
+                    [
+                      ['first', 'First come, first served'],
+                      ['hot', 'Hot lots first'],
+                    ] as const
+                  ).map(([order, text]) => (
+                    <button key={order} className={`chip${plan.order === order ? ' on' : ''}`} aria-pressed={plan.order === order} onClick={() => change({ order })}>
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                <div className="chips">
+                  <button className={`chip${plan.reserve ? ' on' : ''}`} aria-pressed={plan.reserve === true} disabled={sets < 2} onClick={() => change({ reserve: !plan.reserve })}>
+                    Keep one set free for hot lots
+                  </button>
+                </div>
+                <p className="hint">{sets < 2 ? 'With one set there is none to spare.' : 'A reserved set takes hot lots only, and stands idle when there are none. A lot already running is never interrupted.'}</p>
+              </fieldset>
+            </>
+          )}
+          {!hotMode && plan.size === 'mixed' && (
             <fieldset className="lever">
               <legend>
                 <Icon name="sort" /> Which lot goes next
@@ -285,14 +374,86 @@ export function LotRound({ number, total, onFinish, onExit }: { number: number; 
               Run two weeks <Icon name="play" />
             </button>
             {(passed || runs.length >= 4) && (
-              <button className={`btn big${passed ? ' next' : ''}`} onClick={() => onFinish({ tries: runs.length, passed, plan: (runs.find((r) => judgeLots(r.result).passed) ?? runs.at(-1)!).plan })}>
-                {passed ? 'See what it shows' : 'Skip this round'} <Icon name="next" />
+              <button className={`btn big${passed ? ' next' : ''}`} onClick={() => onFinish({ tries: runs.length, passed, plan: (runs.find((r) => passes(r.result)) ?? runs.at(-1)!).plan })}>
+                {passed ? (hotMode ? 'See what it shows' : 'Next round') : 'Skip this round'} <Icon name="next" />
               </button>
             )}
           </div>
         </section>
       </div>
     </div>
+  )
+}
+
+function LotVerdictList({ result, verdict }: { result: LotResult; verdict: ReturnType<typeof judgeLots> }) {
+  const { mission } = LOT_ROUND
+  return (
+    <ul className={`verdict${verdict.passed ? ' won' : ''}`}>
+      <li className={verdict.goodOk ? 'ok' : 'miss'}>
+        <Icon name={verdict.goodOk ? 'check' : 'cross'} />
+        <span>
+          Good wafers <strong>{Math.round(result.good).toLocaleString('en-US')}</strong>, at least {mission.good.toLocaleString('en-US')}
+        </span>
+      </li>
+      <li className={verdict.cycleOk ? 'ok' : 'miss'}>
+        <Icon name={verdict.cycleOk ? 'check' : 'cross'} />
+        <span>
+          Lot cycle time <strong>{Math.round(result.cycleHours)} h</strong>, no more than {mission.cycleHours}
+        </span>
+      </li>
+    </ul>
+  )
+}
+
+function HotVerdictList({ result, verdict }: { result: LotResult; verdict: ReturnType<typeof judgeHot> }) {
+  const { mission } = HOT_ROUND
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+  const rows = [
+    { ok: verdict.hotOk, text: `Hot lots on time: ${pct(result.promises.hot.onTime)} of ${result.promises.hot.finished}, at least ${pct(mission.onTime)}` },
+    { ok: verdict.normalOk, text: `Other lots on time: ${pct(result.promises.normal.onTime)} of ${result.promises.normal.finished}, at least ${pct(mission.onTime)}` },
+    { ok: verdict.goodOk, text: `Good wafers: ${Math.round(result.good).toLocaleString('en-US')}, at least ${mission.good.toLocaleString('en-US')}` },
+  ]
+  return (
+    <ul className={`verdict${verdict.passed ? ' won' : ''}`}>
+      {rows.map((row) => (
+        <li key={row.text} className={row.ok ? 'ok' : 'miss'}>
+          <Icon name={row.ok ? 'check' : 'cross'} />
+          <span>{row.text}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// How the hot lots and the others did against their promises.
+function PromiseTable({ result }: { result: LotResult }) {
+  const rows = [
+    { name: 'Hot lots', due: DUE.hot, kept: result.promises.hot },
+    { name: 'Other lots', due: DUE.normal, kept: result.promises.normal },
+  ]
+  return (
+    <table className="data-table promise-table">
+      <thead>
+        <tr>
+          <th scope="col">Lots</th>
+          <th scope="col">Finished</th>
+          <th scope="col">Promised</th>
+          <th scope="col">Took</th>
+          <th scope="col">On time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.name}>
+            <th scope="row">{row.name}</th>
+            <td>{row.kept.finished}</td>
+            <td>{row.due} h</td>
+            <td>{Math.round(row.kept.cycleHours)} h</td>
+            <td>{Math.round(row.kept.onTime * 100)}%</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }
 
@@ -378,10 +539,11 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
       {shown.map((id, k) => {
         const lot = result.lots[id]
         return (
-          <g key={id} className="queued-lot">
+          <g key={id} className={`queued-lot${lot.hot ? ' hot' : ''}`}>
             <rect x={14} y={38 + k * 24} width={(lot.size / maxSize) * (QUEUE_W - 90) + 20} height={19} rx={6} style={{ fill: lotColor(id) }} />
             <text className="lot-size" x={14 + (lot.size / maxSize) * (QUEUE_W - 90) + 28} y={52 + k * 24}>
               {lot.size}
+              {lot.hot ? ' HOT' : ''}
             </text>
           </g>
         )
@@ -394,10 +556,10 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
       {setBoxes.map((box, g) => {
         const lotId = snapshot.sets[g]
         return (
-          <g key={g} className={`tool-set${lotId === null ? ' empty' : ''}`}>
+          <g key={g} className={`tool-set${lotId === null ? ' empty' : ''}${lotId !== null && result.lots[lotId].hot ? ' hot' : ''}`}>
             <rect className="set-box" x={box.left - 4} y={SET_TOP - 30} width={box.width + 8} height={232} rx={14} />
             <text className="set-label" x={box.left + box.width / 2} y={SET_TOP - 10}>
-              {lotId === null ? 'No lot' : `Lot ${lotId + 1} · ${result.lots[lotId].size}`}
+              {lotId === null ? (result.plan.reserve && g === 0 ? 'Kept free for hot lots' : 'No lot') : `Lot ${lotId + 1} · ${result.lots[lotId].hot ? 'HOT' : result.lots[lotId].size}`}
             </text>
           </g>
         )
@@ -431,10 +593,10 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
       <g className="shipped">
         <rect className="bin" x={width - 190} y={SET_TOP - 30} width={170} height={232} rx={24} />
         <text className="bin-label" x={width - 105} y={SET_TOP + 14}>
-          Finished
+          Lots finished
         </text>
         <text className="bin-count compact" x={width - 105} y={SET_TOP + 70}>
-          {snapshot.finished} lots
+          {snapshot.finished}
         </text>
         <text className="bin-label" x={width - 105} y={SET_TOP + 112}>
           {snapshot.wafers.toLocaleString('en-US')} wafers
