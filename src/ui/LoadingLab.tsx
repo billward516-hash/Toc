@@ -18,9 +18,12 @@ import {
   type Round,
 } from '../loading/rounds.ts'
 import { queueSeries } from '../loading/series.ts'
+import { describePlan, LOT_ROUND } from '../loading/lotRound.ts'
+import { runLots } from '../loading/lots.ts'
 import { STEPS } from '../sandbox/setup.ts'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
+import { LotRound } from './LotLab.tsx'
 import { CurveChart, CycleBar, QueueStrips, type CurveSeries } from './LabParts.tsx'
 import { PlaybackPanel, ScreenHeader, type Stat } from './parts.tsx'
 import { showFloor } from './scroll.ts'
@@ -35,25 +38,43 @@ const STRIP_POINTS = 97
 
 // How a round went, for the summary.
 interface RoundLog {
-  round: Round
+  id: string
+  title: string
   tries: number
   passed: boolean
-  upgraded: boolean[]
-  guess: { chosen: Guess; right: Guess } | null
+  // What the player did, in a sentence, for the summary.
+  detail: string
 }
 
+// Rounds in all: the line rounds, then the lot round.
+const TOTAL = ROUNDS.length + 1
+
 // The loading lab: three short rounds that each ask how many orders the line can take before robots
-// wait too long, on a line with one bottleneck, two, and five.
+// wait too long, on a line with one bottleneck, two, and five, then a round on lots and tools.
 export function LoadingLab({ onExit }: { onExit: () => void }) {
   const [index, setIndex] = useState(0)
   const [log, setLog] = useState<RoundLog[]>([])
-  if (index >= ROUNDS.length) {
+  if (index >= TOTAL) {
     return (
       <LabSummary
         log={log}
         onAgain={() => {
           setLog([])
           setIndex(0)
+        }}
+        onExit={onExit}
+      />
+    )
+  }
+  if (index === ROUNDS.length) {
+    return (
+      <LotRound
+        key="lots"
+        number={index + 1}
+        total={TOTAL}
+        onFinish={(entry) => {
+          setLog([...log, { id: 'lots', title: 'Lots and tools', tries: entry.tries, passed: entry.passed, detail: entry.passed ? `. Winning plan: ${describePlan(entry.plan)}` : '' }])
+          setIndex(index + 1)
         }}
         onExit={onExit}
       />
@@ -163,14 +184,20 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
     showFloor()
   }
 
-  const finish = () =>
+  const finish = () => {
+    const right = guess && reference && runs[0] ? rightGuess(runs[0].outcome.cycle / reference.cycle) : null
+    const winner = runs.find((r) => judge(round, r.outcome).passed)
     onFinish({
-      round,
+      id: round.id,
+      title: round.title,
       tries: runs.length,
       passed,
-      upgraded,
-      guess: guess && reference && runs[0] ? { chosen: guess, right: rightGuess(runs[0].outcome.cycle / reference.cycle) } : null,
+      detail: [
+        guess && right ? `. You guessed "${guess.text.toLowerCase()}"; it was "${right.text.toLowerCase()}"` : '',
+        round.upgrades > 0 && winner ? `. Bottleneck left at ${names(round.minutes, winner.upgraded)}` : '',
+      ].join(''),
     })
+  }
 
   const stats: Stat[] = [
     { label: 'Shipped', value: snapshot.shipped },
@@ -184,7 +211,7 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
 
   return (
     <div className="screen level-screen lab">
-      <ScreenHeader chip={`Loading lab · round ${number} of ${ROUNDS.length}`} title={round.title} stats={stats} onExit={onExit} />
+      <ScreenHeader chip={`Loading lab · round ${number} of ${TOTAL}`} title={round.title} stats={stats} onExit={onExit} />
 
       <Brief round={round} reference={reference} />
 
@@ -266,7 +293,7 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
             </button>
             {(passed || runs.length >= 4) && (
               <button className={`btn big${passed ? ' next' : ''}`} onClick={finish}>
-                {passed ? (number === ROUNDS.length ? 'See what it shows' : 'Next round') : 'Skip this round'} <Icon name="next" />
+                {passed ? 'Next round' : 'Skip this round'} <Icon name="next" />
               </button>
             )}
           </div>
@@ -500,6 +527,10 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
   const low = at(lines.one, 12)
   const mid = at(lines.one, 14)
   const high = at(lines.one, 19)
+  const lots = useMemo(() => {
+    const at = (toolsPerLot: number, depth: number) => runLots({ size: 1200, toolsPerLot, depth, order: 'first' }, LOT_ROUND.day)
+    return { lean: at(4, 2), crowded: at(4, 8), odd: at(3, 2) }
+  }, [])
   const gain = Math.round((100 * (high.shipped - mid.shipped)) / mid.shipped)
   return (
     <div className="screen level-screen lab">
@@ -542,6 +573,12 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
               Speeding up four of the five stations did not raise the capacity ({Math.round(capacityPerHour(ROUND_MANY.minutes, FIXED))} an hour, as before). It cut cycle time at 95% load from {Math.round(at(lines.many, 19).cycle)} to {Math.round(at(lines.fixed, 19).cycle)} minutes by leaving exactly one bottleneck to protect. This is what a rope does in the main game: it holds the load where the bottleneck is nearly full and the piles stay short.
             </p>
           </li>
+          <li>
+            <h3>Lots: queue only what keeps the tools busy</h3>
+            <p>
+              With wafers always waiting, cycle time is just the lots in the system divided by the lots finished an hour. Two lots in the system gave {Math.round(lots.lean.cycleHours)} hours a lot; eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two tools unused and ran only {Math.round(100 * lots.odd.busy)}% busy. Match lots to the group: one lot per set, as many tools to a lot as split it into whole rounds, and lots no bigger than the cycle time allows.
+            </p>
+          </li>
         </ol>
       </section>
 
@@ -549,15 +586,11 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
         <h2>Your rounds</h2>
         <ul className="plan-summary">
           {log.map((entry) => (
-            <li key={entry.round.id}>
+            <li key={entry.id}>
               <Icon name={entry.passed ? 'check' : 'cross'} />
               <span>
-                {entry.round.title}: {entry.passed ? 'done' : 'skipped'} in {entry.tries} {entry.tries === 1 ? 'run' : 'runs'}
-                {entry.guess ? `. You guessed "${entry.guess.chosen.text.toLowerCase()}"; it was "${entry.guess.right.text.toLowerCase()}"` : ''}
-                {entry.round.upgrades > 0 && entry.passed
-                  ? `. Bottleneck left at ${names(entry.round.minutes, entry.upgraded)}`
-                  : ''}
-                .
+                {entry.title}: {entry.passed ? 'done' : 'skipped'} in {entry.tries} {entry.tries === 1 ? 'run' : 'runs'}
+                {entry.detail}.
               </span>
             </li>
           ))}

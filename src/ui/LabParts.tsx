@@ -155,23 +155,86 @@ export function QueueStrips({ series, bottlenecks, horizon }: { series: number[]
 }
 
 // A robot's cycle time as the minutes it was worked on and the minutes it waited.
-export function CycleBar({ cycle, waiting }: { cycle: number; waiting: number }) {
+export function CycleBar({ cycle, waiting, labels = ['Being worked on', 'Waiting in piles'], unit = 'min' }: { cycle: number; waiting: number; labels?: [string, string]; unit?: string }) {
   const work = Math.max(0, cycle - waiting)
   const share = cycle > 0 ? (100 * work) / cycle : 100
   return (
-    <figure className="cycle-bar" aria-label={`Cycle time ${Math.round(cycle)} minutes: ${Math.round(work)} working, ${Math.round(waiting)} waiting`}>
+    <figure className="cycle-bar" aria-label={`Cycle time ${Math.round(cycle)} ${unit}: ${Math.round(work)} ${labels[0].toLowerCase()}, ${Math.round(waiting)} ${labels[1].toLowerCase()}`}>
       <div className="bar" aria-hidden="true">
         <span className="work" style={{ width: `${share}%` }} />
         <span className="wait" style={{ width: `${100 - share}%` }} />
       </div>
       <figcaption>
         <span>
-          <i className="swatch work" /> Being worked on <strong>{Math.round(work)} min</strong>
+          <i className="swatch work" /> {labels[0]} <strong>{Math.round(work)} {unit}</strong>
         </span>
         <span>
-          <i className="swatch wait" /> Waiting in piles <strong>{Math.round(waiting)} min</strong>
+          <i className="swatch wait" /> {labels[1]} <strong>{Math.round(waiting)} {unit}</strong>
         </span>
       </figcaption>
+    </figure>
+  )
+}
+
+export interface DepthPoint {
+  depth: number
+  cycleHours: number
+  busy: number
+}
+
+// Cycle time and tools' busy time against the lots kept in the system: cycle time climbs in a straight
+// line while the tools stop getting busier as soon as every set has a lot.
+export function DepthChart({ points, sets, current, limit }: { points: DepthPoint[]; sets: number; current: number; limit: number }) {
+  const W2 = 560
+  const H2 = 250
+  const pad = { left: 52, right: 16, top: 14, bottom: 58 }
+  const top = Math.max(limit * 1.5, ...points.map((p) => p.cycleHours))
+  const x = (depth: number) => pad.left + ((depth - 1) / Math.max(1, points.length - 1)) * (W2 - pad.left - pad.right)
+  const y = (hours: number) => pad.top + (1 - hours / top) * (H2 - pad.top - pad.bottom)
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.depth).toFixed(1)} ${y(p.cycleHours).toFixed(1)}`).join('')
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round((top * f) / 5) * 5)
+  return (
+    <figure className="lab-chart">
+      <svg viewBox={`0 0 ${W2} ${H2}`} role="img" aria-label="Lot cycle time and tools busy against the number of lots in the system">
+        {[...new Set(ticks)].map((c) => (
+          <g key={c}>
+            <line className="grid" x1={pad.left} x2={W2 - pad.right} y1={y(c)} y2={y(c)} />
+            <text className="tick" x={pad.left - 8} y={y(c) + 4} textAnchor="end">
+              {c}
+            </text>
+          </g>
+        ))}
+        <line className="full" x1={x(sets)} x2={x(sets)} y1={pad.top} y2={H2 - pad.bottom} />
+        <text className="note" x={x(sets) + 5} y={pad.top + 12}>
+          every set has a lot
+        </text>
+        <line className="limit" x1={pad.left} x2={W2 - pad.right} y1={y(limit)} y2={y(limit)} />
+        <text className="note limit-text" x={pad.left + 6} y={y(limit) - 6}>
+          limit {limit} h
+        </text>
+        <g className="curve bold" style={{ color: 'var(--blue)' }}>
+          <path d={path} />
+          {points.map((p) => (
+            <circle key={p.depth} className="mark" cx={x(p.depth)} cy={y(p.cycleHours)} r={p.depth === current ? 6 : 3.5} />
+          ))}
+        </g>
+        {points.map((p) => (
+          <g key={p.depth}>
+            <text className="tick" x={x(p.depth)} y={H2 - pad.bottom + 16} textAnchor="middle">
+              {p.depth}
+            </text>
+            <text className={`tick busy${p.depth === current ? ' now' : ''}`} x={x(p.depth)} y={H2 - pad.bottom + 32} textAnchor="middle">
+              {Math.round(p.busy * 100)}%
+            </text>
+          </g>
+        ))}
+        <text className="axis-label" x={(pad.left + W2 - pad.right) / 2} y={H2 - 4} textAnchor="middle">
+          Lots in the system (and, under each, the share of tool time spent running)
+        </text>
+        <text className="axis-label" transform={`translate(13 ${(pad.top + H2 - pad.bottom) / 2}) rotate(-90)`} textAnchor="middle">
+          Lot cycle time (hours)
+        </text>
+      </svg>
     </figure>
   )
 }

@@ -62,11 +62,16 @@ interface PlaybackPanelProps {
   zones?: ZoneSpan[]
   // Where the line can have problems: whether playback stops at each one, and where they are.
   pause?: { on: boolean; onToggle: () => void; stops: Stop[] }
+  // What the clock and its end are called, when the run isn't a shift.
+  clockLabel?: string
+  endLabel?: string
+  // Leave out the usual "Working" and "Waiting for parts" entries, when the picture means other things.
+  plainLegend?: boolean
   children?: ReactNode
 }
 
 export function PlaybackPanel(props: PlaybackPanelProps) {
-  const { playback, speed, onSpeed, horizon, windows = [], parts, legend, zones, pause, children } = props
+  const { playback, speed, onSpeed, horizon, windows = [], parts, legend, zones, pause, clockLabel = 'Shift clock', endLabel = 'End of shift', plainLegend = false, children } = props
   const at = (minutes: number) => `${(100 * minutes) / horizon}%`
   const stoppedAt = pause?.on && !playback.playing ? pause.stops.find((stop) => stop.at === playback.t) : undefined
   return (
@@ -77,12 +82,16 @@ export function PlaybackPanel(props: PlaybackPanelProps) {
             <i className="swatch" /> Part waiting
           </span>
         )}
-        <span>
-          <i className="swatch dot" /> Working
-        </span>
-        <span>
-          <i className="swatch dot off" /> Waiting for parts
-        </span>
+        {!plainLegend && (
+          <>
+            <span>
+              <i className="swatch dot" /> Working
+            </span>
+            <span>
+              <i className="swatch dot off" /> Waiting for parts
+            </span>
+          </>
+        )}
         {legend}
       </div>
       <div className="controls">
@@ -101,7 +110,7 @@ export function PlaybackPanel(props: PlaybackPanelProps) {
           <Icon name="restart" /> Restart
         </button>
         <button className="btn" onClick={playback.skipToEnd}>
-          <Icon name="skip" /> End of shift
+          <Icon name="skip" /> {endLabel}
         </button>
         {pause && (
           <button className={`btn small${pause.on ? ' active' : ''}`} aria-pressed={pause.on} onClick={pause.onToggle}>
@@ -111,7 +120,7 @@ export function PlaybackPanel(props: PlaybackPanelProps) {
       </div>
       <div className="clock">
         <span>
-          Shift clock {clock(playback.t)} of {clock(horizon)}
+          {clockLabel} {clock(playback.t)} of {clock(horizon)}
           {windows.map((w) => ` · Break ${clock(w.from)} to ${clock(w.to)}`).join('')}
         </span>
         <Scrubber t={playback.t} horizon={horizon} onSeek={playback.seekTo}>

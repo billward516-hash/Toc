@@ -4714,3 +4714,133 @@ p.exam-taught,
   background: var(--ink);
   border-radius: 50%;
 }
+
+/* The lot round */
+
+.lot-floor {
+  min-width: 860px;
+}
+
+.lot-floor .area-label,
+.lot-floor .set-label {
+  font-size: 15px;
+}
+
+.lot-floor .set-label.dim,
+.lot-floor .tool-set.empty .set-label {
+  fill: var(--muted);
+}
+
+.lot-floor .queued-lot text {
+  font-size: 13px;
+  text-anchor: start;
+}
+
+.lot-floor .set-box {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-dasharray: 2 0;
+  opacity: 0.9;
+}
+
+.lot-floor .tool-set.empty .set-box {
+  stroke-dasharray: 6 6;
+  opacity: 0.5;
+}
+
+.lot-floor .tool-box {
+  fill: #f7f2e7;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.lot-floor .tool.unused .tool-box {
+  opacity: 0.45;
+  stroke-dasharray: 5 5;
+}
+
+.lot-floor .tool.waiting .tool-box {
+  fill: #efe7d3;
+}
+
+.lot-floor .tool.on .tool-wafers,
+.lot-floor .tool.on .tool-speed {
+  fill: #fff;
+}
+
+.lot-floor .tool-speed {
+  font-size: 13px;
+}
+
+.lot-floor .tool-wafers {
+  font-size: 22px;
+}
+
+.lot-floor .progress-fill {
+  fill: var(--ink);
+}
+
+.time-split {
+  margin: 0;
+}
+
+.time-split .bar {
+  display: flex;
+  height: 22px;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+}
+
+.time-split .running,
+.time-split .swatch.running {
+  background: var(--green);
+}
+
+.time-split .tail,
+.time-split .swatch.tail {
+  background: var(--amber);
+}
+
+.time-split .starved,
+.time-split .swatch.starved {
+  background: var(--red);
+}
+
+.time-split .unused,
+.time-split .swatch.unused {
+  background: #b9b3a3;
+}
+
+.time-split .swatch {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.time-split figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.by-size {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.by-size small {
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.lab-chart .tick.busy {
+  fill: var(--green-deep);
+}
+
+.lab-chart .tick.busy.now {
+  font-weight: 900;
+  fill: var(--ink);
+}
