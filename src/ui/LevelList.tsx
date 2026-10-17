@@ -22,6 +22,8 @@ interface LevelListProps {
   onPreferences: (preferences: Preferences) => void
   onOpen: (level: Level) => void
   onFreePlay: () => void
+  // Opens the loading lab, a short game about load and cycle time.
+  onLab: () => void
   // Opens the course guide for learners, the trainer's guide, or the exam.
   onGuide: (guide: Guide) => void
 }
@@ -30,7 +32,7 @@ interface LevelListProps {
 const CORE_DONE = 'tier3-read'
 
 export function LevelList(props: LevelListProps) {
-  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay, onGuide } = props
+  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay, onLab, onGuide } = props
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -59,6 +61,18 @@ export function LevelList(props: LevelListProps) {
       {player}
       {classCards}
       <ProgressMap levels={levels} tierNames={tierNames} completed={completed} stars={stars} />
+      <button className="level-card free lab" onClick={onLab}>
+        <span className="level-number">
+          <Icon name="stack" />
+        </span>
+        <span className="level-text">
+          <strong>Loading lab</strong>
+          <span className="principle">A short game: load a line with more and fewer orders and watch cycle time climb. One bottleneck, two, or many?</span>
+        </span>
+        <span className="level-state">
+          Play <Icon name="next" />
+        </span>
+      </button>
       <button className="level-card free" onClick={onFreePlay}>
         <span className="level-number">
           <Icon name="build" />

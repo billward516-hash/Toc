@@ -28,6 +28,7 @@ import { ClassCards, ClassPrompts, JoinClassDialog } from './ui/ClassMember.tsx'
 import { FreePlay } from './ui/FreePlay.tsx'
 import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
+import { LoadingLab } from './ui/LoadingLab.tsx'
 import { PlayerBar } from './ui/PlayerBar.tsx'
 import type { Guide } from './ui/types.ts'
 
@@ -45,6 +46,7 @@ export default function App() {
   const [loaded, setLoaded] = useState<StoredEvent[]>([])
   const [open, setOpen] = useState<Level | null>(null)
   const [free, setFree] = useState(false)
+  const [lab, setLab] = useState(false)
   // The course guide for learners, the trainer's guide, or the exam, when one is open.
   const [guide, setGuide] = useState<Guide | null>(null)
   // Settings changed this session, by player, over what's stored on the device.
@@ -68,7 +70,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [open, free, hostView, guide])
+  }, [open, free, lab, hostView, guide])
 
   // The class code has done its job once read; a reload shouldn't ask to join again.
   useEffect(() => {
@@ -169,6 +171,8 @@ export default function App() {
         )}
       </Suspense>
     )
+  } else if (lab) {
+    screen = <LoadingLab onExit={() => setLab(false)} />
   } else if (free) {
     screen = (
       <FreePlay
@@ -219,6 +223,7 @@ export default function App() {
         onPreferences={setPreferences}
         onOpen={setOpen}
         onFreePlay={() => setFree(true)}
+        onLab={() => setLab(true)}
         onGuide={setGuide}
       />
     )
@@ -235,6 +240,7 @@ export default function App() {
           openLevel={open?.id ?? null}
           onGo={(level) => {
             setFree(false)
+            setLab(false)
             setOpen(level)
           }}
         />

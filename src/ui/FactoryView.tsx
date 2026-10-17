@@ -41,6 +41,9 @@ interface FactoryViewProps {
   snapshot: Snapshot
   selected?: string | null
   constraint?: string | null
+  // Several stations tagged at once, such as every bottleneck of a line, with the tag's words.
+  bottlenecks?: string[]
+  bottleneckTag?: string
   badges?: Record<string, Badge[]>
   buildingAt?: number
   buffer?: BufferBand | null
@@ -75,8 +78,8 @@ function jobColor(palette: Palette, job: number): string | undefined {
 const zoneLabel: Record<Zone, string> = { dry: 'running dry', healthy: 'healthy', flooding: 'flooding' }
 
 export function FactoryView(props: FactoryViewProps) {
-  const { model, snapshot, selected = null, constraint = null, badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', rushJobs, onSelect } = props
-  const { selectedTag = 'Your pick', glide = 0 } = props
+  const { model, snapshot, selected = null, constraint = null, bottlenecks = [], badges = {}, buildingAt = 5, buffer = null, jobProducts, unit = 'robots', rushJobs, onSelect } = props
+  const { selectedTag = 'Your pick', bottleneckTag = 'Bottleneck', glide = 0 } = props
   const count = model.stations.length
   const width = count * COLUMN + BIN
   const beltY = BOX_TOP + 62
@@ -173,7 +176,8 @@ export function FactoryView(props: FactoryViewProps) {
             zone={buffer?.station === station.id ? zoneOf(snapshot.queues[i]) : null}
             selected={selected === station.id}
             selectedTag={selectedTag}
-            isConstraint={constraint === station.id}
+            isConstraint={constraint === station.id || bottlenecks.includes(station.id)}
+            constraintTag={constraint === station.id ? 'Constraint' : bottleneckTag}
             onSelect={onSelect}
           />
         )
@@ -382,6 +386,7 @@ interface ColumnProps {
   selected: boolean
   selectedTag: string
   isConstraint: boolean
+  constraintTag: string
   onSelect?: (stationId: string) => void
 }
 
@@ -405,7 +410,7 @@ function StationColumn(props: ColumnProps) {
   const halted = stopped === 'jammed' || stopped === 'broken'
   const status = halted ? (why ?? stopLabel[stopped]) : busy ? running : stopped ? (why ?? stopLabel[stopped]) : 'Waiting'
   const light = halted ? ' jammed' : changing ? ' changing' : busy ? ' on' : stopped === 'break' ? ' resting' : stopped === 'starved' ? ' starved' : ''
-  const tag = isConstraint ? 'Constraint' : selected ? props.selectedTag : null
+  const tag = isConstraint ? props.constraintTag : selected ? props.selectedTag : null
   const classes = ['station', onSelect && 'selectable', selected && 'selected', isConstraint && 'constraint'].filter(Boolean).join(' ')
   const extras = [
     ...(machines ?? []).map((machine, m) => {
