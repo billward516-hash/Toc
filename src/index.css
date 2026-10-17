@@ -4874,3 +4874,35 @@ p.exam-taught,
 .lot-floor .bin-label.held.some {
   fill: var(--red);
 }
+
+.explainer {
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: #fff;
+  padding: 10px 14px;
+}
+
+.explainer summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.explainer summary svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.explainer video {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  margin: 12px auto 8px;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  background: var(--ink);
+}

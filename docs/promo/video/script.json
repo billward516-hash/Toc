@@ -1,0 +1,19 @@
+[
+  {"cue": "hook-sparse", "say": "Quick question. When the highway is half empty, your commute is easy.", "caption": "Quick question. When the highway is half empty, your commute is easy.", "pause": 0.35},
+  {"cue": "hook-dense", "say": "When it's almost full, everything crawls. Same road. What changed? How busy it is.", "caption": "When it's almost full, everything crawls. Same road. What changed? How busy it is.", "pause": 0.5},
+  {"cue": "title", "say": "That's factory loading, and cycle time.", "caption": "That's factory loading, and cycle time.", "pause": 0.45},
+  {"cue": "gauge", "say": "Loading is how busy you keep your slowest step, the bottleneck. A hundred percent means it never gets a break.", "caption": "Loading is how busy you keep your slowest step, the bottleneck. 100% means it never gets a break.", "pause": 0.4},
+  {"cue": "cycle", "say": "Cycle time is how long one order takes, from the day it starts to the day it ships.", "caption": "Cycle time is how long one order takes, from the day it starts to the day it ships.", "pause": 0.5},
+  {"cue": "chart-base", "say": "Here's what our simulation shows. A robot needs ten minutes of real work.", "caption": "Here's what our simulation shows. A robot needs 10 minutes of real work.", "pause": 0.4},
+  {"cue": "pt60", "say": "At sixty percent loading, it takes eleven minutes.", "caption": "At 60% loading, it takes 11 minutes.", "pause": 0.3},
+  {"cue": "pt90", "say": "At ninety percent, eighteen.", "caption": "At 90%, 18.", "pause": 0.3},
+  {"cue": "pt95", "say": "At ninety-five, twenty-five.", "caption": "At 95%, 25.", "pause": 0.3},
+  {"cue": "pt100", "say": "At a hundred, forty.", "caption": "At 100%, 40.", "pause": 0.3},
+  {"cue": "pt110", "say": "And at a hundred and ten percent, ninety-one minutes, and climbing.", "caption": "And at 110%, 91 minutes, and climbing.", "pause": 0.5},
+  {"cue": "knee-label", "say": "That bend in the curve is the knee.", "caption": "That bend in the curve is the knee.", "pause": 0.4},
+  {"cue": "knee-split", "say": "Before it, a little more work costs you almost no time. After it, every extra order makes everybody wait.", "caption": "Before it, a little more work costs almost no time. After it, every extra order makes everybody wait.", "pause": 0.55},
+  {"cue": "why-queue", "say": "Why? Because nothing arrives perfectly smoothly. One slow job, or a crowd of orders, makes a line.", "caption": "Why? Nothing arrives perfectly smoothly. One slow job, or a crowd of orders, makes a line.", "pause": 0.4},
+  {"cue": "why-busy", "say": "And a station that's never idle never catches up.", "caption": "And a station that's never idle never catches up.", "pause": 0.55},
+  {"cue": "trade", "say": "Look at the trade. Going from ninety to a hundred percent ships about eight percent more, but cycle time more than doubles.", "caption": "Going from 90% to 100% ships about 8% more, but cycle time more than doubles.", "pause": 0.5},
+  {"cue": "sweet", "say": "So don't run flat out. Keep your bottleneck around ninety percent busy, and your orders keep moving.", "caption": "So don't run flat out. Keep your bottleneck around 90% busy, and your orders keep moving.", "pause": 0.8}
+]

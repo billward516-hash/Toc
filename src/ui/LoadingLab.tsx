@@ -306,6 +306,22 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
   )
 }
 
+// The explainer video, folded away so nothing downloads until it is opened.
+function Explainer() {
+  return (
+    <details className="explainer">
+      <summary>
+        <Icon name="play" /> Watch the 80-second explainer: loading, cycle time, and the knee
+      </summary>
+      <video controls preload="none" aria-label="Explainer video: an illustrated podcast host describes how factory loading affects cycle time, and the knee in the curve. Captions are in the picture.">
+        <source src={`${import.meta.env.BASE_URL}loading-lab-explainer.mp4`} type="video/mp4" />
+        <source src={`${import.meta.env.BASE_URL}loading-lab-explainer.webm`} type="video/webm" />
+      </video>
+      <p className="hint">An illustrated host with a synthetic voice. The numbers are this lab's own.</p>
+    </details>
+  )
+}
+
 // What the round is, and what counts as done.
 function Brief({ round, reference }: { round: Round; reference: Outcome | null }) {
   const cap = capacityPerHour(round.minutes)
@@ -333,6 +349,7 @@ function Brief({ round, reference }: { round: Round; reference: Outcome | null }
         <p>You choose the load. Too few orders and the line sits idle; too many and robots wait in long piles. Slide the load, run the day, and find the sweet spot.</p>
         {goal}
         {hint}
+        <Explainer />
       </section>
     )
   }
@@ -569,6 +586,7 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
       </header>
 
       <section className="card lab-summary">
+        <Explainer />
         <CurveChart series={series} limit={ROUND_ONE.mission.cycle} label="Cycle time against load for a line with one bottleneck, two, five, and five with four sped up." />
         <ol className="takeaways">
           <li>

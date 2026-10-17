@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root { --ink:#1f2544; --paper:#fff7e6; --blue:#3f63f5; --blue-soft:#eef1ff; --green:#22b573; --green-deep:#13804f; --amber:#ffb020; --amber-ink:#8f5300; --red:#e5383f; --muted:#62688a; }
+  html, body { margin:0; padding:0; background:var(--paper); }
+  body { width:1280px; height:720px; overflow:hidden; font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif; color:var(--ink); position:relative; }
+  svg { position:absolute; left:0; top:0; }
+  svg text { font-family: inherit; font-weight:800; }
+  #cap { position:absolute; left:60px; right:60px; bottom:26px; min-height:84px; display:flex; align-items:center; justify-content:center; text-align:center;
+    background:var(--ink); color:#fff; border-radius:22px; padding:12px 28px; font-size:31px; line-height:1.28; font-weight:800; box-shadow:0 6px 0 #0c0f24; }
+  #cap.off { visibility:hidden; }
+  #third { position:absolute; left:40px; top:30px; padding:10px 18px; background:var(--ink); color:#fff; border-radius:16px; font-size:22px; font-weight:800; }
+</style>
+</head>
+<body>
+<svg id="gfx" width="1280" height="720" viewBox="0 0 1280 720"></svg>
+<div id="third"></div>
+<div id="cap"></div>
+<script>
+const INK = '#1f2544', PAPER = '#fff7e6', BLUE = '#3f63f5', GREEN = '#22b573', GREEN_DEEP = '#13804f', AMBER = '#ffb020', RED = '#e5383f', MUTED = '#62688a'
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
+const lerp = (a, b, p) => a + (b - a) * p
+const ease = (p) => p * p * (3 - 2 * p)
+const f = (n) => n.toFixed(1)
+
+let TL = null
+let CURVE = null
+let DIST = null
+let QUEUE = null
+
+// ---- setup -------------------------------------------------------------------------------------
+window.setup = (timeline, curve) => {
+  TL = timeline
+  CURVE = curve.points
+  const fps = TL.fps
+  // Distance the highway cars have covered: fast while the road is half empty, a crawl once it fills.
+  const dense = TL.lines.find((l) => l.cue === 'hook-dense')
+  DIST = []
+  let d = 0
+  for (let k = 0; k < Math.ceil(TL.total * fps) + 2; k++) {
+    const t = k / fps
+    const p = ease(clamp((t - dense.start) / 1.2))
+    const speed = lerp(260, 34, p)
+    DIST.push(d)
+    d += speed / fps
+  }
+  // A small queue simulation for the two "why" lines: orders arrive unevenly, one station, 97% busy.
+  QUEUE = buildQueue()
+}
+
+function lcg(seed) {
+  let s = seed >>> 0
+  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296)
+}
+
+function buildQueue() {
+  let best = null
+  for (let seed = 1; seed < 400; seed++) {
+    const r = lcg(seed)
+    const arrivals = []
+    let t = 0.6
+    while (t < 40) { arrivals.push(t); t += 1.0 * (0.1 + 1.8 * r()) }
+    const jobs = arrivals.map((a) => ({ arrive: a, work: 0.97 * (0.25 + 1.5 * r()) }))
+    let free = 0
+    for (const j of jobs) { j.start = Math.max(free, j.arrive); j.end = j.start + j.work; free = j.end }
+    const q = (t) => jobs.filter((j) => j.arrive <= t && j.start > t).length
+    const peak = Math.max(...Array.from({ length: 160 }, (_, k) => q(k * 0.1)))
+    const early = q(4)
+    const score = Math.abs(peak - 9) + (early > 3 ? 5 : 0)
+    if (!best || score < best.score) best = { score, seed, jobs, q }
+  }
+  return best
+}
+
+// ---- host ----------------------------------------------------------------------------------------
+function host(t, mouth, speaking) {
+  const bob = Math.sin(t * 2.1) * 2 + mouth * 3
+  const blinkPhase = (t % 3.4)
+  const blink = blinkPhase > 3.25 ? 1 : 0
+  const brow = -mouth * 4
+  const ry = 5 + mouth * 20
+  const rx = 22 - mouth * 4
+  const nod = speaking ? Math.sin(t * 3.3) * 1.2 : 0
+  return `
+  <g transform="translate(0 ${f(bob)})">
+    <circle cx="240" cy="330" r="190" fill="#eef1ff" />
+    <!-- shoulders and shirt -->
+    <path d="M70 640 C70 520 140 470 240 470 C340 470 410 520 410 640 Z" fill="#3f63f5" stroke="${INK}" stroke-width="5" />
+    <path d="M205 472 L240 520 L275 472" fill="#fff" stroke="${INK}" stroke-width="5" stroke-linejoin="round" />
+    <!-- neck -->
+    <rect x="212" y="410" width="56" height="70" rx="22" fill="#e7b48c" stroke="${INK}" stroke-width="5" />
+    <g transform="rotate(${f(nod)} 240 330)">
+      <!-- head -->
+      <ellipse cx="240" cy="320" rx="98" ry="108" fill="#f2c29b" stroke="${INK}" stroke-width="5" />
+      <!-- hair -->
+      <path d="M142 306 C132 220 190 190 246 192 C312 194 352 236 338 306 C320 262 290 246 240 248 C190 248 160 268 142 306 Z" fill="#3a2a22" stroke="${INK}" stroke-width="5" stroke-linejoin="round" />
+      <!-- ears -->
+      <ellipse cx="143" cy="325" rx="12" ry="22" fill="#e7b48c" stroke="${INK}" stroke-width="5" />
+      <ellipse cx="337" cy="325" rx="12" ry="22" fill="#e7b48c" stroke="${INK}" stroke-width="5" />
+      <!-- eyebrows -->
+      <path d="M185 ${f(285 + brow)} Q205 ${f(274 + brow)} 224 ${f(284 + brow)}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round" />
+      <path d="M256 ${f(284 + brow)} Q275 ${f(274 + brow)} 295 ${f(285 + brow)}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round" />
+      <!-- eyes -->
+      <ellipse cx="205" cy="312" rx="11" ry="${blink ? 1.5 : 13}" fill="${INK}" />
+      <ellipse cx="275" cy="312" rx="11" ry="${blink ? 1.5 : 13}" fill="${INK}" />
+      <!-- nose -->
+      <path d="M240 322 Q232 346 244 350" fill="none" stroke="#c88a62" stroke-width="5" stroke-linecap="round" />
+      <!-- mouth -->
+      <ellipse cx="240" cy="${f(384 + ry * 0.2)}" rx="${f(rx)}" ry="${f(ry)}" fill="#7a2230" stroke="${INK}" stroke-width="5" />
+      ${ry > 11 ? `<ellipse cx="240" cy="${f(384 + ry * 0.2 + ry * 0.45)}" rx="${f(rx * 0.55)}" ry="${f(ry * 0.35)}" fill="#e56a78" />` : ''}
+      <!-- headphones -->
+      <path d="M134 318 C128 200 190 170 240 170 C290 170 352 200 346 318" fill="none" stroke="${INK}" stroke-width="12" stroke-linecap="round" />
+      <rect x="112" y="296" width="36" height="64" rx="16" fill="#e5383f" stroke="${INK}" stroke-width="5" />
+      <rect x="332" y="296" width="36" height="64" rx="16" fill="#e5383f" stroke="${INK}" stroke-width="5" />
+    </g>
+    <!-- boom mic -->
+    <path d="M420 520 L420 300 Q420 250 360 250 L300 330" fill="none" stroke="${INK}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="278" y="326" width="40" height="64" rx="18" fill="#62688a" stroke="${INK}" stroke-width="5" transform="rotate(32 298 358)" />
+    <!-- desk and mug -->
+    <rect x="30" y="560" width="450" height="46" rx="14" fill="#c9915a" stroke="${INK}" stroke-width="5" />
+    <rect x="70" y="520" width="42" height="42" rx="8" fill="#fff" stroke="${INK}" stroke-width="5" />
+    <path d="M112 532 q22 0 22 16 q0 14 -22 14" fill="none" stroke="${INK}" stroke-width="5" />
+  </g>`
+}
+
+// ---- cards ---------------------------------------------------------------------------------------
+const CARD = { x: 520, y: 40, w: 720, h: 510 }
+const card = (inner, chip, opacity) => `
+  <g opacity="${f(opacity)}">
+    <rect x="${CARD.x}" y="${CARD.y + 6}" width="${CARD.w}" height="${CARD.h}" rx="26" fill="${INK}" />
+    <rect x="${CARD.x}" y="${CARD.y}" width="${CARD.w}" height="${CARD.h}" rx="26" fill="#fff" stroke="${INK}" stroke-width="5" />
+    <g transform="translate(${CARD.x} ${CARD.y})">
+      <rect x="24" y="20" width="${chip.length * 13 + 36}" height="38" rx="19" fill="${INK}" />
+      <text x="42" y="46" font-size="21" fill="#fff">${chip}</text>
+      ${inner}
+    </g>
+  </g>`
+
+function highway(t, dense) {
+  const roadY = 200, roadH = 150, len = 640
+  const colors = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff', '#22b573', '#ffb020']
+  const k = Math.min(DIST.length - 1, Math.floor(t * TL.fps))
+  const d = DIST[k]
+  const slots = 7, gap = len / slots
+  const cars = []
+  for (let j = 0; j < slots * 2; j++) {
+    const lane = j % 2, slot = Math.floor(j / 2)
+    const early = slot === 0 || slot === 4
+    const visible = early ? 1 : ease(clamp((t - dense.start) / 1.4 - slot * 0.06))
+    if (visible <= 0) continue
+    const x = 30 + ((((slot * gap + lane * 44 + d * 0.8) % len) + len) % len) - 62
+    const y = roadY + 18 + lane * 62
+    cars.push(`<g opacity="${f(visible)}" transform="translate(${f(x)} ${y})"><rect width="62" height="34" rx="9" fill="${colors[j % colors.length]}" stroke="${INK}" stroke-width="4" /><rect x="40" y="5" width="14" height="24" rx="4" fill="#dff1ff" stroke="${INK}" stroke-width="2.5" /></g>`)
+  }
+  const nowDense = t >= dense.start
+  const label = nowDense ? 'Almost full: everything crawls' : 'Half empty: easy'
+  const sub = nowDense ? 'Same road. The only thing that changed is how busy it is.' : 'Cars flow at full speed.'
+  return `
+    <defs><clipPath id="road"><rect x="30" y="${roadY - 10}" width="660" height="${roadH + 20}" rx="22" /></clipPath></defs>
+    <rect x="30" y="${roadY - 10}" width="660" height="${roadH + 20}" rx="22" fill="#4a4f6b" />
+    <g clip-path="url(#road)"><line x1="30" y1="${roadY + roadH / 2}" x2="690" y2="${roadY + roadH / 2}" stroke="#fff7e6" stroke-width="5" stroke-dasharray="26 22" />${cars.join('')}</g>
+    <rect x="30" y="${roadY - 10}" width="660" height="${roadH + 20}" rx="22" fill="none" stroke="${INK}" stroke-width="5" />
+    <text x="360" y="${roadY + roadH + 82}" text-anchor="middle" font-size="38" fill="${nowDense ? RED : GREEN_DEEP}">${label}</text>
+    <text x="360" y="${roadY + roadH + 122}" text-anchor="middle" font-size="22" fill="${MUTED}">${sub}</text>`
+}
+
+function titleCard(t, line) {
+  const p = ease(clamp((t - line.start) / 0.5))
+  return `
+    <g transform="translate(0 ${f((1 - p) * 20)})" opacity="${f(p)}">
+      <rect x="70" y="150" width="270" height="110" rx="26" fill="${BLUE}" stroke="${INK}" stroke-width="5" />
+      <text x="205" y="218" text-anchor="middle" font-size="44" fill="#fff">Loading</text>
+      <text x="205" y="296" text-anchor="middle" font-size="22" fill="${MUTED}">how busy</text>
+      <path d="M360 205 h60 m-18 -18 l18 18 l-18 18" fill="none" stroke="${INK}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+      <rect x="440" y="150" width="210" height="110" rx="26" fill="${AMBER}" stroke="${INK}" stroke-width="5" />
+      <text x="545" y="218" text-anchor="middle" font-size="40" fill="${INK}">Cycle time</text>
+      <text x="545" y="296" text-anchor="middle" font-size="22" fill="${MUTED}">how long</text>
+      <text x="360" y="420" text-anchor="middle" font-size="34" fill="${INK}">What does one do to the other?</text>
+    </g>`
+}
+
+function stationsRow(highlight, y) {
+  const names = ['Cut', 'Mold', 'Paint', 'Assemble', 'Box']
+  return names.map((n, i) => {
+    const x = 34 + i * 134
+    const hot = highlight && i === 2
+    return `<g><rect x="${x}" y="${y}" width="118" height="64" rx="16" fill="${hot ? '#ffe3e4' : '#f7f2e7'}" stroke="${hot ? RED : INK}" stroke-width="${hot ? 6 : 4}" /><text x="${x + 59}" y="${y + 40}" text-anchor="middle" font-size="22" fill="${INK}">${n}</text>${hot ? `<text x="${x + 59}" y="${y + 90}" text-anchor="middle" font-size="19" fill="${RED}">bottleneck</text>` : ''}</g>`
+  }).join('')
+}
+
+function gauge(t, line) {
+  const p = ease(clamp((t - line.start) / Math.max(0.5, (line.end - line.start) * 0.85)))
+  const cx = 360, cy = 300, r = 170
+  const ang = (v) => Math.PI * (1 - v) // v from 0..1 -> pi..0
+  const pt = (v, rad) => [cx + Math.cos(ang(v)) * rad, cy - Math.sin(ang(v)) * rad]
+  const arc = (a, b, col) => {
+    const [x1, y1] = pt(a, r), [x2, y2] = pt(b, r)
+    return `<path d="M${f(x1)} ${f(y1)} A${r} ${r} 0 0 1 ${f(x2)} ${f(y2)}" fill="none" stroke="${col}" stroke-width="30" />`
+  }
+  const v = p
+  const [nx, ny] = pt(v, r - 24)
+  return `
+    ${arc(0, 0.85, GREEN)}${arc(0.85, 1, AMBER)}
+    <path d="M${f(pt(0, r)[0])} ${f(pt(0, r)[1])} A${r} ${r} 0 0 1 ${f(pt(1, r)[0])} ${f(pt(1, r)[1])}" fill="none" stroke="${INK}" stroke-width="4" opacity="0.25" />
+    <line x1="${cx}" y1="${cy}" x2="${f(nx)}" y2="${f(ny)}" stroke="${INK}" stroke-width="10" stroke-linecap="round" />
+    <circle cx="${cx}" cy="${cy}" r="16" fill="${INK}" />
+    <text x="${cx}" y="${cy + 78}" text-anchor="middle" font-size="44" fill="${INK}">Loading ${Math.round(v * 100)}%</text>
+    <text x="${cx - r}" y="${cy + 30}" text-anchor="middle" font-size="19" fill="${MUTED}">0</text>
+    <text x="${cx + r}" y="${cy + 30}" text-anchor="middle" font-size="19" fill="${MUTED}">100%</text>
+    ${stationsRow(true, 400)}`
+}
+
+function cycleCard(t, line) {
+  const p = ease(clamp((t - line.start) / Math.max(0.5, (line.end - line.start) * 0.9)))
+  const x0 = 70, x1 = 650, y = 250
+  const segs = [[0, 0.1, 1], [0.1, 0.22, 0], [0.22, 0.3, 1], [0.3, 0.5, 0], [0.5, 0.58, 1], [0.58, 0.8, 0], [0.8, 0.9, 1], [0.9, 1, 0]]
+  const bar = segs.map(([a, b, work]) => {
+    const w = clamp((p - a) / (b - a)) * (b - a) * (x1 - x0)
+    return w > 0 ? `<rect x="${f(x0 + a * (x1 - x0))}" y="${y}" width="${f(w)}" height="56" fill="${work ? GREEN : AMBER}" />` : ''
+  }).join('')
+  const dotX = x0 + p * (x1 - x0)
+  return `
+    <text x="${x0}" y="170" font-size="26" fill="${INK}">Order starts</text>
+    <text x="${x1}" y="170" text-anchor="end" font-size="26" fill="${INK}">Order ships</text>
+    <rect x="${x0}" y="${y}" width="${x1 - x0}" height="56" rx="14" fill="#f7f2e7" />
+    ${bar}
+    <rect x="${x0}" y="${y}" width="${x1 - x0}" height="56" rx="14" fill="none" stroke="${INK}" stroke-width="5" />
+    <circle cx="${f(dotX)}" cy="${y + 28}" r="17" fill="#fff" stroke="${INK}" stroke-width="5" />
+    <rect x="${x0}" y="${y + 120}" width="26" height="26" rx="6" fill="${GREEN}" stroke="${INK}" stroke-width="3" /><text x="${x0 + 38}" y="${y + 142}" font-size="25" fill="${INK}">being worked on</text>
+    <rect x="${x0 + 300}" y="${y + 120}" width="26" height="26" rx="6" fill="${AMBER}" stroke="${INK}" stroke-width="3" /><text x="${x0 + 338}" y="${y + 142}" font-size="25" fill="${INK}">waiting in a pile</text>
+    <text x="360" y="${y + 230}" text-anchor="middle" font-size="40" fill="${INK}">Cycle time = working + waiting</text>`
+}
+
+// ---- the curve ------------------------------------------------------------------------------------
+const CH = { x: 76, y: 78, w: 610, h: 350, lo: 0.4, hi: 1.2, top: 120 }
+const cx_ = (load) => CH.x + ((load - CH.lo) / (CH.hi - CH.lo)) * CH.w
+const cy_ = (min) => CH.y + (1 - clamp(min, 0, CH.top) / CH.top) * CH.h
+
+function curveAt(load) {
+  const pts = CURVE
+  if (load <= pts[0].load) return pts[0].cycle
+  for (let i = 1; i < pts.length; i++) {
+    if (load <= pts[i].load) {
+      const a = pts[i - 1], b = pts[i]
+      return lerp(a.cycle, b.cycle, (load - a.load) / (b.load - a.load))
+    }
+  }
+  return pts[pts.length - 1].cycle
+}
+
+function chartFrame() {
+  const grid = [0, 30, 60, 90, 120].map((m) => `<line x1="${CH.x}" y1="${f(cy_(m))}" x2="${CH.x + CH.w}" y2="${f(cy_(m))}" stroke="#eee4d0" stroke-width="2" /><text x="${CH.x - 10}" y="${f(cy_(m) + 6)}" text-anchor="end" font-size="17" fill="${MUTED}">${m}</text>`).join('')
+  const xs = [0.4, 0.6, 0.8, 1.0, 1.2].map((l) => `<text x="${f(cx_(l))}" y="${CH.y + CH.h + 28}" text-anchor="middle" font-size="18" fill="${MUTED}">${Math.round(l * 100)}%</text>`).join('')
+  return `${grid}${xs}
+    <line x1="${f(cx_(1))}" y1="${CH.y}" x2="${f(cx_(1))}" y2="${CH.y + CH.h}" stroke="${INK}" stroke-width="3" stroke-dasharray="7 6" opacity="0.5" />
+    <text x="${CH.x + CH.w / 2}" y="${CH.y + CH.h + 58}" text-anchor="middle" font-size="19" fill="${INK}">Loading: how busy the bottleneck is</text>
+    <text transform="translate(26 ${CH.y + CH.h / 2}) rotate(-90)" text-anchor="middle" font-size="19" fill="${INK}">Cycle time (minutes)</text>`
+}
+
+function curvePath(toLoad) {
+  const out = []
+  const steps = 90
+  for (let i = 0; i <= steps; i++) {
+    const l = lerp(CH.lo, toLoad, i / steps)
+    out.push(`${i === 0 ? 'M' : 'L'}${f(cx_(l))} ${f(cy_(curveAt(l)))}`)
+  }
+  return out.join('')
+}
+
+const CALLOUTS = [
+  { cue: 'pt60', load: 0.6, text: '11 min' },
+  { cue: 'pt90', load: 0.9, text: '18 min' },
+  { cue: 'pt95', load: 0.95, text: '25 min' },
+  { cue: 'pt100', load: 1.0, text: '40 min' },
+  { cue: 'pt110', load: 1.1, text: '91 min' },
+]
+
+function chart(t, line) {
+  const cue = line.cue
+  const idx = TL.lines.findIndex((l) => l === line)
+  const startOf = (name) => TL.lines.find((l) => l.cue === name)
+  let reveal = CH.lo
+  let shown = []
+  const calls = CALLOUTS.map((c) => ({ ...c, line: startOf(c.cue) }))
+  for (const c of calls) {
+    if (t >= c.line.start) {
+      const p = ease(clamp((t - c.line.start) / Math.max(0.4, c.line.end - c.line.start)))
+      const prev = shown.length ? shown[shown.length - 1].load : CH.lo
+      reveal = lerp(prev, c.load, p)
+      if (p > 0.7) shown.push(c)
+    }
+  }
+  const afterNumbers = t >= startOf('knee-label').start
+  if (afterNumbers) {
+    const p = ease(clamp((t - startOf('knee-label').start) / 0.9))
+    reveal = lerp(1.1, CH.hi, p)
+    shown = calls
+  }
+  const base = `
+    <line x1="${f(cx_(CH.lo))}" y1="${f(cy_(10))}" x2="${f(cx_(CH.hi))}" y2="${f(cy_(10))}" stroke="${GREEN_DEEP}" stroke-width="3" stroke-dasharray="3 7" />
+    <text x="${f(cx_(0.44))}" y="${f(cy_(10) + 26)}" font-size="19" fill="${GREEN_DEEP}">10 min of real work</text>`
+  const baseOpacity = ease(clamp((t - startOf('chart-base').start) / 0.5))
+  const drawn = reveal > CH.lo + 0.001 ? `<path d="${curvePath(reveal)}" fill="none" stroke="${BLUE}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />` : ''
+  const dots = shown.map((c) => {
+    const x = cx_(c.load), y = cy_(curveAt(c.load))
+    const offset = { pt60: [-42, -54], pt90: [-122, -52], pt95: [-42, -102], pt100: [16, 8], pt110: [16, -6] }[c.cue]
+    const bx = x + offset[0], by = y + offset[1]
+    return `<circle cx="${f(x)}" cy="${f(y)}" r="9" fill="#fff" stroke="${INK}" stroke-width="5" />
+      <g><rect x="${f(bx)}" y="${f(by)}" width="88" height="36" rx="11" fill="${INK}" /><text x="${f(bx + 44)}" y="${f(by + 26)}" text-anchor="middle" font-size="21" fill="#fff">${c.text}</text></g>`
+  }).join('')
+  let overlay = ''
+  const kneeLine = startOf('knee-label'), splitLine = startOf('knee-split'), sweetLine = startOf('sweet')
+  if (t >= splitLine.start) {
+    const p = ease(clamp((t - splitLine.start) / 0.6))
+    overlay += `<rect x="${f(cx_(0.4))}" y="${CH.y}" width="${f(cx_(0.93) - cx_(0.4))}" height="${CH.h}" fill="${GREEN}" opacity="${f(0.13 * p)}" />
+      <rect x="${f(cx_(0.93))}" y="${CH.y}" width="${f(cx_(1.2) - cx_(0.93))}" height="${CH.h}" fill="${RED}" opacity="${f(0.12 * p)}" />
+      <text x="${f(cx_(0.58))}" y="${f(cy_(52))}" text-anchor="middle" font-size="25" fill="${GREEN_DEEP}" opacity="${f(p)}">little cost</text>
+      <text x="${f(cx_(1.1))}" y="${f(cy_(15))}" text-anchor="middle" font-size="22" fill="${RED}" opacity="${f(p)}">everyone waits</text>`
+  }
+  if (t >= kneeLine.start) {
+    const p = ease(clamp((t - kneeLine.start - 0.6) / 0.5))
+    const pulse = 1 + 0.12 * Math.sin((t - kneeLine.start) * 5)
+    const kx = cx_(0.93), ky = cy_(curveAt(0.93))
+    overlay += `<g opacity="${f(p)}"><circle cx="${f(kx)}" cy="${f(ky)}" r="${f(30 * pulse)}" fill="none" stroke="${RED}" stroke-width="6" />
+      <rect x="${f(kx - 250)}" y="${f(ky - 214)}" width="160" height="48" rx="14" fill="${RED}" /><text x="${f(kx - 170)}" y="${f(ky - 181)}" text-anchor="middle" font-size="28" fill="#fff">THE KNEE</text>
+      <path d="M${f(kx - 122)} ${f(ky - 164)} L${f(kx - 34)} ${f(ky - 40)}" stroke="${RED}" stroke-width="6" stroke-linecap="round" /></g>`
+  }
+  if (t >= sweetLine.start) {
+    const p = ease(clamp((t - sweetLine.start) / 0.6))
+    overlay += `<rect x="${f(cx_(0.85))}" y="${CH.y}" width="${f(cx_(0.93) - cx_(0.85))}" height="${CH.h}" fill="${GREEN}" opacity="${f(0.35 * p)}" />
+      <rect x="${f(cx_(0.8))}" y="${f(CH.y + 8)}" width="150" height="62" rx="14" fill="${GREEN_DEEP}" opacity="${f(p)}" /><text x="${f(cx_(0.8) + 75)}" y="${f(CH.y + 36)}" text-anchor="middle" font-size="22" fill="#fff" opacity="${f(p)}">sweet spot</text><text x="${f(cx_(0.8) + 75)}" y="${f(CH.y + 60)}" text-anchor="middle" font-size="20" fill="#fff" opacity="${f(p)}">about 90%</text>`
+  }
+  return `${chartFrame()}<g opacity="${f(baseOpacity)}">${base}</g>${overlay}${drawn}${dots}`
+}
+
+// ---- queue ----------------------------------------------------------------------------------------
+function queueCard(t, line, busyLine) {
+  const t0 = line.start
+  const st = (t - t0) * 0.9 + 0.2
+  const { jobs, q } = QUEUE
+  const waiting = jobs.filter((j) => j.arrive <= st && j.start > st)
+  const active = jobs.find((j) => j.start <= st && j.end > st)
+  const done = jobs.filter((j) => j.end <= st).length
+  const stationX = 430, stationY = 170
+  const squares = waiting.slice(0, 30).map((j, k) => {
+    const col = k % 6, row = Math.floor(k / 6)
+    return `<rect x="${130 + col * 40}" y="${330 - row * 40}" width="32" height="32" rx="8" fill="${BLUE}" stroke="${INK}" stroke-width="3.5" />`
+  }).join('')
+  const arriving = jobs.filter((j) => j.arrive <= st && j.arrive > st - 0.55).map((j) => {
+    const p = (st - j.arrive) / 0.55
+    return `<rect x="${f(lerp(30, 120, p))}" y="${f(200)}" width="32" height="32" rx="8" fill="${BLUE}" stroke="${INK}" stroke-width="3.5" opacity="${f(1 - p * 0.3)}" />`
+  }).join('')
+  const slow = active && active.work > 1.15
+  const prog = active ? clamp((st - active.start) / active.work) : 0
+  const onBusy = t >= busyLine.start
+  const util = onBusy ? 'Busy: 100% of the time' : ''
+  const wcount = waiting.length
+  const spark = []
+  for (let k = 0; k <= 60; k++) {
+    const s = Math.min(st, (k / 60) * st)
+    spark.push(`${k === 0 ? 'M' : 'L'}${f(30 + (k / 60) * 280)} ${f(480 - q(s) * 9)}`)
+  }
+  return `
+    <text x="30" y="100" font-size="21" fill="${MUTED}">Orders arrive unevenly</text>
+    <path d="M30 150 h90" stroke="${INK}" stroke-width="5" stroke-dasharray="4 8" />
+    ${arriving}
+    <rect x="110" y="${f(334 - Math.ceil(Math.max(1, wcount) / 6) * 40 + 6)}" width="260" height="${Math.ceil(Math.max(1, wcount) / 6) * 40 + 4}" rx="14" fill="none" stroke="${AMBER}" stroke-width="4" stroke-dasharray="8 7" opacity="${wcount ? 1 : 0}" />
+    ${squares}
+    <text x="240" y="400" text-anchor="middle" font-size="30" fill="${wcount >= 5 ? RED : INK}">${wcount} waiting</text>
+    <rect x="${stationX}" y="${stationY}" width="190" height="130" rx="22" fill="#fff" stroke="${slow ? RED : INK}" stroke-width="6" />
+    <text x="${stationX + 95}" y="${stationY + 42}" text-anchor="middle" font-size="26" fill="${INK}">Station</text>
+    <circle cx="${stationX + 34}" cy="${stationY + 80}" r="9" fill="${active ? GREEN : '#c9c2b3'}" stroke="${INK}" stroke-width="3" />
+    <text x="${stationX + 54}" y="${stationY + 87}" font-size="21" fill="${INK}">${active ? (slow ? 'slow job' : 'working') : 'idle'}</text>
+    <rect x="${stationX + 20}" y="${stationY + 100}" width="150" height="12" rx="6" fill="#eee4d0" /><rect x="${stationX + 20}" y="${stationY + 100}" width="${f(150 * prog)}" height="12" rx="6" fill="${slow ? RED : GREEN}" />
+    <path d="M${stationX + 200} ${stationY + 65} h60" stroke="${INK}" stroke-width="5" /><text x="${stationX + 232}" y="${stationY + 112}" text-anchor="middle" font-size="22" fill="${MUTED}">${done} done</text>
+    <text x="${stationX + 95}" y="${stationY + 190}" text-anchor="middle" font-size="26" fill="${RED}">${util}</text>
+    <text x="30" y="440" font-size="19" fill="${MUTED}">the pile over time</text>
+    <path d="${spark.join('')}" fill="none" stroke="${AMBER}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="30" y1="480" x2="310" y2="480" stroke="${INK}" stroke-width="3" opacity="0.4" />
+    ${onBusy ? `<text x="${stationX + 95}" y="${stationY + 232}" text-anchor="middle" font-size="22" fill="${INK}">never idle, so it never catches up</text>` : ''}`
+}
+
+// ---- the trade ------------------------------------------------------------------------------------
+function tradeCard(t, line) {
+  const p = ease(clamp((t - line.start) / Math.max(0.6, (line.end - line.start) * 0.55)))
+  const bar = (x, w, h, col, label, value, delay = 0) => {
+    const pp = ease(clamp(p * (1 + delay) - delay))
+    const hh = h * pp
+    return `<rect x="${x}" y="${f(440 - hh)}" width="${w}" height="${f(hh)}" rx="12" fill="${col}" stroke="${INK}" stroke-width="5" />
+      <text x="${x + w / 2}" y="${f(430 - hh)}" text-anchor="middle" font-size="30" fill="${INK}" opacity="${f(pp)}">${value}</text>
+      <text x="${x + w / 2}" y="478" text-anchor="middle" font-size="21" fill="${MUTED}">${label}</text>`
+  }
+  const o1 = 432 / 466 * 215, o2 = 215
+  const c1 = 17.9 / 40 * 215, c2 = 215
+  const pill = (x, w, y, text, col, show) => `<g opacity="${f(show)}"><rect x="${x}" y="${y}" width="${w}" height="50" rx="16" fill="${col}" stroke="${INK}" stroke-width="4" /><text x="${x + w / 2}" y="${y + 34}" text-anchor="middle" font-size="25" fill="#fff">${text}</text></g>`
+  const show = ease(clamp((p - 0.7) / 0.3))
+  return `
+    <text x="170" y="110" text-anchor="middle" font-size="27" fill="${INK}">Robots shipped a day</text>
+    <text x="545" y="110" text-anchor="middle" font-size="27" fill="${INK}">Cycle time (minutes)</text>
+    ${bar(60, 90, o1, GREEN, '90% load', '432')}
+    ${bar(180, 90, o2, GREEN, '100% load', '466', 0.1)}
+    ${bar(440, 90, c1, AMBER, '90% load', '18')}
+    ${bar(560, 90, c2, RED, '100% load', '40', 0.1)}
+    ${pill(50, 240, 128, '+8% more', GREEN_DEEP, show)}
+    ${pill(405, 280, 128, 'more than double', RED, show)}`
+}
+
+function endCard(t, start) {
+  const p = ease(clamp((t - start) / 0.6))
+  return `<g opacity="${f(p)}">
+    <rect x="0" y="0" width="1280" height="720" fill="${PAPER}" />
+    <rect x="240" y="170" width="800" height="300" rx="34" fill="#fff" stroke="${INK}" stroke-width="6" />
+    <text x="640" y="262" text-anchor="middle" font-size="64" fill="${INK}">TOC Factory</text>
+    <text x="640" y="336" text-anchor="middle" font-size="40" fill="${BLUE}">Loading lab</text>
+    <text x="640" y="398" text-anchor="middle" font-size="28" fill="${MUTED}">Slide the load. Find the knee. Keep the bottleneck near 90%.</text>
+    <text x="640" y="440" text-anchor="middle" font-size="20" fill="${MUTED}">Illustrated host and synthetic voice.</text>
+  </g>`
+}
+
+// ---- compose --------------------------------------------------------------------------------------
+const GROUP = {
+  'hook-sparse': ['Traffic', 'hook'], 'hook-dense': ['Traffic', 'hook'], title: ['Two ideas', 'title'], gauge: ['Loading', 'gauge'], cycle: ['Cycle time', 'cycle'],
+  'chart-base': ['Our simulation', 'chart'], pt60: ['Our simulation', 'chart'], pt90: ['Our simulation', 'chart'], pt95: ['Our simulation', 'chart'], pt100: ['Our simulation', 'chart'], pt110: ['Our simulation', 'chart'],
+  'knee-label': ['Our simulation', 'chart'], 'knee-split': ['Our simulation', 'chart'], 'why-queue': ['Why queues form', 'queue'], 'why-busy': ['Why queues form', 'queue'], trade: ['The trade', 'trade'], sweet: ['Our simulation', 'chart'],
+}
+
+window.renderAt = (t) => {
+  const fps = TL.fps
+  const k = Math.min(TL.mouth.length - 1, Math.floor(t * fps))
+  const lines = TL.lines
+  let line = lines.find((l) => t >= l.start && t < l.end + l.pause) || lines[lines.length - 1]
+  if (t < lines[0].start) line = lines[0]
+  const speaking = lines.some((l) => t >= l.start && t <= l.end)
+  const mouth = speaking ? TL.mouth[k] : 0
+  const [chip, kind] = GROUP[line.cue]
+  const groupStart = Math.min(...lines.filter((l) => GROUP[l.cue][1] === kind).map((l) => l.start))
+  // chart group is split in two stretches (before and after the trade), so measure from this stretch's first line
+  const idx = lines.indexOf(line)
+  let first = idx
+  while (first > 0 && GROUP[lines[first - 1].cue][1] === kind) first--
+  const opacity = ease(clamp((t - lines[first].start + 0.1) / 0.35))
+  let inner = ''
+  const dense = lines.find((l) => l.cue === 'hook-dense')
+  const why = lines.find((l) => l.cue === 'why-queue'), busy = lines.find((l) => l.cue === 'why-busy')
+  if (kind === 'hook') inner = highway(t, dense)
+  else if (kind === 'title') inner = titleCard(t, line)
+  else if (kind === 'gauge') inner = gauge(t, line)
+  else if (kind === 'cycle') inner = cycleCard(t, line)
+  else if (kind === 'chart') inner = chart(t, line)
+  else if (kind === 'queue') inner = queueCard(t, why, busy)
+  else if (kind === 'trade') inner = tradeCard(t, line)
+  const last = lines[lines.length - 1]
+  const endStart = last.end + 1.1
+  const showEnd = t >= endStart
+  document.getElementById('gfx').innerHTML = `
+    <rect width="1280" height="720" fill="${PAPER}" />
+    <rect x="0" y="0" width="1280" height="560" fill="#ffefc9" />
+    <rect x="0" y="560" width="1280" height="160" fill="#f3e3bd" />
+    ${host(t, mouth, speaking)}
+    ${card(inner, chip, opacity)}
+    ${showEnd ? endCard(t, endStart) : ''}`
+  const cap = document.getElementById('cap')
+  const showCap = (t >= line.start - 0.05 && t <= line.end + 0.35) && !showEnd
+  cap.className = showCap ? '' : 'off'
+  if (showCap) cap.textContent = line.caption
+  const third = document.getElementById('third')
+  third.style.display = t < 3.6 && !showEnd ? 'block' : 'none'
+  third.textContent = 'The Flow Show  ·  Loading, cycle time, and the knee'
+}
+</script>
+</body>
+</html>

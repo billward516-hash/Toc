@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import scriptJson from '../../docs/promo/video/script.json'
 import { validateModel } from '../engine/model.ts'
 import { snapshotAt } from '../engine/timeline.ts'
 import { loadCurve, outcomeOf, runDay } from './curve.ts'
@@ -145,5 +146,35 @@ describe('the queue strips', () => {
       const snapshot = snapshotAt(result, (k * result.horizon) / (points - 1) - 1e-9)
       expect(series.map((s) => s[k])).toEqual(snapshot.queues)
     }
+  })
+})
+
+describe("the explainer video's numbers", () => {
+  // docs/promo/video/script.json says these aloud; if the lab changes them, retype the script and rebuild.
+  const script: { cue: string; caption: string }[] = scriptJson
+  const caption = (cue: string) => script.find((l) => l.cue === cue)?.caption ?? ''
+  const curve = loadCurve(ROUND_ONE.minutes, none, [12, 18, 19, 20, 22], 20)
+  const at = (rate: number) => curve.find((o) => o.rate === rate)!
+
+  it('are what the model gives', () => {
+    expect(workTime(ROUND_ONE.minutes)).toBe(10)
+    expect(Math.round(at(12).cycle)).toBe(11)
+    expect(Math.round(at(18).cycle)).toBe(18)
+    expect(Math.round(at(19).cycle)).toBe(25)
+    expect(Math.round(at(20).cycle)).toBe(40)
+    expect(Math.round(at(22).cycle)).toBe(91)
+    expect(Math.round((100 * (at(20).shipped - at(18).shipped)) / at(18).shipped)).toBe(8)
+    expect(at(20).cycle / at(18).cycle).toBeGreaterThan(2)
+  })
+
+  it('are the ones the script says', () => {
+    expect(caption('chart-base')).toContain('10 minutes')
+    expect(caption('pt60')).toContain('60%')
+    expect(caption('pt60')).toContain('11 minutes')
+    expect(caption('pt90')).toContain('18')
+    expect(caption('pt95')).toContain('25')
+    expect(caption('pt100')).toContain('40')
+    expect(caption('pt110')).toContain('91 minutes')
+    expect(caption('trade')).toContain('8%')
   })
 })
