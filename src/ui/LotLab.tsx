@@ -9,6 +9,7 @@ import {
   judgeHot,
   judgeLots,
   LIMITS,
+  FLEET,
   LOT_ROUND,
   lotAdvice,
   lotSnapshotAt,
@@ -126,10 +127,13 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           A group of <strong>eight tools</strong> processes wafers. Two tools make {SPEEDS[0]} wafers an hour and six make {SPEEDS[2]}, so the group can make {capacity} an hour, about {Math.round((capacity * DAYS_SHOWN * 24) / 1000)},000 in two weeks. A load of up to 50 wafers takes a tool the same time whatever its size. Wafers are always queued, so arrivals don't matter.
         </p>
         <p>
-          <strong>A lot is a customer's order for {ORDER_SIZES.slice(0, -1).join(', ')} or {ORDER_SIZES.at(-1)} good wafers, not yours to change. It must ship full, and only when all of it is done.</strong> An order can be cut into sublots, but a sublot finished early can't ship; it waits for the rest. Each sublot is run out on its tools before they take another, so sublots never mix.
+          <strong>A lot is a customer's order for {ORDER_SIZES.slice(0, -1).join(', ')} or {ORDER_SIZES.at(-1)} good wafers, not yours to change. It must ship full, and only when all of it is done.</strong> An order can be cut into sublots, but a sublot finished early can't ship; it waits for the rest.
         </p>
         <p>
-          <strong>Yield decides how many wafers to start.</strong> It runs from 69% to 85%, order by order, and is known only once the order has been run. Start for the worst (69%) and every order is full the first time, but the spare wafers use tool time. Start for a better yield and fewer are wasted, but an order that comes up short needs a top-up run, and waits for it. You also choose how many tools each sublot gets, whether to cut orders into sublots, and how many orders to keep in the system.
+          <strong>The whole fleet is dedicated to one order at a time,</strong> so orders never mix. That is how most workgroups run; this one can also be divided into single tools, one order on each.
+        </p>
+        <p>
+          <strong>Yield decides how many wafers to start.</strong> It runs from 69% to 85%, order by order, and is known only once the order has been run. Start for the worst (69%) and every order is full the first time, but the spare wafers use tool time. Start for a better yield and fewer are wasted, but an order that comes up short needs a top-up run, and waits for it. You also choose how the workgroup is run, whether to cut orders into sublots, and how many orders to keep in the system.
         </p>
         {hotMode && (
           <p>
@@ -270,18 +274,22 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           </fieldset>
           <fieldset className="lever">
             <legend>
-              <Icon name="build" /> Tools for each sublot
+              <Icon name="build" /> How the workgroup is run
             </legend>
-            <div className="chips" role="group" aria-label="Tools for each sublot">
-              {Array.from({ length: LIMITS.toolsPerLot.max }, (_, k) => k + 1).map((m) => (
-                <button key={m} className={`chip${plan.toolsPerLot === m ? ' on' : ''}`} aria-pressed={plan.toolsPerLot === m} onClick={() => change({ toolsPerLot: m })}>
-                  {m}
+            <div className="chips" role="group" aria-label="How the workgroup is run">
+              {[
+                [FLEET, 'Whole fleet on one order'],
+                [1, 'One tool per order'],
+              ].map(([m, text]) => (
+                <button key={m} className={`chip${plan.toolsPerLot === m ? ' on' : ''}`} aria-pressed={plan.toolsPerLot === m} onClick={() => change({ toolsPerLot: m as number })}>
+                  {text}
                 </button>
               ))}
             </div>
             <p className="hint">
-              {sets} {sets === 1 ? 'sublot' : 'sublots'} at a time on {sets * plan.toolsPerLot} tools
-              {result.unused.length > 0 ? `; ${result.unused.length} ${result.unused.length === 1 ? 'tool is' : 'tools are'} left in no set` : ''}.
+              {plan.toolsPerLot >= FLEET
+                ? 'All eight tools work on one order at a time, which keeps orders from mixing. This is how most workgroups run.'
+                : 'This workgroup can be divided: eight orders run at once, one on each tool. Each takes far longer on one tool.'}
             </p>
           </fieldset>
           <fieldset className="lever">
@@ -359,7 +367,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
                     Keep one set free for hot orders
                   </button>
                 </div>
-                <p className="hint">{sets < 2 ? 'With one set there is none to spare.' : 'A reserved set takes sublots of hot orders only, and stands idle when there are none. A sublot already running is never interrupted.'}</p>
+                <p className="hint">{sets < 2 ? 'With the whole fleet on each order there is no set to keep free.' : 'A reserved set takes sublots of hot orders only, and stands idle when there are none. A sublot already running is never interrupted.'}</p>
               </fieldset>
             </>
           )}

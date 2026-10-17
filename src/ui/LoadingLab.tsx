@@ -536,23 +536,20 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
     const avg = (plan: LotPlan) => {
       const runs = days.map((day) => runLots(plan, day))
       const mean = (pick: (r: LotResult) => number) => runs.reduce((sum, r) => sum + pick(r), 0) / runs.length
-      return { cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy), shipped: mean((r) => r.good), shortShare: mean((r) => r.shortShare), surplus: mean((r) => r.surplus), hotOnTime: mean((r) => r.promises.hot.onTime), hotHours: mean((r) => r.promises.hot.cycleHours) }
+      return { cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy), shipped: mean((r) => r.good), shortShare: mean((r) => r.shortShare), hotOnTime: mean((r) => r.promises.hot.onTime) }
     }
-    const base: LotPlan = { size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first', startFor: 0.77 }
-    const hot: LotPlan = { ...base, depth: 3, hot: 0.15 }
+    const whole: LotPlan = { size: 'demand', toolsPerLot: 8, depth: 1, split: 1, order: 'first', startFor: 0.69 }
+    const hot: LotPlan = { ...whole, depth: 2, startFor: 0.77, hot: 0.15 }
     return {
-      lean: avg(base),
-      crowded: avg({ ...base, depth: 8 }),
-      odd: avg({ ...base, toolsPerLot: 3 }),
-      cut: avg({ ...base, split: 4 }),
-      safe: avg({ ...base, startFor: 0.69 }),
-      hopeful: avg({ ...base, startFor: 0.85 }),
-      safeWide: avg({ ...base, toolsPerLot: 8, depth: 1, startFor: 0.69 }),
-      hopefulWide: avg({ ...base, toolsPerLot: 8, depth: 1, startFor: 0.85 }),
+      lean: avg(whole),
+      crowded: avg({ ...whole, depth: 4 }),
+      cut: avg({ ...whole, split: 4 }),
+      safe: avg(whole),
+      hopeful: avg({ ...whole, startFor: 0.85 }),
+      divided: avg({ ...whole, toolsPerLot: 1, depth: 8, startFor: 0.85 }),
       noPriority: avg(hot),
       priority: avg({ ...hot, order: 'hot' }),
-      wide: avg({ ...hot, toolsPerLot: 8, depth: 1, order: 'hot' }),
-      reserved: avg({ ...hot, order: 'hot', reserve: true }),
+      dividedHot: avg({ ...hot, toolsPerLot: 1, depth: 8, order: 'hot' }),
     }
   }, [])
   const gain = Math.round((100 * (high.shipped - mid.shipped)) / mid.shipped)
@@ -598,21 +595,21 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
             </p>
           </li>
           <li>
-            <h3>Orders: queue only what the tools can run</h3>
+            <h3>Orders: one at a time on the fleet, and no more queued</h3>
             <p>
-              A lot is a customer's order, so its size is demand and it ships only when all of it is done. With wafers always waiting, cycle time is the orders in the system divided by the orders shipped an hour: two orders gave {Math.round(lots.lean.cycleHours)} hours each and eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two unused ({Math.round(100 * lots.odd.busy)}% busy). Cutting each order into four sublots did not help: the early ones sat finished and unshippable, and it took {Math.round(lots.cut.cycleHours)} hours with the tools {Math.round(100 * lots.cut.busy)}% busy. Sublots help only when free sets can run them all at once, which is the same as giving the order more tools.
+              A lot is a customer's order, so its size is demand, and it ships only when all of it is done. Most workgroups dedicate the whole fleet to one order at a time so orders never mix, and then cycle time is simply the orders in the system times the time one takes: one order took {Math.round(lots.lean.cycleHours)} hours and four took {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Cutting each order into four sublots on the same fleet did not help: the early sublots sat finished and unshippable, and tool use fell to {Math.round(100 * lots.cut.busy)}%.
             </p>
           </li>
           <li>
             <h3>Orders must ship full, so yield sets what you start</h3>
             <p>
-              A customer orders good wafers, and yield of 69–85% isn't known until the order has been run. Starting every order for the worst yield made every order full the first time but wasted {(Math.round(lots.safe.surplus / 100) * 100).toLocaleString('en-US')} spare wafers and shipped {(Math.round(lots.safe.shipped / 100) * 100).toLocaleString('en-US')}. Starting for the best yield wasted almost none and shipped {(Math.round(lots.hopeful.shipped / 100) * 100).toLocaleString('en-US')}, but {Math.round(100 * lots.hopeful.shortShare)}% of orders came up short and waited for a top-up run. A top-up is a small sublot, so on all eight tools at once it left tools idle: tool use fell from {Math.round(100 * lots.safeWide.busy)}% to {Math.round(100 * lots.hopefulWide.busy)}% and nothing more shipped. Hoping for a good yield pays only where top-ups can be run efficiently.
+              A customer orders good wafers, and yield of 69–85% isn't known until the order has been run. On the whole fleet, starting every order for the worst yield shipped {(Math.round(lots.safe.shipped / 100) * 100).toLocaleString('en-US')} wafers with every order full the first time. Starting for the best yield saved the spare wafers but {Math.round(100 * lots.hopeful.shortShare)}% of orders came up short, and each top-up is a short run that holds the whole fleet and leaves most of it idle at the end: tool use fell from {Math.round(100 * lots.safe.busy)}% to {Math.round(100 * lots.hopeful.busy)}%. Dividing the workgroup into single tools keeps every tool {Math.round(100 * lots.divided.busy)}% busy and ships {(Math.round(lots.divided.shipped / 100) * 100).toLocaleString('en-US')}, but each order then takes about {Math.round(lots.divided.cycleHours)} hours instead of {Math.round(lots.safe.cycleHours)}.
             </p>
           </li>
           <li>
             <h3>A shorter promise is a priority, and priority has limits</h3>
             <p>
-              Hot orders promised {DUE.hot} hours were on time {Math.round(100 * lots.noPriority.hotOnTime)}% of the time with no priority and {Math.round(100 * lots.priority.hotOnTime)}% going first, at little cost to the other orders. A sublot that is running out can't be interrupted, so a hot order still waits for one to finish and then needs as long as its own size takes on its tools. Orders can't shrink, so the cure is more tools for each: one order at a time on all eight tools had hot orders on time {Math.round(100 * lots.wide.hotOnTime)}% of the time. Keeping a set free for them ({Math.round(100 * lots.reserved.hotOnTime)}% on time) left the tools {Math.round(100 * lots.reserved.busy)}% busy instead of {Math.round(100 * lots.priority.busy)}%.
+              Hot orders promised {DUE.hot} hours were on time {Math.round(100 * lots.noPriority.hotOnTime)}% of the time with no priority and {Math.round(100 * lots.priority.hotOnTime)}% going first, at little cost to the other orders. Nothing interrupts the order on the fleet, so a hot order still waits for it to finish and then needs the time its own size takes. With the workgroup divided into single tools, where each order takes far longer, hot orders were on time {Math.round(100 * lots.dividedHot.hotOnTime)}% of the time. Orders can't shrink, so the fleet is the lever: keep it whole, and keep the queue short.
             </p>
           </li>
         </ol>

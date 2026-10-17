@@ -21,8 +21,13 @@ export const HOT_ROUND = {
   mission: { onTime: 0.85, good: 56000 },
   // A hot order needs at least this many shipped to count.
   fewest: 3,
-  start: { size: 'demand', toolsPerLot: 4, depth: 4, split: 1, order: 'first', startFor: 0.77, hot: 0.15, reserve: false } satisfies LotPlan,
+  start: { size: 'demand', toolsPerLot: 8, depth: 3, split: 1, order: 'first', startFor: 0.77, hot: 0.15, reserve: false } satisfies LotPlan,
 }
+
+// The workgroup is generally run with the whole fleet dedicated to one order, so orders never mix; some
+// workgroups can be divided into single tools. Those are the two ways the lab offers.
+export const FLEET = 8
+export const WAYS = [FLEET, 1]
 
 export const LIMITS = {
   toolsPerLot: { min: 1, max: 8 },
@@ -128,7 +133,8 @@ export function describePlan(plan: LotPlan): string {
   const sets = Math.floor(8 / plan.toolsPerLot)
   const split = plan.split ?? 1
   const hot = (plan.hot ?? 0) > 0 ? `; ${Math.round((plan.hot ?? 0) * 100)}% hot orders, ${plan.order === 'hot' ? 'hot first' : plan.order === 'shortest' ? 'shortest first' : 'no priority'}${plan.reserve ? ', one set reserved' : ''}` : plan.order === 'shortest' ? '; shortest first' : ''
-  return `${plan.toolsPerLot} ${plan.toolsPerLot === 1 ? 'tool' : 'tools'} each (${sets} ${sets === 1 ? 'set' : 'sets'}), ${split === 1 ? 'orders run whole' : `orders cut into ${split}`}, ${plan.depth} in the system, started for ${Math.round((plan.startFor ?? YIELD.min) * 100)}% yield${hot}`
+  const way = plan.toolsPerLot >= FLEET ? 'whole fleet on each order' : plan.toolsPerLot === 1 ? 'one tool per order' : `${plan.toolsPerLot} tools each (${sets} sets)`
+  return `${way}, ${split === 1 ? 'orders run whole' : `orders cut into ${split}`}, ${plan.depth} in the system, started for ${Math.round((plan.startFor ?? YIELD.min) * 100)}% yield${hot}`
 }
 
 // What to try next after a run of the order round.
@@ -147,7 +153,7 @@ export function lotAdvice(result: LotResult): string {
       return `Some sets had no sublot to run (${Math.round(split.starved * 100)}% of their time). Keep enough orders in the system to give every set a sublot: ${Math.ceil(sets / (plan.split ?? 1))} at least.`
     }
     if (split.tail > 0.08 && result.shortShare > 0.3) {
-      return `${Math.round(result.shortShare * 100)}% of orders came up short of good wafers and needed a top-up run. A top-up is a small sublot that doesn't fill whole rounds of its tools, so tools stood idle (${Math.round(split.tail * 100)}% of their time). Start orders for a lower yield so fewer need one, or use smaller sets.`
+      return `${Math.round(result.shortShare * 100)}% of orders came up short of good wafers and needed a top-up run. A top-up is a small sublot that doesn't fill whole rounds of its tools, so tools stood idle (${Math.round(split.tail * 100)}% of their time). Start orders for a lower yield so fewer need one${plan.toolsPerLot >= FLEET ? ', or divide the workgroup so a top-up ties up one tool, not the whole fleet' : ''}.`
     }
     if (split.tail > 0.08) {
       return `Tools finished their loads and stood idle while the others finished the sublot (${Math.round(split.tail * 100)}% of their time). A sublot fills its tools evenly only when its size is a multiple of 50 times the tools it uses, and customers' orders are what they are, so change the number of tools, or cut orders into fewer sublots.`
@@ -157,6 +163,9 @@ export function lotAdvice(result: LotResult): string {
     }
     return 'Not enough good wafers shipped: yield averages about 77%, and every order must be full, so the tools have to run close to full all fortnight.'
   }
+  if (plan.toolsPerLot === 1) {
+    return `Dividing the workgroup keeps every tool busy, but each order now runs on one tool and takes about ${Math.round(holdHours(result))} hours, with ${plan.depth} orders in the system. Customers' orders can't shrink, so when the promise is a short cycle time, dedicate the whole fleet to one order at a time.`
+  }
   if (result.shortShare > 0.3 && (plan.startFor ?? YIELD.min) > YIELD.min + 0.005 && holdHours(result) > 0 && result.cycleHours > LOT_ROUND.mission.cycleHours * 1.2) {
     return `${Math.round(result.shortShare * 100)}% of orders came up short and waited for a top-up run before they could ship. Start orders for a lower yield so more are full the first time, and keep only as many orders in the system as the tools can run at once.`
   }
@@ -165,6 +174,9 @@ export function lotAdvice(result: LotResult): string {
   }
   if (plan.depth > slots) {
     return `Orders waited too long: ${plan.depth - slots} of the ${plan.depth} orders were always waiting for a set. At most ${slots} ${slots === 1 ? 'order' : 'orders'} can be on the tools at once; more only adds waiting and ships nothing extra.`
+  }
+  if (plan.toolsPerLot >= FLEET) {
+    return `With the whole fleet on each order, an order still takes about ${Math.round(holdHours(result))} hours and orders can't be made smaller. Fewer orders in the system, and no top-up runs that hold the fleet for a short time, are what is left to shorten it.`
   }
   return `An order held its tools about ${Math.round(holdHours(result))} hours, and orders are customers' demand, so they can't be made smaller. Give each order more tools, so it finishes sooner, and keep only one order per set of tools in the system.`
 }
@@ -208,6 +220,12 @@ export function hotAdvice(result: LotResult): string {
       return `Hot orders are promised ${DUE.hot} hours but waited their turn like any other: ${took} hours on average, ${Math.round(promises.hot.onTime * 100)}% on time. A promise is kept by running hot orders first.`
     }
     const hold = Math.round(hotHoldHours(result))
+    if (plan.toolsPerLot === 1) {
+      return `Dividing the workgroup puts each hot order on a single tool: ${hold} hours on its tool alone, ${took} in all. Dedicate the whole fleet to one order at a time and a hot order waits only for the order running, then runs in a fraction of the time.`
+    }
+    if (plan.toolsPerLot >= FLEET && !plan.reserve) {
+      return `Hot orders go first but still wait for the order on the fleet to finish, since nothing interrupts it (${took} hours in all, ${Math.round(promises.hot.onTime * 100)}% on time). Keep fewer orders in the system, and start orders for a lower yield so no top-up run holds the fleet longer.`
+    }
     if (!plan.reserve && hold > DUE.hot / 2) {
       return `Even first in line, a hot order can't interrupt a sublot being run out. It waits for one to finish, then needs ${hold} hours itself: ${took} hours in all. Orders are customers' demand and can't shrink, so give each more tools and it finishes sooner.`
     }

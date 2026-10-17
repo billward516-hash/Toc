@@ -180,29 +180,42 @@ describe('full orders', () => {
 })
 
 describe('the order mission', () => {
-  it('is won by giving each order the tools, and only as many orders as can run at once', () => {
-    expect(wins(plan({ toolsPerLot: 8, depth: 1 }))).toBeGreaterThanOrEqual(0.7)
-    expect(wins(plan({ toolsPerLot: 4, depth: 2 }))).toBeGreaterThanOrEqual(0.5)
-    expect(wins(plan({ toolsPerLot: 4, depth: 1, split: 2 }))).toBeGreaterThanOrEqual(0.7)
-    expect(wins(plan({ toolsPerLot: 2, depth: 2, split: 2 }))).toBeGreaterThanOrEqual(0.5)
+  const whole = (p: Partial<LotPlan>) => plan({ toolsPerLot: 8, depth: 1, startFor: 0.69, ...p })
+
+  it('is won by the whole fleet on one order at a time, started for the worst yield', () => {
+    expect(wins(whole({}))).toBeGreaterThanOrEqual(0.7)
+    expect(wins(whole({ depth: 2 }))).toBeGreaterThanOrEqual(0.5)
   })
 
-  it('is lost by crowding the system, by sets that waste tools, and by cutting orders for nothing', () => {
+  it('is lost by queueing orders, by dividing the workgroup, and by cutting orders for nothing', () => {
     expect(wins(LOT_ROUND.start)).toBe(0)
-    expect(wins(plan({ depth: 6 }))).toBe(0)
-    expect(wins(plan({ toolsPerLot: 3 }))).toBe(0)
-    expect(wins(plan({ toolsPerLot: 2, depth: 1 }))).toBe(0)
-    expect(wins(plan({ depth: 2, split: 4 }))).toBe(0)
+    expect(wins(whole({ depth: 4 }))).toBe(0)
+    expect(wins(whole({ toolsPerLot: 1, depth: 8 }))).toBe(0)
+    expect(wins(whole({ toolsPerLot: 1, depth: 4, split: 4 }))).toBe(0)
+    expect(wins(whole({ split: 4 }))).toBe(0)
+  })
+
+  it('shows what dividing buys and costs: more shipped, much longer orders', () => {
+    const divided = whole({ toolsPerLot: 1, depth: 8, startFor: 0.85 })
+    expect(mean(divided, (r) => r.busy)).toBeGreaterThan(0.97)
+    expect(mean(divided, (r) => r.good)).toBeGreaterThan(mean(whole({}), (r) => r.good) * 1.05)
+    expect(mean(divided, (r) => r.cycleHours)).toBeGreaterThan(mean(whole({}), (r) => r.cycleHours) * 4)
+  })
+
+  it('has top-ups waste the whole fleet, so the worst yield suits it, and a hopeful start suits single tools', () => {
+    expect(mean(whole({ startFor: 0.85 }), (r) => r.busy)).toBeLessThan(mean(whole({}), (r) => r.busy) - 0.05)
+    const single = (y: number) => whole({ toolsPerLot: 1, depth: 8, startFor: y })
+    expect(mean(single(0.85), (r) => r.good)).toBeGreaterThan(mean(single(0.69), (r) => r.good) + 3000)
   })
 
   it('gives advice that names the cause', () => {
     const advise = (p: LotPlan) => lotAdvice(runLots(p, LOT_ROUND.day))
-    expect(advise(plan({ toolsPerLot: 3 }))).toMatch(/in no set/)
-    expect(advise(plan({ toolsPerLot: 2, depth: 1 }))).toMatch(/no sublot to run/)
-    expect(advise(plan({ toolsPerLot: 8, depth: 1, split: 2 }))).toMatch(/idle while the others/)
-    expect(advise(plan({ depth: 6 }))).toMatch(/always waiting/)
-    expect(advise(plan({ toolsPerLot: 2, depth: 4, split: 2 }))).toMatch(/sublots started .* hours apart|always waiting/)
-    expect(advise(plan({ toolsPerLot: 4, depth: 2 }))).toMatch(/Mission done|can't be made smaller/)
+    expect(advise(whole({ toolsPerLot: 3, depth: 2 }))).toMatch(/in no set/)
+    expect(advise(whole({ toolsPerLot: 1, depth: 3 }))).toMatch(/no sublot to run/)
+    expect(advise(whole({ toolsPerLot: 1, depth: 8 }))).toMatch(/Dividing the workgroup/)
+    expect(advise(whole({ depth: 4 }))).toMatch(/always waiting/)
+    expect(advise(whole({ split: 4 }))).toMatch(/idle while the others|hours apart/)
+    expect(advise(whole({}))).toBe('Mission done.')
   })
 })
 
@@ -247,12 +260,11 @@ describe('hot orders', () => {
     expect(timeSplit(runLots(reserved, 1)).starved).toBeGreaterThan(0.2)
   })
 
-  it('make the mission winnable with big sets and priority, and not otherwise', () => {
+  it('make the mission winnable with the whole fleet and priority, and not otherwise', () => {
     expect(hotWins(hot({ depth: 1 }))).toBeGreaterThanOrEqual(0.5)
-    expect(hotWins(hot({ toolsPerLot: 4, depth: 1, split: 2 }))).toBeGreaterThanOrEqual(0.5)
+    expect(hotWins(hot({ depth: 2 }))).toBeGreaterThanOrEqual(0.5)
     expect(hotWins(hot({ order: 'first' }))).toBe(0)
-    expect(hotWins(hot({ toolsPerLot: 2, depth: 4 }))).toBe(0)
-    expect(hotWins(hot({ toolsPerLot: 4, depth: 3, reserve: true }))).toBe(0)
+    expect(hotWins(hot({ toolsPerLot: 1, depth: 8 }))).toBe(0)
     expect(hotWins(HOT_ROUND.start)).toBe(0)
     expect(hotWins(hot({ hot: 0 }))).toBe(0)
   })
@@ -260,6 +272,7 @@ describe('hot orders', () => {
   it('gives advice that names the cause', () => {
     const advise = (p: LotPlan) => hotAdvice(runLots(p, HOT_ROUND.day))
     expect(advise(hot({ order: 'first' }))).toMatch(/waited their turn/)
+    expect(advise(hot({ toolsPerLot: 1, depth: 8 }))).toMatch(/Dividing the workgroup/)
     expect(advise(hot({ toolsPerLot: 2, depth: 4 }))).toMatch(/interrupt|still waits/)
     expect(advise(hot({ hot: 0 }))).toMatch(/Hardly any hot orders/)
     expect(advise(hot({ depth: 1 }))).toBe('Mission done.')
