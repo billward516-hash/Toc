@@ -41,8 +41,23 @@ export const HORIZON = DAYS * 24 * 60
 export const AGING = 72 * 60
 
 // Hot orders carry a shorter promise: hours from joining the queue to shipping, for a hot order and for
-// any other.
+// any other. These are for the eight-tool group; a smaller or slower group, whose orders take longer, is
+// promised longer in proportion (see dueFor).
 export const DUE = { hot: 20, normal: 55 }
+
+// The eight-tool group's wafers an hour, which promise times and the three-day aging are measured
+// against.
+export const REFERENCE_CAPACITY = 290
+
+// How much longer than the eight-tool group an order takes on a group with these speeds.
+export function scaleFor(speeds: readonly number[]): number {
+  return REFERENCE_CAPACITY / speeds.reduce((sum, v) => sum + v, 0)
+}
+
+export function dueFor(speeds: readonly number[]): { hot: number; normal: number } {
+  const k = scaleFor(speeds)
+  return { hot: Math.round(DUE.hot * k), normal: Math.round(DUE.normal * k) }
+}
 
 export interface LotPlan {
   // Wafers in every order; 'demand' for orders of every size customers send (ORDER_SIZES), or 'mixed' for
@@ -140,6 +155,9 @@ export interface LotResult {
   // Hours the order that has waited longest without starting has been waiting, at the end.
   oldestWait: number
   promises: { hot: Kept; normal: Kept }
+  // The tools' speeds, and the promises in force for them, in hours.
+  speeds: readonly number[]
+  due: { hot: number; normal: number }
   // The share of the tools' time spent on runs.
   busy: number
   // Wafers the whole group could make in the horizon at full loads.
@@ -176,6 +194,8 @@ type Pending = { kind: 'run'; tool: number; lot: number } | { kind: 'hot' }
 
 export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] = SPEEDS): LotResult {
   const { groups, unused } = toolSets(speeds, plan.toolsPerLot)
+  const due = dueFor(speeds)
+  const aging = AGING * scaleFor(speeds)
   const sizeDraws = stream(seed, 'lot-size')
   const yieldDraws = stream(seed, 'lot-yield')
   const hotDraws = stream(seed, 'lot-hot')
@@ -238,7 +258,7 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     const oldest = (ids: number[]) => ids.reduce((best, id) => (orders[lots[id].order].release < orders[lots[best].order].release ? id : best), ids[0])
     if (plan.order === 'first') return oldest(pool)
     if (plan.order === 'hot') return oldest(pool.filter(hot).length > 0 ? pool.filter(hot) : pool)
-    const aged = pool.find((id) => now - orders[lots[id].order].release >= AGING)
+    const aged = pool.find((id) => now - orders[lots[id].order].release >= aging)
     if (aged !== undefined) return aged
     return pool.reduce((best, id) => (lots[id].size < lots[best].size ? id : best), pool[0])
   }
@@ -315,8 +335,8 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
   for (const size of new Set(done.map((o) => o.size))) cycleBySize[size] = cycle(done.filter((o) => o.size === size))
   const promise = (hot: boolean): Kept => {
     const set = done.filter((o) => o.hot === hot)
-    const due = hot ? DUE.hot : DUE.normal
-    return { finished: set.length, onTime: set.length === 0 ? 1 : set.filter((o) => ((o.end ?? 0) - o.release) / 60 <= due).length / set.length, cycleHours: cycle(set) }
+    const limit = hot ? due.hot : due.normal
+    return { finished: set.length, onTime: set.length === 0 ? 1 : set.filter((o) => ((o.end ?? 0) - o.release) / 60 <= limit).length / set.length, cycleHours: cycle(set) }
   }
   const notStarted = orders.filter((o) => o.start === null).map((o) => (HORIZON - o.release) / 60)
   return {
@@ -338,6 +358,8 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     cycleBySize,
     oldestWait: notStarted.length === 0 ? 0 : Math.max(...notStarted),
     promises: { hot: promise(true), normal: promise(false) },
+    speeds,
+    due,
     busy: busyTime / (speeds.length * HORIZON),
     capacity: capacityPerHour(speeds) * DAYS * 24,
   }

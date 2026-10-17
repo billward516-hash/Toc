@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { HOT_ROUND, hotAdvice, hotOrdersPerDay, judgeHot, judgeLots, LOT_ROUND, lotAdvice, lotSnapshotAt, staggerHours, timeSplit } from './lotRound.ts'
-import { HORIZON, LOAD, MIN_LOAD, nextLoad, ORDER_SIZES, runLots, SPEEDS, START_FOR, sublotSizes, toolSets, type LotPlan } from './lots.ts'
+import { HOT_ROUND, hotAdvice, hotMission, hotOrdersPerDay, judgeHot, judgeLots, LOT_ROUND, lotAdvice, lotMission, lotSnapshotAt, staggerHours, startPlan, timeSplit } from './lotRound.ts'
+import { dueFor, HORIZON, LOAD, MIN_LOAD, nextLoad, ORDER_SIZES, runLots, SPEEDS, START_FOR, sublotSizes, toolSets, type LotPlan } from './lots.ts'
+import { WORKGROUPS } from './workgroups.ts'
 
 const SEEDS = Array.from({ length: 12 }, (_, s) => s + 1)
 const plan = (p: Partial<LotPlan>): LotPlan => ({ size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first', ...p })
@@ -188,7 +189,7 @@ describe('the order mission', () => {
   })
 
   it('is lost by queueing orders, by dividing the workgroup, and by cutting orders for nothing', () => {
-    expect(wins(LOT_ROUND.start)).toBe(0)
+    expect(wins(startPlan('lots', SPEEDS))).toBe(0)
     expect(wins(whole({ depth: 4 }))).toBe(0)
     expect(wins(whole({ toolsPerLot: 1, depth: 8 }))).toBe(0)
     expect(wins(whole({ toolsPerLot: 1, depth: 4, split: 4 }))).toBe(0)
@@ -265,7 +266,7 @@ describe('hot orders', () => {
     expect(hotWins(hot({ depth: 2 }))).toBeGreaterThanOrEqual(0.5)
     expect(hotWins(hot({ order: 'first' }))).toBe(0)
     expect(hotWins(hot({ toolsPerLot: 1, depth: 8 }))).toBe(0)
-    expect(hotWins(HOT_ROUND.start)).toBe(0)
+    expect(hotWins(startPlan('hot', SPEEDS))).toBe(0)
     expect(hotWins(hot({ hot: 0 }))).toBe(0)
   })
 
@@ -276,5 +277,58 @@ describe('hot orders', () => {
     expect(advise(hot({ toolsPerLot: 2, depth: 4 }))).toMatch(/interrupt|still waits/)
     expect(advise(hot({ hot: 0 }))).toMatch(/Hardly any hot orders/)
     expect(advise(hot({ depth: 1 }))).toBe('Mission done.')
+  })
+})
+
+describe('workgroups of other sizes', () => {
+  const winsOn = (speeds: readonly number[], p: LotPlan) => SEEDS.filter((s) => judgeLots(runLots(p, s, speeds)).passed).length / SEEDS.length
+  const hotWinsOn = (speeds: readonly number[], p: LotPlan) => SEEDS.filter((s) => judgeHot(runLots(p, s, speeds)).passed).length / SEEDS.length
+
+  it('scale the missions and the promises to the group, so a smaller one is asked for less, over longer', () => {
+    const eight = lotMission(SPEEDS)
+    expect(eight).toEqual({ good: 58500, cycleHours: 18 })
+    expect(dueFor(SPEEDS)).toEqual({ hot: 20, normal: 55 })
+    for (const g of WORKGROUPS.slice(1)) {
+      const m = lotMission(g.speeds)
+      expect(m.good).toBeLessThan(eight.good)
+      expect(m.cycleHours).toBeGreaterThan(eight.cycleHours)
+      expect(dueFor(g.speeds).hot).toBeGreaterThan(20)
+      expect(hotMission(g.speeds).good).toBeLessThan(hotMission(SPEEDS).good)
+    }
+  })
+
+  for (const g of WORKGROUPS) {
+    const fleet = g.speeds.length
+    const whole = (p: Partial<LotPlan> = {}): LotPlan => ({ size: 'demand', toolsPerLot: fleet, depth: 1, split: 1, order: 'first', startFor: 0.69, ...p })
+
+    it(`${g.name}: the start fails, one order at a time on the whole fleet wins, and a queue of four loses`, () => {
+      expect(winsOn(g.speeds, startPlan('lots', g.speeds))).toBe(0)
+      expect(winsOn(g.speeds, whole())).toBeGreaterThanOrEqual(0.5)
+      expect(winsOn(g.speeds, whole({ depth: 4 }))).toBe(0)
+      // Cutting an order only costs where the fleet is wide enough for a short sublot to leave tools idle.
+      if (fleet >= 6) expect(winsOn(g.speeds, whole({ split: 4 }))).toBe(0)
+    })
+
+    it(`${g.name}: hot orders miss with no priority and a queue, and keep their promise going first`, () => {
+      expect(hotWinsOn(g.speeds, startPlan('hot', g.speeds))).toBe(0)
+      const onTime = (p: LotPlan) => SEEDS.reduce((sum, s) => sum + runLots(p, s, g.speeds).promises.hot.onTime, 0) / SEEDS.length
+      const queued = { ...startPlan('hot', g.speeds), depth: 2 }
+      expect(onTime({ ...queued, order: 'hot' })).toBeGreaterThan(0.85)
+      expect(onTime(queued)).toBeLessThan(0.6)
+    })
+  }
+
+  it('make a hopeful start pay on small groups, where a top-up wastes little of the fleet', () => {
+    const small = WORKGROUPS.find((g) => g.id === 'two')!.speeds
+    const shipped = (y: number) => SEEDS.reduce((sum, s) => sum + runLots({ size: 'demand', toolsPerLot: 2, depth: 1, split: 1, order: 'first', startFor: y }, s, small).good, 0)
+    expect(shipped(0.85)).toBeGreaterThan(shipped(0.69) * 1.03)
+  })
+
+  it('give dividing no gain on four tools, but a real one on eight', () => {
+    const shippedDivided = (speeds: readonly number[]) => SEEDS.reduce((sum, s) => sum + runLots({ size: 'demand', toolsPerLot: 1, depth: speeds.length, split: 1, order: 'first', startFor: 0.85 }, s, speeds).good, 0)
+    const shippedWhole = (speeds: readonly number[], y: number) => SEEDS.reduce((sum, s) => sum + runLots({ size: 'demand', toolsPerLot: speeds.length, depth: 1, split: 1, order: 'first', startFor: y }, s, speeds).good, 0)
+    const four = WORKGROUPS.find((g) => g.id === 'four')!.speeds
+    expect(shippedDivided(four)).toBeLessThan(shippedWhole(four, 0.85) * 1.03)
+    expect(shippedDivided(SPEEDS)).toBeGreaterThan(shippedWhole(SPEEDS, 0.69) * 1.05)
   })
 })

@@ -9,17 +9,20 @@ import {
   judgeHot,
   judgeLots,
   LIMITS,
-  FLEET,
+  hotMission,
   LOT_ROUND,
   lotAdvice,
+  lotMission,
   lotSnapshotAt,
   orderSlots,
+  startPlan,
   timeSplit,
   whatHappenedHot,
   whatHappenedLots,
   type LotSnapshot,
 } from '../loading/lotRound.ts'
-import { capacityPerHour, DUE, HORIZON, ORDER_SIZES, runLots, SPEEDS, START_FOR, type LotPlan, type LotResult } from '../loading/lots.ts'
+import { capacityPerHour, HORIZON, ORDER_SIZES, runLots, START_FOR, type LotPlan, type LotResult } from '../loading/lots.ts'
+import { DEFAULT_WORKGROUP, WORKGROUPS, type Workgroup } from '../loading/workgroups.ts'
 import { Icon } from './icons.tsx'
 import { CycleBar, DepthChart, type DepthPoint } from './LabParts.tsx'
 import { PlaybackPanel, ScreenHeader, type Stat } from './parts.tsx'
@@ -31,7 +34,6 @@ const MINUTES_PER_SECOND = 252
 const SWEEP_SEEDS = 4
 const COLORS = ['#4c8dff', '#8a5cf6', '#ff6fb5', '#2ec5e6', '#ff8a3d', '#6a7bff']
 const orderColor = (order: number) => COLORS[order % COLORS.length]
-const TOOLS = SPEEDS.length
 
 interface Run {
   number: number
@@ -43,6 +45,8 @@ const samePlan = (a: LotPlan, b: LotPlan) =>
   a.size === b.size && a.toolsPerLot === b.toolsPerLot && a.depth === b.depth && a.order === b.order && (a.hot ?? 0) === (b.hot ?? 0) && (a.reserve ?? false) === (b.reserve ?? false)
 
 export interface LotLog {
+  // Tools in the workgroup played on, for describing the plan.
+  fleet: number
   tries: number
   passed: boolean
   plan: LotPlan
@@ -57,12 +61,15 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
   const hotMode = mode === 'hot'
   const round = hotMode ? HOT_ROUND : LOT_ROUND
   const passes = (r: LotResult) => (hotMode ? judgeHot(r).passed : judgeLots(r).passed)
-  const [plan, setPlan] = useState<LotPlan>(round.start)
+  const [group, setGroup] = useState<Workgroup>(DEFAULT_WORKGROUP)
+  const speeds = group.speeds
+  const fleet = speeds.length
+  const [plan, setPlan] = useState<LotPlan>(() => startPlan(mode, DEFAULT_WORKGROUP.speeds))
   const [runs, setRuns] = useState<Run[]>([])
   const [speed, setSpeed] = useState(4)
-  const result = useMemo(() => runLots(plan, round.day), [plan, round.day])
+  const result = useMemo(() => runLots(plan, round.day, speeds), [plan, round.day, speeds])
   const playback = usePlayback(HORIZON, MINUTES_PER_SECOND * speed)
-  const snapshot = useMemo(() => lotSnapshotAt(result, playback.t, TOOLS), [result, playback.t])
+  const snapshot = useMemo(() => lotSnapshotAt(result, playback.t, fleet), [result, playback.t, fleet])
   const latest = runs.at(-1)
   const ran = latest !== undefined && samePlan(latest.plan, plan)
   const done = ran && playback.finished ? latest : null
@@ -73,11 +80,11 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
   const sweep = useMemo<DepthPoint[] | null>(() => {
     if (!done || hotMode) return null
     return Array.from({ length: LIMITS.depth.max }, (_, k) => {
-      const runsAt = Array.from({ length: SWEEP_SEEDS }, (_, s) => runLots({ ...done.plan, depth: k + 1 }, s + 1))
+      const runsAt = Array.from({ length: SWEEP_SEEDS }, (_, s) => runLots({ ...done.plan, depth: k + 1 }, s + 1, speeds))
       const mean = (pick: (r: LotResult) => number) => runsAt.reduce((sum, r) => sum + pick(r), 0) / SWEEP_SEEDS
       return { depth: k + 1, cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy) }
     })
-  }, [done, hotMode])
+  }, [done, hotMode, speeds])
 
   const record = () => {
     setRuns((previous) => (previous.at(-1) && samePlan(previous.at(-1)!.plan, plan) ? previous : [...previous, { number: previous.length + 1, plan, result }]))
@@ -101,6 +108,12 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
       playback.seekTo(minutes)
     },
   }
+  const chooseGroup = (next: Workgroup) => {
+    setGroup(next)
+    setPlan(startPlan(mode, next.speeds))
+    setRuns([])
+    playback.rewind()
+  }
   const change = (patch: Partial<LotPlan>) => {
     setPlan({ ...plan, ...patch })
     playback.rewind()
@@ -116,7 +129,9 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
     { label: 'Order cycle time', value: snapshot.cycleHours === null ? '–' : `${Math.round(snapshot.cycleHours)} h` },
     { label: 'Tools busy', value: `${Math.round(100 * snapshot.busy)}%` },
   ]
-  const capacity = capacityPerHour()
+  const capacity = capacityPerHour(speeds)
+  const lotM = lotMission(speeds)
+  const hotM = hotMission(speeds)
 
   return (
     <div className="screen level-screen lab">
@@ -124,20 +139,20 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
 
       <section className="card lab-brief" aria-label="Round brief">
         <p>
-          A group of <strong>eight tools</strong> processes wafers. Two tools make {SPEEDS[0]} wafers an hour and six make {SPEEDS[2]}, so the group can make {capacity} an hour, about {Math.round((capacity * DAYS_SHOWN * 24) / 1000)},000 in two weeks. A load of up to 50 wafers takes a tool the same time whatever its size. Wafers are always queued, so arrivals don't matter.
+          A <strong>workgroup of {fleet} {fleet === 1 ? 'tool' : 'tools'}</strong> processes wafers: {speeds.filter((v) => v === Math.min(...speeds)).length === fleet ? `each makes ${speeds[0]} wafers an hour` : `${speeds.filter((v) => v === Math.min(...speeds)).length} make ${Math.min(...speeds)} wafers an hour and ${speeds.filter((v) => v > Math.min(...speeds)).length} make ${Math.max(...speeds)}`}, so it can make {capacity} an hour, about {(Math.round((capacity * DAYS_SHOWN * 24) / 1000))},000 in two weeks. A load of up to 50 wafers takes a tool the same time whatever its size. Wafers are always queued, so arrivals don't matter.
         </p>
         <p>
           <strong>A lot is a customer's order for {ORDER_SIZES.slice(0, -1).join(', ')} or {ORDER_SIZES.at(-1)} good wafers, not yours to change. It must ship full, and only when all of it is done.</strong> An order can be cut into sublots, but a sublot finished early can't ship; it waits for the rest.
         </p>
         <p>
-          <strong>The whole fleet is dedicated to one order at a time,</strong> so orders never mix. That is how most workgroups run; this one can also be divided into single tools, one order on each.
+          <strong>The whole fleet is dedicated to one order at a time,</strong> so orders never mix. That is how most workgroups run; {group.divisible ? 'this one can also be divided into single tools, one order on each.' : "this one can't be divided."}
         </p>
         <p>
           <strong>Yield decides how many wafers to start.</strong> It runs from 69% to 85%, order by order, and is known only once the order has been run. Start for the worst (69%) and every order is full the first time, but the spare wafers use tool time. Start for a better yield and fewer are wasted, but an order that comes up short needs a top-up run, and waits for it. You also choose how the workgroup is run, whether to cut orders into sublots, and how many orders to keep in the system.
         </p>
         {hotMode && (
           <p>
-            <strong>Some orders are promised sooner.</strong> A hot order must ship within {DUE.hot} hours of arriving, any other within {DUE.normal}. Hot orders arrive at random, on top of the orders in the system, and take up a share of the group's capacity you can change. You decide how they are treated: whether they go first, and whether a set is kept free for them. A sublot already running is never interrupted.
+            <strong>Some orders are promised sooner.</strong> A hot order must ship within {result.due.hot} hours of arriving, any other within {result.due.normal}. Hot orders arrive at random, on top of the orders in the system, and take up a share of the group's capacity you can change. You decide how they are treated: whether they go first, and whether a set is kept free for them. A sublot already running is never interrupted.
           </p>
         )}
         <p className="mission">
@@ -145,11 +160,11 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           <span>
             {hotMode ? (
               <>
-                <strong>Mission:</strong> at least <strong>{Math.round(HOT_ROUND.mission.onTime * 100)}%</strong> of the hot orders and of the other orders shipped on time, and at least <strong>{HOT_ROUND.mission.good.toLocaleString('en-US')} wafers</strong> shipped in full orders in two weeks.
+                <strong>Mission:</strong> at least <strong>{Math.round(hotM.onTime * 100)}%</strong> of the hot orders and of the other orders shipped on time, and at least <strong>{hotM.good.toLocaleString('en-US')} wafers</strong> shipped in full orders in two weeks.
               </>
             ) : (
               <>
-                <strong>Mission:</strong> ship at least <strong>{LOT_ROUND.mission.good.toLocaleString('en-US')} wafers</strong> in full orders in two weeks, with an order's average time from joining the queue to shipping no more than <strong>{LOT_ROUND.mission.cycleHours} hours</strong>.
+                <strong>Mission:</strong> ship at least <strong>{lotM.good.toLocaleString('en-US')} wafers</strong> in full orders in two weeks, with an order's average time from joining the queue to shipping no more than <strong>{lotM.cycleHours} hours</strong>.
               </>
             )}
           </span>
@@ -204,7 +219,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           {sweep && done && (
             <section className="runs" aria-label="Cycle time against lots in the system">
               <h3>The same plan at other numbers of orders in the system</h3>
-              <DepthChart points={sweep} sets={orderSlots(done.plan, done.result.groups.length)} current={done.plan.depth} limit={LOT_ROUND.mission.cycleHours} />
+              <DepthChart points={sweep} sets={orderSlots(done.plan, done.result.groups.length)} current={done.plan.depth} limit={lotM.cycleHours} />
               <p className="hint">Average of {SWEEP_SEEDS} fortnights. Past what the tools can run at once, extra orders in the system make no more wafers; they only add waiting.</p>
             </section>
           )}
@@ -238,7 +253,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
                     return (
                       <tr key={r.number} className={won ? 'current' : undefined}>
                         <th scope="row">{r.number}</th>
-                        <td className="changes">{describePlan(r.plan)}</td>
+                        <td className="changes">{describePlan(r.plan, fleet)}</td>
                         <td>{Math.round(r.result.good / 1000)}k</td>
                         {hotMode ? (
                           <>
@@ -261,6 +276,19 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
         <section className="card lab-controls" aria-label="Plan the orders">
           <fieldset className="lever">
             <legend>
+              <Icon name="group" /> Workgroup
+            </legend>
+            <div className="chips" role="group" aria-label="Workgroup">
+              {WORKGROUPS.map((g) => (
+                <button key={g.id} className={`chip${group.id === g.id ? ' on' : ''}`} aria-pressed={group.id === g.id} onClick={() => chooseGroup(g)}>
+                  {g.name}
+                </button>
+              ))}
+            </div>
+            <p className="hint">Changing the workgroup starts the round again on that group, with missions to match its size.</p>
+          </fieldset>
+          <fieldset className="lever">
+            <legend>
               <Icon name="stack" /> Cut each order into sublots
             </legend>
             <div className="chips" role="group" aria-label="Sublots for each order">
@@ -278,8 +306,8 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
             </legend>
             <div className="chips" role="group" aria-label="How the workgroup is run">
               {[
-                [FLEET, 'Whole fleet on one order'],
-                [1, 'One tool per order'],
+                [fleet, 'Whole fleet on one order'],
+                ...(group.divisible ? [[1, 'One tool per order']] : []),
               ].map(([m, text]) => (
                 <button key={m} className={`chip${plan.toolsPerLot === m ? ' on' : ''}`} aria-pressed={plan.toolsPerLot === m} onClick={() => change({ toolsPerLot: m as number })}>
                   {text}
@@ -287,9 +315,9 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
               ))}
             </div>
             <p className="hint">
-              {plan.toolsPerLot >= FLEET
-                ? 'All eight tools work on one order at a time, which keeps orders from mixing. This is how most workgroups run.'
-                : 'This workgroup can be divided: eight orders run at once, one on each tool. Each takes far longer on one tool.'}
+              {plan.toolsPerLot >= fleet
+                ? `${fleet === 1 ? 'The tool works' : `All ${fleet} tools work`} on one order at a time, which keeps orders from mixing. This is how most workgroups run.${group.divisible ? '' : " This one can't be divided."}`
+                : `This workgroup can be divided: ${fleet} orders run at once, one on each tool. Each takes far longer on one tool.`}
             </p>
           </fieldset>
           <fieldset className="lever">
@@ -344,7 +372,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
                     onChange={(event) => change({ hot: Math.round(Number(event.target.value) * 100) / 100 })}
                   />
                 </div>
-                <p className="hint">About {hotOrdersPerDay(plan).toFixed(1)} hot orders a day, arriving at random.</p>
+                <p className="hint">About {hotOrdersPerDay(plan, speeds).toFixed(1)} hot orders a day, arriving at random.</p>
               </fieldset>
               <fieldset className="lever">
                 <legend>
@@ -396,7 +424,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
               Run two weeks <Icon name="play" />
             </button>
             {(passed || runs.length >= 4) && (
-              <button className={`btn big${passed ? ' next' : ''}`} onClick={() => onFinish({ tries: runs.length, passed, plan: (runs.find((r) => passes(r.result)) ?? runs.at(-1)!).plan })}>
+              <button className={`btn big${passed ? ' next' : ''}`} onClick={() => onFinish({ fleet, tries: runs.length, passed, plan: (runs.find((r) => passes(r.result)) ?? runs.at(-1)!).plan })}>
                 {passed ? (hotMode ? 'See what it shows' : 'Next round') : 'Skip this round'} <Icon name="next" />
               </button>
             )}
@@ -408,7 +436,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
 }
 
 function LotVerdictList({ result, verdict }: { result: LotResult; verdict: ReturnType<typeof judgeLots> }) {
-  const { mission } = LOT_ROUND
+  const mission = lotMission(result.speeds)
   return (
     <ul className={`verdict${verdict.passed ? ' won' : ''}`}>
       <li className={verdict.goodOk ? 'ok' : 'miss'}>
@@ -428,7 +456,7 @@ function LotVerdictList({ result, verdict }: { result: LotResult; verdict: Retur
 }
 
 function HotVerdictList({ result, verdict }: { result: LotResult; verdict: ReturnType<typeof judgeHot> }) {
-  const { mission } = HOT_ROUND
+  const mission = hotMission(result.speeds)
   const pct = (x: number) => `${Math.round(x * 100)}%`
   const rows = [
     { ok: verdict.hotOk, text: `Hot orders on time: ${pct(result.promises.hot.onTime)} of ${result.promises.hot.finished}, at least ${pct(mission.onTime)}` },
@@ -450,8 +478,8 @@ function HotVerdictList({ result, verdict }: { result: LotResult; verdict: Retur
 // How the hot lots and the others did against their promises.
 function PromiseTable({ result }: { result: LotResult }) {
   const rows = [
-    { name: 'Hot orders', due: DUE.hot, kept: result.promises.hot },
-    { name: 'Other orders', due: DUE.normal, kept: result.promises.normal },
+    { name: 'Hot orders', due: result.due.hot, kept: result.promises.hot },
+    { name: 'Other orders', due: result.due.normal, kept: result.promises.normal },
   ]
   return (
     <table className="data-table promise-table">
@@ -611,7 +639,7 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
           <g key={tool} className={`tool ${state}`}>
             <rect className="tool-box" x={left + 4} y={SET_TOP} width={SLOT - 8} height={170} rx={12} style={run ? { fill: orderColor(result.lots[run.lot].order) } : undefined} />
             <text className="tool-speed" x={left + SLOT / 2} y={SET_TOP + 24}>
-              {SPEEDS[tool]}/h
+              {result.speeds[tool]}/h
             </text>
             <text className="tool-wafers" x={left + SLOT / 2} y={SET_TOP + 90}>
               {run ? run.wafers : state === 'waiting' ? 'idle' : ''}

@@ -1,4 +1,4 @@
-import { capacityPerHour, DAYS, DUE, HORIZON, MIXED, ORDER_SIZES, YIELD, type LotPlan, type LotResult } from './lots.ts'
+import { capacityPerHour, DAYS, HORIZON, MIXED, ORDER_SIZES, SPEEDS, YIELD, type LotPlan, type LotResult } from './lots.ts'
 
 // The loading lab's lot rounds: one group of eight tools, run for two weeks. A lot is a customer's order,
 // so its size is demand, not a choice, and it ships only when all of it is done. What the player chooses
@@ -8,26 +8,43 @@ export const LOT_ROUND = {
   title: 'Orders and tools',
   // The day the round is played on, so only the plan changes between runs.
   day: 2,
-  // Good wafers shipped in full orders, and the average hours an order takes.
-  mission: { good: 58000, cycleHours: 18 },
-  start: { size: 'demand', toolsPerLot: 8, depth: 4, split: 1, order: 'first', startFor: 0.77 } satisfies LotPlan,
 }
 
 // The hot-order round: the same group, with some orders promised much sooner.
 export const HOT_ROUND = {
   title: 'Hot orders',
   day: 2,
-  // Every order should meet its promise, and the group still has to ship.
-  mission: { onTime: 0.85, good: 56000 },
   // A hot order needs at least this many shipped to count.
   fewest: 3,
-  start: { size: 'demand', toolsPerLot: 8, depth: 3, split: 1, order: 'first', startFor: 0.77, hot: 0.15, reserve: false } satisfies LotPlan,
 }
 
-// The workgroup is generally run with the whole fleet dedicated to one order, so orders never mix; some
+const roundTo = (value: number, step: number) => Math.round(value / step) * step
+
+// Wafers the group could process in the fortnight at full loads.
+const rawCapacity = (speeds: readonly number[]) => capacityPerHour(speeds) * DAYS * 24
+
+// What the order round asks of a workgroup: wafers shipped in full orders (60% of what it could process,
+// since a lot of the rest is yield) and the average hours an order may take (2.4 times what an order
+// takes on the whole fleet, so no more than two orders in the system).
+export function lotMission(speeds: readonly number[]): { good: number; cycleHours: number } {
+  const hold = meanOrder({ size: 'demand' } as LotPlan) / YIELD.min / capacityPerHour(speeds)
+  return { good: roundTo(0.6 * rawCapacity(speeds), 500), cycleHours: Math.round(2.4 * hold) }
+}
+
+// What the hot-order round asks: the share of every kind of order shipped on time, and the wafers.
+export function hotMission(speeds: readonly number[]): { onTime: number; good: number } {
+  return { onTime: 0.85, good: roundTo(0.57 * rawCapacity(speeds), 500) }
+}
+
+// Where each round starts: the whole fleet on an order, a queue of orders, and a middling yield, which
+// fails the mission.
+export function startPlan(mode: 'lots' | 'hot', speeds: readonly number[]): LotPlan {
+  const whole = { size: 'demand', toolsPerLot: speeds.length, split: 1, order: 'first', startFor: 0.77 } as const
+  return mode === 'hot' ? { ...whole, depth: 3, hot: 0.15, reserve: false } : { ...whole, depth: 4 }
+}
+
+// A workgroup is generally run with the whole fleet dedicated to one order, so orders never mix; some
 // workgroups can be divided into single tools. Those are the two ways the lab offers.
-export const FLEET = 8
-export const WAYS = [FLEET, 1]
 
 export const LIMITS = {
   toolsPerLot: { min: 1, max: 8 },
@@ -41,8 +58,8 @@ export const meanOrder = (plan: LotPlan): number =>
   plan.size === 'mixed' ? (MIXED[0] + MIXED[1]) / 2 : plan.size === 'demand' ? ORDER_SIZES.reduce((a, b) => a + b, 0) / ORDER_SIZES.length : plan.size
 
 // Hot orders a day on average, for a plan.
-export function hotOrdersPerDay(plan: LotPlan): number {
-  return ((plan.hot ?? 0) * capacityPerHour() * 24) / meanOrder(plan)
+export function hotOrdersPerDay(plan: LotPlan, speeds: readonly number[] = SPEEDS): number {
+  return ((plan.hot ?? 0) * capacityPerHour(speeds) * 24) / meanOrder(plan)
 }
 
 // Orders that can be on the tools at once: each takes `split` sets, and each set a sublot.
@@ -57,8 +74,9 @@ export interface LotVerdict {
 }
 
 export function judgeLots(result: LotResult): LotVerdict {
-  const goodOk = result.good >= LOT_ROUND.mission.good
-  const cycleOk = result.finished > 0 && result.cycleHours <= LOT_ROUND.mission.cycleHours
+  const mission = lotMission(result.speeds)
+  const goodOk = result.good >= mission.good
+  const cycleOk = result.finished > 0 && result.cycleHours <= mission.cycleHours
   return { goodOk, cycleOk, passed: goodOk && cycleOk }
 }
 
@@ -70,7 +88,8 @@ export interface HotVerdict {
 }
 
 export function judgeHot(result: LotResult): HotVerdict {
-  const { mission, fewest } = HOT_ROUND
+  const { fewest } = HOT_ROUND
+  const mission = hotMission(result.speeds)
   const hotOk = result.promises.hot.finished >= fewest && result.promises.hot.onTime >= mission.onTime
   const normalOk = result.promises.normal.finished > 0 && result.promises.normal.onTime >= mission.onTime
   const goodOk = result.good >= mission.good
@@ -129,11 +148,11 @@ export function staggerHours(result: LotResult): number {
   return split.reduce((sum, o) => sum + gap(o.id), 0) / split.length / 60
 }
 
-export function describePlan(plan: LotPlan): string {
-  const sets = Math.floor(8 / plan.toolsPerLot)
+export function describePlan(plan: LotPlan, tools = 8): string {
+  const sets = Math.floor(tools / plan.toolsPerLot)
   const split = plan.split ?? 1
   const hot = (plan.hot ?? 0) > 0 ? `; ${Math.round((plan.hot ?? 0) * 100)}% hot orders, ${plan.order === 'hot' ? 'hot first' : plan.order === 'shortest' ? 'shortest first' : 'no priority'}${plan.reserve ? ', one set reserved' : ''}` : plan.order === 'shortest' ? '; shortest first' : ''
-  const way = plan.toolsPerLot >= FLEET ? 'whole fleet on each order' : plan.toolsPerLot === 1 ? 'one tool per order' : `${plan.toolsPerLot} tools each (${sets} sets)`
+  const way = plan.toolsPerLot >= tools ? 'whole fleet on each order' : plan.toolsPerLot === 1 ? 'one tool per order' : `${plan.toolsPerLot} tools each (${sets} sets)`
   return `${way}, ${split === 1 ? 'orders run whole' : `orders cut into ${split}`}, ${plan.depth} in the system, started for ${Math.round((plan.startFor ?? YIELD.min) * 100)}% yield${hot}`
 }
 
@@ -147,13 +166,13 @@ export function lotAdvice(result: LotResult): string {
   const slots = orderSlots(plan, sets)
   if (!verdict.goodOk) {
     if (split.unused > 0.03) {
-      return `${result.unused.length} of the 8 tools are in no set: sets of ${plan.toolsPerLot} use only ${sets * plan.toolsPerLot}. Pick a number of tools that divides 8 (1, 2, 4 or 8).`
+      return `${result.unused.length} of the ${result.speeds.length} tools are in no set: sets of ${plan.toolsPerLot} use only ${sets * plan.toolsPerLot}. Run the whole fleet on one order, or one tool to an order.`
     }
     if (split.starved > 0.05) {
       return `Some sets had no sublot to run (${Math.round(split.starved * 100)}% of their time). Keep enough orders in the system to give every set a sublot: ${Math.ceil(sets / (plan.split ?? 1))} at least.`
     }
     if (split.tail > 0.08 && result.shortShare > 0.3) {
-      return `${Math.round(result.shortShare * 100)}% of orders came up short of good wafers and needed a top-up run. A top-up is a small sublot that doesn't fill whole rounds of its tools, so tools stood idle (${Math.round(split.tail * 100)}% of their time). Start orders for a lower yield so fewer need one${plan.toolsPerLot >= FLEET ? ', or divide the workgroup so a top-up ties up one tool, not the whole fleet' : ''}.`
+      return `${Math.round(result.shortShare * 100)}% of orders came up short of good wafers and needed a top-up run. A top-up is a small sublot that doesn't fill whole rounds of its tools, so tools stood idle (${Math.round(split.tail * 100)}% of their time). Start orders for a lower yield so fewer need one${plan.toolsPerLot >= result.speeds.length && result.speeds.length > 2 ? ', or, where the workgroup can be divided, divide it so a top-up ties up one tool, not the whole fleet' : ''}.`
     }
     if (split.tail > 0.08) {
       return `Tools finished their loads and stood idle while the others finished the sublot (${Math.round(split.tail * 100)}% of their time). A sublot fills its tools evenly only when its size is a multiple of 50 times the tools it uses, and customers' orders are what they are, so change the number of tools, or cut orders into fewer sublots.`
@@ -166,7 +185,7 @@ export function lotAdvice(result: LotResult): string {
   if (plan.toolsPerLot === 1) {
     return `Dividing the workgroup keeps every tool busy, but each order now runs on one tool and takes about ${Math.round(holdHours(result))} hours, with ${plan.depth} orders in the system. Customers' orders can't shrink, so when the promise is a short cycle time, dedicate the whole fleet to one order at a time.`
   }
-  if (result.shortShare > 0.3 && (plan.startFor ?? YIELD.min) > YIELD.min + 0.005 && holdHours(result) > 0 && result.cycleHours > LOT_ROUND.mission.cycleHours * 1.2) {
+  if (result.shortShare > 0.3 && (plan.startFor ?? YIELD.min) > YIELD.min + 0.005 && holdHours(result) > 0 && result.cycleHours > lotMission(result.speeds).cycleHours * 1.2) {
     return `${Math.round(result.shortShare * 100)}% of orders came up short and waited for a top-up run before they could ship. Start orders for a lower yield so more are full the first time, and keep only as many orders in the system as the tools can run at once.`
   }
   if ((plan.split ?? 1) > 1 && staggerHours(result) > 1) {
@@ -175,7 +194,7 @@ export function lotAdvice(result: LotResult): string {
   if (plan.depth > slots) {
     return `Orders waited too long: ${plan.depth - slots} of the ${plan.depth} orders were always waiting for a set. At most ${slots} ${slots === 1 ? 'order' : 'orders'} can be on the tools at once; more only adds waiting and ships nothing extra.`
   }
-  if (plan.toolsPerLot >= FLEET) {
+  if (plan.toolsPerLot >= result.speeds.length) {
     return `With the whole fleet on each order, an order still takes about ${Math.round(holdHours(result))} hours and orders can't be made smaller. Fewer orders in the system, and no top-up runs that hold the fleet for a short time, are what is left to shorten it.`
   }
   return `An order held its tools about ${Math.round(holdHours(result))} hours, and orders are customers' demand, so they can't be made smaller. Give each order more tools, so it finishes sooner, and keep only one order per set of tools in the system.`
@@ -202,14 +221,11 @@ export function whatHappenedLots(result: LotResult): string {
   return parts.join(' ')
 }
 
-// Hours a hot order is promised, as the player sees it.
-export const promiseWords = `${DUE.hot} hours for a hot order, ${DUE.normal} for any other`
-
 // What to try next after a run of the hot-order round.
 export function hotAdvice(result: LotResult): string {
   const verdict = judgeHot(result)
   if (verdict.passed) return 'Mission done.'
-  const { plan, promises } = result
+  const { plan, promises, due: DUE } = result
   const split = timeSplit(result)
   if ((plan.hot ?? 0) === 0 || promises.hot.finished < HOT_ROUND.fewest) {
     return 'Hardly any hot orders came through, so there was nothing to test the promise on. Send some hot orders in.'
@@ -223,7 +239,7 @@ export function hotAdvice(result: LotResult): string {
     if (plan.toolsPerLot === 1) {
       return `Dividing the workgroup puts each hot order on a single tool: ${hold} hours on its tool alone, ${took} in all. Dedicate the whole fleet to one order at a time and a hot order waits only for the order running, then runs in a fraction of the time.`
     }
-    if (plan.toolsPerLot >= FLEET && !plan.reserve) {
+    if (plan.toolsPerLot >= result.speeds.length && !plan.reserve) {
       return `Hot orders go first but still wait for the order on the fleet to finish, since nothing interrupts it (${took} hours in all, ${Math.round(promises.hot.onTime * 100)}% on time). Keep fewer orders in the system, and start orders for a lower yield so no top-up run holds the fleet longer.`
     }
     if (!plan.reserve && hold > DUE.hot / 2) {
@@ -245,7 +261,7 @@ export function hotAdvice(result: LotResult): string {
 
 // How the fortnight went with hot orders, in words.
 export function whatHappenedHot(result: LotResult): string {
-  const { promises, plan } = result
+  const { promises, plan, due: DUE } = result
   const hot = Math.round(promises.hot.cycleHours)
   const normal = Math.round(promises.normal.cycleHours)
   return `${promises.hot.finished} hot orders took ${hot} hours on average against ${DUE.hot} promised; the other ${promises.normal.finished} took ${normal} against ${DUE.normal}. ${

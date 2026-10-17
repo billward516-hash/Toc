@@ -76,7 +76,7 @@ export function LoadingLab({ onExit }: { onExit: () => void }) {
         total={TOTAL}
         onFinish={(entry) => {
           const title = mode === 'lots' ? LOT_ROUND.title : HOT_ROUND.title
-          setLog([...log, { id: mode, title, tries: entry.tries, passed: entry.passed, detail: entry.passed ? `. Winning plan: ${describePlan(entry.plan)}` : '' }])
+          setLog([...log, { id: mode, title, tries: entry.tries, passed: entry.passed, detail: entry.passed ? `. Winning plan: ${describePlan(entry.plan, entry.fleet)}` : '' }])
           setIndex(index + 1)
         }}
         onExit={onExit}
