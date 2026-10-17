@@ -408,6 +408,7 @@ function Dial({ round, upgraded, rate, capacity, onChange }: { round: Round; upg
         </button>
         <input
           type="range"
+          aria-label="Orders per hour"
           min={RATES.min}
           max={RATES.max}
           step={RATES.step}

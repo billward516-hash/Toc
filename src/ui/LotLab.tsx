@@ -345,7 +345,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
               <button className="chip step" aria-label="Fewer orders" disabled={plan.depth <= LIMITS.depth.min} onClick={() => change({ depth: plan.depth - 1 })}>
                 <Icon name="minus" />
               </button>
-              <input type="range" min={LIMITS.depth.min} max={LIMITS.depth.max} step={1} value={plan.depth} aria-valuetext={`${plan.depth} orders`} onChange={(event) => change({ depth: Number(event.target.value) })} />
+              <input type="range" aria-label="Orders in the system" min={LIMITS.depth.min} max={LIMITS.depth.max} step={1} value={plan.depth} aria-valuetext={`${plan.depth} orders`} onChange={(event) => change({ depth: Number(event.target.value) })} />
               <button className="chip step" aria-label="More orders" disabled={plan.depth >= LIMITS.depth.max} onClick={() => change({ depth: plan.depth + 1 })}>
                 <Icon name="plus" />
               </button>
@@ -364,6 +364,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
                 <div className="dial" role="group" aria-label="Hot orders">
                   <input
                     type="range"
+                    aria-label="Hot orders as a share of capacity"
                     min={LIMITS.hot.min}
                     max={LIMITS.hot.max}
                     step={LIMITS.hot.step}
