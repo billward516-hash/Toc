@@ -1,15 +1,16 @@
-import { capacityPerHour, DAYS, DUE, HORIZON, MIXED, ORDER_SIZES, type LotPlan, type LotResult } from './lots.ts'
+import { capacityPerHour, DAYS, DUE, HORIZON, MIXED, ORDER_SIZES, YIELD, type LotPlan, type LotResult } from './lots.ts'
 
 // The loading lab's lot rounds: one group of eight tools, run for two weeks. A lot is a customer's order,
 // so its size is demand, not a choice, and it ships only when all of it is done. What the player chooses
 // is how many tools each sublot gets, whether to cut orders into sublots, and how many orders to keep in
-// the system.
+// the system, and what yield to start each order for.
 export const LOT_ROUND = {
   title: 'Orders and tools',
   // The day the round is played on, so only the plan changes between runs.
   day: 2,
-  mission: { good: 64000, cycleHours: 12 },
-  start: { size: 'demand', toolsPerLot: 8, depth: 4, split: 1, order: 'first' } satisfies LotPlan,
+  // Good wafers shipped in full orders, and the average hours an order takes.
+  mission: { good: 58000, cycleHours: 18 },
+  start: { size: 'demand', toolsPerLot: 8, depth: 4, split: 1, order: 'first', startFor: 0.77 } satisfies LotPlan,
 }
 
 // The hot-order round: the same group, with some orders promised much sooner.
@@ -17,10 +18,10 @@ export const HOT_ROUND = {
   title: 'Hot orders',
   day: 2,
   // Every order should meet its promise, and the group still has to ship.
-  mission: { onTime: 0.85, good: 60000 },
+  mission: { onTime: 0.85, good: 56000 },
   // A hot order needs at least this many shipped to count.
   fewest: 3,
-  start: { size: 'demand', toolsPerLot: 4, depth: 4, split: 1, order: 'first', hot: 0.15, reserve: false } satisfies LotPlan,
+  start: { size: 'demand', toolsPerLot: 4, depth: 4, split: 1, order: 'first', startFor: 0.77, hot: 0.15, reserve: false } satisfies LotPlan,
 }
 
 export const LIMITS = {
@@ -127,7 +128,7 @@ export function describePlan(plan: LotPlan): string {
   const sets = Math.floor(8 / plan.toolsPerLot)
   const split = plan.split ?? 1
   const hot = (plan.hot ?? 0) > 0 ? `; ${Math.round((plan.hot ?? 0) * 100)}% hot orders, ${plan.order === 'hot' ? 'hot first' : plan.order === 'shortest' ? 'shortest first' : 'no priority'}${plan.reserve ? ', one set reserved' : ''}` : plan.order === 'shortest' ? '; shortest first' : ''
-  return `${plan.toolsPerLot} ${plan.toolsPerLot === 1 ? 'tool' : 'tools'} each (${sets} ${sets === 1 ? 'set' : 'sets'}), ${split === 1 ? 'orders run whole' : `orders cut into ${split}`}, ${plan.depth} in the system${hot}`
+  return `${plan.toolsPerLot} ${plan.toolsPerLot === 1 ? 'tool' : 'tools'} each (${sets} ${sets === 1 ? 'set' : 'sets'}), ${split === 1 ? 'orders run whole' : `orders cut into ${split}`}, ${plan.depth} in the system, started for ${Math.round((plan.startFor ?? YIELD.min) * 100)}% yield${hot}`
 }
 
 // What to try next after a run of the order round.
@@ -145,10 +146,19 @@ export function lotAdvice(result: LotResult): string {
     if (split.starved > 0.05) {
       return `Some sets had no sublot to run (${Math.round(split.starved * 100)}% of their time). Keep enough orders in the system to give every set a sublot: ${Math.ceil(sets / (plan.split ?? 1))} at least.`
     }
+    if (split.tail > 0.08 && result.shortShare > 0.3) {
+      return `${Math.round(result.shortShare * 100)}% of orders came up short of good wafers and needed a top-up run. A top-up is a small sublot that doesn't fill whole rounds of its tools, so tools stood idle (${Math.round(split.tail * 100)}% of their time). Start orders for a lower yield so fewer need one, or use smaller sets.`
+    }
     if (split.tail > 0.08) {
       return `Tools finished their loads and stood idle while the others finished the sublot (${Math.round(split.tail * 100)}% of their time). A sublot fills its tools evenly only when its size is a multiple of 50 times the tools it uses, and customers' orders are what they are, so change the number of tools, or cut orders into fewer sublots.`
     }
-    return 'Not enough good wafers: yield averages about 77%, so the tools have to be running close to full all fortnight.'
+    if ((plan.startFor ?? YIELD.min) <= YIELD.min + 0.005 && result.surplus > 4000) {
+      return `Starting every order for the worst yield (69%) makes every order full the first time, but the spare good wafers it made, ${(Math.round(result.surplus / 100) * 100).toLocaleString('en-US')} in all, used tool time that could have shipped more. Start for a better yield and let the few short orders take a top-up.`
+    }
+    return 'Not enough good wafers shipped: yield averages about 77%, and every order must be full, so the tools have to run close to full all fortnight.'
+  }
+  if (result.shortShare > 0.3 && (plan.startFor ?? YIELD.min) > YIELD.min + 0.005 && holdHours(result) > 0 && result.cycleHours > LOT_ROUND.mission.cycleHours * 1.2) {
+    return `${Math.round(result.shortShare * 100)}% of orders came up short and waited for a top-up run before they could ship. Start orders for a lower yield so more are full the first time, and keep only as many orders in the system as the tools can run at once.`
   }
   if ((plan.split ?? 1) > 1 && staggerHours(result) > 1) {
     return `An order ships only when its last sublot is done, and sublots started ${Math.round(staggerHours(result))} hours apart on average, so the early ones sat finished and unshippable. Cut orders into sublots only when there are free sets to run them all at once.`
@@ -171,6 +181,9 @@ export function whatHappenedLots(result: LotResult): string {
       ? `With room for ${slots} ${slots === 1 ? 'order' : 'orders'} on the tools at once and ${result.plan.depth} in the system, ${waiting} ${waiting === 1 ? 'is' : 'are'} always waiting. Cycle time is orders in the system divided by orders shipped an hour, so orders beyond what the tools can hold only lengthen the wait.`
       : 'The system holds no more orders than the tools can run at once, so no order waits for anything but a set to finish.',
   ]
+  parts.push(
+    `Orders must ship full, so each was started for a ${Math.round((result.plan.startFor ?? YIELD.min) * 100)}% yield. ${Math.round(result.shortShare * 100)}% came up short and needed a top-up run; ${(Math.round(result.surplus / 100) * 100).toLocaleString('en-US')} good wafers beyond the orders were made.`,
+  )
   if ((result.plan.split ?? 1) > 1) {
     parts.push(`Each order was cut into ${result.plan.split} sublots, which started ${staggerHours(result) < 0.1 ? 'together' : `${Math.round(staggerHours(result) * 10) / 10} hours apart on average`}. The order shipped only when the last was done.`)
   }
@@ -232,7 +245,7 @@ export interface LotSnapshot {
   sets: (number | null)[]
   // The load each tool is running now.
   tools: ({ lot: number; wafers: number; start: number; end: number } | null)[]
-  // Orders shipped, and the wafers and good wafers in them.
+  // Orders shipped, the wafers started for them, and the good wafers shipped (the orders themselves).
   finished: number
   wafers: number
   good: number
@@ -277,10 +290,10 @@ export function lotSnapshotAt(result: LotResult, t: number, toolCount: number): 
       case 'ship': {
         const order = result.orders[event.order]
         finished++
-        wafers += order.size
-        good += order.size * order.yield
+        wafers += order.started
+        good += order.size
         cycle += event.t - order.release
-        held -= order.size
+        held -= order.started
         break
       }
     }

@@ -18,7 +18,7 @@ import {
   whatHappenedLots,
   type LotSnapshot,
 } from '../loading/lotRound.ts'
-import { capacityPerHour, DUE, HORIZON, ORDER_SIZES, runLots, SPEEDS, type LotPlan, type LotResult } from '../loading/lots.ts'
+import { capacityPerHour, DUE, HORIZON, ORDER_SIZES, runLots, SPEEDS, START_FOR, type LotPlan, type LotResult } from '../loading/lots.ts'
 import { Icon } from './icons.tsx'
 import { CycleBar, DepthChart, type DepthPoint } from './LabParts.tsx'
 import { PlaybackPanel, ScreenHeader, type Stat } from './parts.tsx'
@@ -111,7 +111,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
 
   const stats: Stat[] = [
     { label: 'Orders shipped', value: snapshot.finished },
-    { label: 'Good wafers', value: Math.round(snapshot.good).toLocaleString('en-US') },
+    { label: 'Wafers shipped', value: Math.round(snapshot.good).toLocaleString('en-US') },
     { label: 'Order cycle time', value: snapshot.cycleHours === null ? '–' : `${Math.round(snapshot.cycleHours)} h` },
     { label: 'Tools busy', value: `${Math.round(100 * snapshot.busy)}%` },
   ]
@@ -126,7 +126,10 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           A group of <strong>eight tools</strong> processes wafers. Two tools make {SPEEDS[0]} wafers an hour and six make {SPEEDS[2]}, so the group can make {capacity} an hour, about {Math.round((capacity * DAYS_SHOWN * 24) / 1000)},000 in two weeks. A load of up to 50 wafers takes a tool the same time whatever its size. Wafers are always queued, so arrivals don't matter.
         </p>
         <p>
-          <strong>A lot is a customer's order: {ORDER_SIZES.slice(0, -1).join(', ')} or {ORDER_SIZES.at(-1)} wafers, not yours to change, and it ships only when all of it is done.</strong> An order can be cut into sublots, but a sublot finished early can't ship; it waits for the rest. Each sublot is run out on its tools before they take another, so sublots never mix. You choose how many tools each gets, whether to cut orders into sublots, and how many orders to keep in the system. Yield averages about 77%, order by order between 69% and 85%.
+          <strong>A lot is a customer's order for {ORDER_SIZES.slice(0, -1).join(', ')} or {ORDER_SIZES.at(-1)} good wafers, not yours to change. It must ship full, and only when all of it is done.</strong> An order can be cut into sublots, but a sublot finished early can't ship; it waits for the rest. Each sublot is run out on its tools before they take another, so sublots never mix.
+        </p>
+        <p>
+          <strong>Yield decides how many wafers to start.</strong> It runs from 69% to 85%, order by order, and is known only once the order has been run. Start for the worst (69%) and every order is full the first time, but the spare wafers use tool time. Start for a better yield and fewer are wasted, but an order that comes up short needs a top-up run, and waits for it. You also choose how many tools each sublot gets, whether to cut orders into sublots, and how many orders to keep in the system.
         </p>
         {hotMode && (
           <p>
@@ -138,11 +141,11 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
           <span>
             {hotMode ? (
               <>
-                <strong>Mission:</strong> at least <strong>{Math.round(HOT_ROUND.mission.onTime * 100)}%</strong> of the hot orders and of the other orders shipped on time, and at least <strong>{HOT_ROUND.mission.good.toLocaleString('en-US')} good wafers</strong> in two weeks.
+                <strong>Mission:</strong> at least <strong>{Math.round(HOT_ROUND.mission.onTime * 100)}%</strong> of the hot orders and of the other orders shipped on time, and at least <strong>{HOT_ROUND.mission.good.toLocaleString('en-US')} wafers</strong> shipped in full orders in two weeks.
               </>
             ) : (
               <>
-                <strong>Mission:</strong> ship at least <strong>{LOT_ROUND.mission.good.toLocaleString('en-US')} good wafers</strong> in two weeks, with an order's average time from joining the queue to shipping no more than <strong>{LOT_ROUND.mission.cycleHours} hours</strong>.
+                <strong>Mission:</strong> ship at least <strong>{LOT_ROUND.mission.good.toLocaleString('en-US')} wafers</strong> in full orders in two weeks, with an order's average time from joining the queue to shipping no more than <strong>{LOT_ROUND.mission.cycleHours} hours</strong>.
               </>
             )}
           </span>
@@ -188,6 +191,9 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
               <p className="advice">{hotMode ? hotAdvice(done.result) : lotAdvice(done.result)}</p>
               {hotMode && <PromiseTable result={done.result} />}
               <TimeSplitBar result={done.result} />
+              <p className="by-size">
+                {Math.round(done.result.shortShare * 100)}% of orders came up short and needed a top-up · {(Math.round(done.result.surplus / 100) * 100).toLocaleString('en-US')} spare good wafers made · {Math.round(done.result.wafers).toLocaleString('en-US')} wafers started
+              </p>
               {!hotMode && <BySize result={done.result} />}
             </section>
           )}
@@ -206,7 +212,7 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
                   <tr>
                     <th scope="col">Run</th>
                     <th scope="col">Plan</th>
-                    <th scope="col">Good</th>
+                    <th scope="col">Shipped</th>
                     {hotMode ? (
                       <>
                         <th scope="col">Hot on time</th>
@@ -276,6 +282,23 @@ export function LotRound({ mode, number, total, onFinish, onExit }: { mode: LotM
             <p className="hint">
               {sets} {sets === 1 ? 'sublot' : 'sublots'} at a time on {sets * plan.toolsPerLot} tools
               {result.unused.length > 0 ? `; ${result.unused.length} ${result.unused.length === 1 ? 'tool is' : 'tools are'} left in no set` : ''}.
+            </p>
+          </fieldset>
+          <fieldset className="lever">
+            <legend>
+              <Icon name="rule" /> Start each order for a yield of
+            </legend>
+            <div className="chips" role="group" aria-label="Yield to start for">
+              {START_FOR.map((y) => (
+                <button key={y} className={`chip${(plan.startFor ?? START_FOR[0]) === y ? ' on' : ''}`} aria-pressed={(plan.startFor ?? START_FOR[0]) === y} onClick={() => change({ startFor: y })}>
+                  {Math.round(y * 100)}%{y === START_FOR[0] ? ' (worst)' : y === START_FOR[2] ? ' (best)' : ' (average)'}
+                </button>
+              ))}
+            </div>
+            <p className="hint">
+              {(plan.startFor ?? START_FOR[0]) === START_FOR[0]
+                ? 'Every order is full the first time; the spare wafers are wasted.'
+                : `An order that comes out below ${Math.round((plan.startFor ?? START_FOR[0]) * 100)}% needs a top-up and waits for it; ${(plan.startFor ?? START_FOR[0]) === START_FOR[2] ? 'most' : 'about half of'} orders will.`}
             </p>
           </fieldset>
           <fieldset className="lever">
@@ -383,7 +406,7 @@ function LotVerdictList({ result, verdict }: { result: LotResult; verdict: Retur
       <li className={verdict.goodOk ? 'ok' : 'miss'}>
         <Icon name={verdict.goodOk ? 'check' : 'cross'} />
         <span>
-          Good wafers <strong>{Math.round(result.good).toLocaleString('en-US')}</strong>, at least {mission.good.toLocaleString('en-US')}
+          Wafers shipped <strong>{Math.round(result.good).toLocaleString('en-US')}</strong>, at least {mission.good.toLocaleString('en-US')}
         </span>
       </li>
       <li className={verdict.cycleOk ? 'ok' : 'miss'}>
@@ -402,7 +425,7 @@ function HotVerdictList({ result, verdict }: { result: LotResult; verdict: Retur
   const rows = [
     { ok: verdict.hotOk, text: `Hot orders on time: ${pct(result.promises.hot.onTime)} of ${result.promises.hot.finished}, at least ${pct(mission.onTime)}` },
     { ok: verdict.normalOk, text: `Other orders on time: ${pct(result.promises.normal.onTime)} of ${result.promises.normal.finished}, at least ${pct(mission.onTime)}` },
-    { ok: verdict.goodOk, text: `Good wafers: ${Math.round(result.good).toLocaleString('en-US')}, at least ${mission.good.toLocaleString('en-US')}` },
+    { ok: verdict.goodOk, text: `Wafers shipped: ${Math.round(result.good).toLocaleString('en-US')}, at least ${mission.good.toLocaleString('en-US')}` },
   ]
   return (
     <ul className={`verdict${verdict.passed ? ' won' : ''}`}>
@@ -526,7 +549,9 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
     const lot = result.lots[lotId]
     const order = result.orders[lot.order]
     if (order.hot) return 'HOT'
-    return order.sublots.length > 1 ? `${order.size}: ${order.sublots.indexOf(lotId) + 1}/${order.sublots.length}` : `${order.size}`
+    const part = order.sublots.indexOf(lotId)
+    if (part >= (result.plan.split ?? 1)) return 'TOP-UP'
+    return (result.plan.split ?? 1) > 1 ? `${order.size}: ${part + 1}/${result.plan.split}` : `${order.size}`
   }
   return (
     <svg className="factory lot-floor" viewBox={`0 0 ${width} ${height}`} role="group" aria-label="Tool group">
@@ -597,10 +622,10 @@ function LotFloor({ result, snapshot }: { result: LotResult; snapshot: LotSnapsh
           {snapshot.finished}
         </text>
         <text className="bin-label" x={width - 105} y={SET_TOP + 112}>
-          {snapshot.wafers.toLocaleString('en-US')} wafers
+          {Math.round(snapshot.good).toLocaleString('en-US')} wafers
         </text>
         <text className="bin-label" x={width - 105} y={SET_TOP + 140}>
-          {Math.round(snapshot.good).toLocaleString('en-US')} good
+          {snapshot.wafers.toLocaleString('en-US')} started
         </text>
         <text className={`bin-label held${snapshot.held > 0 ? ' some' : ''}`} x={width - 105} y={SET_TOP + 172}>
           Done, can't ship:

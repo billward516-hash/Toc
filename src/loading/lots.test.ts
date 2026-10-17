@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HOT_ROUND, hotAdvice, hotOrdersPerDay, judgeHot, judgeLots, LOT_ROUND, lotAdvice, lotSnapshotAt, staggerHours, timeSplit } from './lotRound.ts'
-import { HORIZON, LOAD, MIN_LOAD, nextLoad, ORDER_SIZES, runLots, SPEEDS, sublotSizes, toolSets, type LotPlan } from './lots.ts'
+import { HORIZON, LOAD, MIN_LOAD, nextLoad, ORDER_SIZES, runLots, SPEEDS, START_FOR, sublotSizes, toolSets, type LotPlan } from './lots.ts'
 
 const SEEDS = Array.from({ length: 12 }, (_, s) => s + 1)
 const plan = (p: Partial<LotPlan>): LotPlan => ({ size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first', ...p })
@@ -57,7 +57,7 @@ describe('the order simulation', () => {
     for (const order of r.orders.filter((o) => o.end !== null)) {
       const parts = order.sublots.map((id) => r.lots[id])
       expect(order.end).toBe(Math.max(...parts.map((p) => p.end ?? Infinity)))
-      expect(parts.reduce((sum, p) => sum + p.size, 0)).toBe(order.size)
+      expect(parts.reduce((sum, p) => sum + p.size, 0)).toBe(order.started)
     }
     for (const lot of r.lots.filter((l) => l.end !== null)) {
       const own = runs.filter((e) => e.lot === lot.id)
@@ -137,6 +137,45 @@ describe('what the lab teaches about orders', () => {
     expect(by(shortest, 600)).toBeLessThan(by(first, 600) * 0.7)
     expect(by(shortest, 2400)).toBeGreaterThan(by(first, 2400) * 1.1)
     expect(Math.abs(mean(shortest, (r) => r.cycleHours) - mean(first, (r) => r.cycleHours)) / mean(first, (r) => r.cycleHours)).toBeLessThan(0.1)
+  })
+})
+
+describe('full orders', () => {
+  it('ship with at least the good wafers ordered, never short', () => {
+    for (const startFor of START_FOR) {
+      const r = runLots(plan({ toolsPerLot: 4, depth: 3, startFor }), 4)
+      const shipped = r.orders.filter((o) => o.end !== null)
+      expect(shipped.length).toBeGreaterThan(20)
+      for (const o of shipped) expect(o.started * o.yield).toBeGreaterThanOrEqual(o.size - 1e-6)
+      expect(r.good).toBe(shipped.reduce((sum, o) => sum + o.size, 0))
+    }
+  })
+
+  it('start more wafers than ordered, for the yield the plan hopes for', () => {
+    const r = runLots(plan({ startFor: 0.69 }), 1)
+    for (const o of r.orders.filter((o) => o.topUps === 0)) expect(o.started).toBeGreaterThanOrEqual(o.size / 0.69)
+    expect(r.orders.filter((o) => o.end !== null).every((o) => o.started >= o.size / 0.85)).toBe(true)
+  })
+
+  it('need no top-up when started for the worst yield, and a top-up for most orders when started for the best', () => {
+    expect(mean(plan({ startFor: 0.69 }), (r) => r.shortShare)).toBe(0)
+    expect(mean(plan({ startFor: 0.77 }), (r) => r.shortShare)).toBeGreaterThan(0.3)
+    expect(mean(plan({ startFor: 0.85 }), (r) => r.shortShare)).toBeGreaterThan(0.75)
+    expect(mean(plan({ startFor: 0.69 }), (r) => r.surplus)).toBeGreaterThan(mean(plan({ startFor: 0.85 }), (r) => r.surplus) * 10)
+  })
+
+  it('run a top-up as one more small sublot of the order, which then ships when it is done', () => {
+    const r = runLots(plan({ startFor: 0.85 }), 2)
+    const shortOrder = r.orders.find((o) => o.topUps > 0 && o.end !== null)!
+    expect(shortOrder.sublots.length).toBe(2)
+    const [first, topUp] = shortOrder.sublots.map((id) => r.lots[id])
+    expect(topUp.size).toBeLessThan(first.size)
+    expect(shortOrder.end).toBe(Math.max(first.end ?? 0, topUp.end ?? 0))
+  })
+
+  it('ship more wafers when started for a better yield, on sets that run top-ups well, and not on all eight tools', () => {
+    expect(mean(plan({ startFor: 0.85 }), (r) => r.good)).toBeGreaterThan(mean(plan({ startFor: 0.69 }), (r) => r.good) + 2000)
+    expect(mean(plan({ toolsPerLot: 8, depth: 1, startFor: 0.85 }), (r) => r.busy)).toBeLessThan(mean(plan({ toolsPerLot: 8, depth: 1, startFor: 0.69 }), (r) => r.busy) - 0.05)
   })
 })
 

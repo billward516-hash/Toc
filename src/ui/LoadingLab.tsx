@@ -536,15 +536,19 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
     const avg = (plan: LotPlan) => {
       const runs = days.map((day) => runLots(plan, day))
       const mean = (pick: (r: LotResult) => number) => runs.reduce((sum, r) => sum + pick(r), 0) / runs.length
-      return { cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy), hotOnTime: mean((r) => r.promises.hot.onTime), hotHours: mean((r) => r.promises.hot.cycleHours) }
+      return { cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy), shipped: mean((r) => r.good), shortShare: mean((r) => r.shortShare), surplus: mean((r) => r.surplus), hotOnTime: mean((r) => r.promises.hot.onTime), hotHours: mean((r) => r.promises.hot.cycleHours) }
     }
-    const base: LotPlan = { size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first' }
+    const base: LotPlan = { size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first', startFor: 0.77 }
     const hot: LotPlan = { ...base, depth: 3, hot: 0.15 }
     return {
       lean: avg(base),
       crowded: avg({ ...base, depth: 8 }),
       odd: avg({ ...base, toolsPerLot: 3 }),
       cut: avg({ ...base, split: 4 }),
+      safe: avg({ ...base, startFor: 0.69 }),
+      hopeful: avg({ ...base, startFor: 0.85 }),
+      safeWide: avg({ ...base, toolsPerLot: 8, depth: 1, startFor: 0.69 }),
+      hopefulWide: avg({ ...base, toolsPerLot: 8, depth: 1, startFor: 0.85 }),
       noPriority: avg(hot),
       priority: avg({ ...hot, order: 'hot' }),
       wide: avg({ ...hot, toolsPerLot: 8, depth: 1, order: 'hot' }),
@@ -597,6 +601,12 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
             <h3>Orders: queue only what the tools can run</h3>
             <p>
               A lot is a customer's order, so its size is demand and it ships only when all of it is done. With wafers always waiting, cycle time is the orders in the system divided by the orders shipped an hour: two orders gave {Math.round(lots.lean.cycleHours)} hours each and eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two unused ({Math.round(100 * lots.odd.busy)}% busy). Cutting each order into four sublots did not help: the early ones sat finished and unshippable, and it took {Math.round(lots.cut.cycleHours)} hours with the tools {Math.round(100 * lots.cut.busy)}% busy. Sublots help only when free sets can run them all at once, which is the same as giving the order more tools.
+            </p>
+          </li>
+          <li>
+            <h3>Orders must ship full, so yield sets what you start</h3>
+            <p>
+              A customer orders good wafers, and yield of 69–85% isn't known until the order has been run. Starting every order for the worst yield made every order full the first time but wasted {(Math.round(lots.safe.surplus / 100) * 100).toLocaleString('en-US')} spare wafers and shipped {(Math.round(lots.safe.shipped / 100) * 100).toLocaleString('en-US')}. Starting for the best yield wasted almost none and shipped {(Math.round(lots.hopeful.shipped / 100) * 100).toLocaleString('en-US')}, but {Math.round(100 * lots.hopeful.shortShare)}% of orders came up short and waited for a top-up run. A top-up is a small sublot, so on all eight tools at once it left tools idle: tool use fell from {Math.round(100 * lots.safeWide.busy)}% to {Math.round(100 * lots.hopefulWide.busy)}% and nothing more shipped. Hoping for a good yield pays only where top-ups can be run efficiently.
             </p>
           </li>
           <li>

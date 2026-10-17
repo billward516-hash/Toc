@@ -1,8 +1,11 @@
 import { EventQueue } from '../engine/eventQueue.ts'
 import { stream } from '../engine/random.ts'
 
-// A group of tools that process wafers for the loading lab's lot rounds. A lot is a customer's order:
-// it ships when all of it is done, so a part of it finished early cannot go. An order may be split into
+// A group of tools that process wafers for the loading lab's lot rounds. A lot is a customer's order for
+// a number of good wafers: it must ship full, and only when all of it is done, so a part of it finished
+// early cannot go, and neither can an order that came up short of good wafers. Yield is not known until a
+// batch is done, so starting an order takes a guess: start enough for a poor yield and the order is always
+// full but spare wafers are wasted; start for a good one and some orders come up short and need a top-up. An order may be split into
 // sublots, but it is not complete until the last sublot is. A sublot is committed to some of the group's
 // tools and run out before they take another, so sublots never mix. Tools run loads of up to 50 wafers in
 // the same time whatever the load; a sublot's loads go to whichever of its tools is free. The queue is
@@ -23,8 +26,11 @@ export const RUN_SPREAD = 0.1
 export const ORDER_SIZES = [600, 1200, 1800, 2400]
 export const MIXED = [600, 2400]
 
-// Average yield of an order is drawn from this range, an order at a time.
+// Yield of an order is drawn from this range, an order at a time, and known only when it has been run.
 export const YIELD = { min: 0.69, max: 0.85 }
+
+// The yields an order can be started for: the worst, the average, the best.
+export const START_FOR = [0.69, 0.77, 0.85]
 
 // Two weeks, in minutes.
 export const DAYS = 14
@@ -36,7 +42,7 @@ export const AGING = 72 * 60
 
 // Hot orders carry a shorter promise: hours from joining the queue to shipping, for a hot order and for
 // any other.
-export const DUE = { hot: 14, normal: 40 }
+export const DUE = { hot: 20, normal: 55 }
 
 export interface LotPlan {
   // Wafers in every order; 'demand' for orders of every size customers send (ORDER_SIZES), or 'mixed' for
@@ -47,6 +53,10 @@ export interface LotPlan {
   toolsPerLot: number
   // Orders in the system, from joining the queue until they ship.
   depth: number
+  // The yield each order is started for: it starts size / startFor wafers, rounded up to whole loads.
+  // 0.69 (the default) always makes a full order; more hopeful values waste less and leave some orders
+  // short, needing a top-up.
+  startFor?: number
   // 'hot' runs the sublots of hot orders ahead of the others, each kind in the order it came.
   order: 'first' | 'shortest' | 'hot'
   // Sublots each order is cut into, which together make up the order. 1 runs it whole.
@@ -61,7 +71,11 @@ export interface LotPlan {
 // A customer's order.
 export interface Order {
   id: number
+  // Good wafers the customer ordered, which it must ship in full.
   size: number
+  // Wafers started for it so far, including top-ups, and how many top-ups it needed.
+  started: number
+  topUps: number
   yield: number
   // Arrived as a hot order, promised sooner than the rest.
   hot: boolean
@@ -109,9 +123,14 @@ export interface LotResult {
   // The tools of each set a sublot can be committed to, and the tools no set uses.
   groups: number[][]
   unused: number[]
-  // Wafers in shipped orders, and the good ones among them.
+  // Wafers started for shipped orders, and the good wafers shipped: the sum of their sizes.
   wafers: number
   good: number
+  // Shipped orders that came up short and needed a top-up, the share of them, and the good wafers made
+  // beyond what customers ordered.
+  topUps: number
+  shortShare: number
+  surplus: number
   // Orders shipped.
   finished: number
   // Average hours from joining the queue to shipping, over the orders shipped.
@@ -179,22 +198,26 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     return plan.size
   }
 
-  // An order joins the queue with all its sublots at once.
+  const addSublot = (order: Order, part: number) => {
+    const lot: Lot = { id: lots.length, order: order.id, size: part, start: null, end: null, group: null }
+    lots.push(lot)
+    remaining.push(part)
+    inFlight.push(0)
+    waiting.push(lot.id)
+    order.sublots.push(lot.id)
+    order.started += part
+    open[order.id]++
+    events.push({ t: now, type: 'release', lot: lot.id })
+  }
+
+  // An order joins the queue with all its sublots at once, started for the yield the plan hopes for.
   const release = (hot = false) => {
     const size = orderSize()
-    const order: Order = { id: orders.length, size, yield: YIELD.min + yieldDraws() * (YIELD.max - YIELD.min), hot, release: now, start: null, end: null, sublots: [] }
+    const order: Order = { id: orders.length, size, started: 0, topUps: 0, yield: YIELD.min + yieldDraws() * (YIELD.max - YIELD.min), hot, release: now, start: null, end: null, sublots: [] }
     orders.push(order)
     open.push(0)
-    for (const part of sublotSizes(size, plan.split ?? 1)) {
-      const lot: Lot = { id: lots.length, order: order.id, size: part, start: null, end: null, group: null }
-      lots.push(lot)
-      remaining.push(part)
-      inFlight.push(0)
-      waiting.push(lot.id)
-      order.sublots.push(lot.id)
-      open[order.id]++
-      events.push({ t: now, type: 'release', lot: lot.id })
-    }
+    const wafers = Math.ceil(size / (plan.startFor ?? YIELD.min) / LOAD) * LOAD
+    for (const part of sublotSizes(wafers, plan.split ?? 1)) addSublot(order, part)
   }
 
   const startRun = (tool: number, lot: number) => {
@@ -212,8 +235,9 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     const hot = (id: number) => orders[lots[id].order].hot
     const pool = reserved ? waiting.filter(hot) : waiting
     if (pool.length === 0) return undefined
-    if (plan.order === 'first') return pool[0]
-    if (plan.order === 'hot') return pool.find(hot) ?? pool[0]
+    const oldest = (ids: number[]) => ids.reduce((best, id) => (orders[lots[id].order].release < orders[lots[best].order].release ? id : best), ids[0])
+    if (plan.order === 'first') return oldest(pool)
+    if (plan.order === 'hot') return oldest(pool.filter(hot).length > 0 ? pool.filter(hot) : pool)
     const aged = pool.find((id) => now - orders[lots[id].order].release >= AGING)
     if (aged !== undefined) return aged
     return pool.reduce((best, id) => (lots[id].size < lots[best].size ? id : best), pool[0])
@@ -266,10 +290,17 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
       const order = orders[lots[lot].order]
       open[order.id]--
       if (open[order.id] === 0) {
-        order.end = now
-        events.push({ t: now, type: 'ship', order: order.id })
-        // A shipped hot order isn't replaced: only the orders kept in the system are.
-        if (!order.hot) release()
+        const good = order.started * order.yield
+        if (good < order.size) {
+          // Short: the yield is known now, so the top-up is exactly what is missing. The order waits for it.
+          order.topUps++
+          addSublot(order, Math.max(MIN_LOAD, Math.ceil((order.size - good) / order.yield)))
+        } else {
+          order.end = now
+          events.push({ t: now, type: 'ship', order: order.id })
+          // A shipped hot order isn't replaced: only the orders kept in the system are.
+          if (!order.hot) release()
+        }
       }
       dispatchAll()
     }
@@ -297,8 +328,11 @@ export function runLots(plan: LotPlan, seed: number, speeds: readonly number[] =
     lots,
     groups,
     unused,
-    wafers: done.reduce((sum, o) => sum + o.size, 0),
-    good: done.reduce((sum, o) => sum + o.size * o.yield, 0),
+    wafers: done.reduce((sum, o) => sum + o.started, 0),
+    good: done.reduce((sum, o) => sum + o.size, 0),
+    topUps: done.reduce((sum, o) => sum + o.topUps, 0),
+    shortShare: done.length === 0 ? 0 : done.filter((o) => o.topUps > 0).length / done.length,
+    surplus: done.reduce((sum, o) => sum + (o.started * o.yield - o.size), 0),
     finished: done.length,
     cycleHours: cycle(done),
     cycleBySize,
