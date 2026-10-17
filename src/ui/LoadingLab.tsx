@@ -19,7 +19,7 @@ import {
 } from '../loading/rounds.ts'
 import { queueSeries } from '../loading/series.ts'
 import { describePlan, HOT_ROUND, LOT_ROUND } from '../loading/lotRound.ts'
-import { DUE, runLots } from '../loading/lots.ts'
+import { DUE, runLots, type LotPlan, type LotResult } from '../loading/lots.ts'
 import { STEPS } from '../sandbox/setup.ts'
 import { FactoryView } from './FactoryView.tsx'
 import { Icon } from './icons.tsx'
@@ -531,17 +531,24 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
   const mid = at(lines.one, 14)
   const high = at(lines.one, 19)
   const lots = useMemo(() => {
-    const at = (toolsPerLot: number, depth: number) => runLots({ size: 1200, toolsPerLot, depth, order: 'first' }, LOT_ROUND.day)
-    const hot = { size: 600, toolsPerLot: 2, depth: 6, hot: 0.25, reserve: false } as const
-    const hotRun = (order: 'first' | 'hot', extra: { size?: number; toolsPerLot?: number; depth?: number; reserve?: boolean } = {}) => runLots({ ...hot, order, ...extra }, HOT_ROUND.day)
+    // Averages over a few fortnights, so one lucky or unlucky one doesn't mislead.
+    const days = [1, 2, 3, 4, 5, 6]
+    const avg = (plan: LotPlan) => {
+      const runs = days.map((day) => runLots(plan, day))
+      const mean = (pick: (r: LotResult) => number) => runs.reduce((sum, r) => sum + pick(r), 0) / runs.length
+      return { cycleHours: mean((r) => r.cycleHours), busy: mean((r) => r.busy), hotOnTime: mean((r) => r.promises.hot.onTime), hotHours: mean((r) => r.promises.hot.cycleHours) }
+    }
+    const base: LotPlan = { size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first' }
+    const hot: LotPlan = { ...base, depth: 3, hot: 0.15 }
     return {
-      lean: at(4, 2),
-      crowded: at(4, 8),
-      odd: at(3, 2),
-      noPriority: hotRun('first'),
-      priority: hotRun('hot'),
-      bigLots: hotRun('hot', { size: 1200, toolsPerLot: 4, depth: 4 }),
-      reserved: hotRun('hot', { size: 1200, toolsPerLot: 4, depth: 4, reserve: true }),
+      lean: avg(base),
+      crowded: avg({ ...base, depth: 8 }),
+      odd: avg({ ...base, toolsPerLot: 3 }),
+      cut: avg({ ...base, split: 4 }),
+      noPriority: avg(hot),
+      priority: avg({ ...hot, order: 'hot' }),
+      wide: avg({ ...hot, toolsPerLot: 8, depth: 1, order: 'hot' }),
+      reserved: avg({ ...hot, order: 'hot', reserve: true }),
     }
   }, [])
   const gain = Math.round((100 * (high.shipped - mid.shipped)) / mid.shipped)
@@ -587,15 +594,15 @@ function LabSummary({ log, onAgain, onExit }: { log: RoundLog[]; onAgain: () => 
             </p>
           </li>
           <li>
-            <h3>Lots: queue only what keeps the tools busy</h3>
+            <h3>Orders: queue only what the tools can run</h3>
             <p>
-              With wafers always waiting, cycle time is just the lots in the system divided by the lots finished an hour. Two lots in the system gave {Math.round(lots.lean.cycleHours)} hours a lot; eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two tools unused and ran only {Math.round(100 * lots.odd.busy)}% busy. Match lots to the group: one lot per set, as many tools to a lot as split it into whole rounds, and lots no bigger than the cycle time allows.
+              A lot is a customer's order, so its size is demand and it ships only when all of it is done. With wafers always waiting, cycle time is the orders in the system divided by the orders shipped an hour: two orders gave {Math.round(lots.lean.cycleHours)} hours each and eight gave {Math.round(lots.crowded.cycleHours)}, for the same {Math.round(100 * lots.lean.busy)}% busy tools. Sets of three tools left two unused ({Math.round(100 * lots.odd.busy)}% busy). Cutting each order into four sublots did not help: the early ones sat finished and unshippable, and it took {Math.round(lots.cut.cycleHours)} hours with the tools {Math.round(100 * lots.cut.busy)}% busy. Sublots help only when free sets can run them all at once, which is the same as giving the order more tools.
             </p>
           </li>
           <li>
             <h3>A shorter promise is a priority, and priority has limits</h3>
             <p>
-              Hot lots promised {DUE.hot} hours took {Math.round(lots.noPriority.promises.hot.cycleHours)} with no priority ({Math.round(100 * lots.noPriority.promises.hot.onTime)}% on time) and {Math.round(lots.priority.promises.hot.cycleHours)} going first ({Math.round(100 * lots.priority.promises.hot.onTime)}%), at little cost to the other lots. A lot that is running out can't be interrupted, so a hot lot still waits for one to finish and then runs for as long as its own size takes: with 1200-wafer lots on four tools it took {Math.round(lots.bigLots.promises.hot.cycleHours)} hours and was on time {Math.round(100 * lots.bigLots.promises.hot.onTime)}% of the time. Keeping a set free fixes that ({Math.round(100 * lots.reserved.promises.hot.onTime)}% on time) but left the tools {Math.round(100 * lots.reserved.busy)}% busy instead of {Math.round(100 * lots.bigLots.busy)}%. The cheaper cure is smaller lots.
+              Hot orders promised {DUE.hot} hours were on time {Math.round(100 * lots.noPriority.hotOnTime)}% of the time with no priority and {Math.round(100 * lots.priority.hotOnTime)}% going first, at little cost to the other orders. A sublot that is running out can't be interrupted, so a hot order still waits for one to finish and then needs as long as its own size takes on its tools. Orders can't shrink, so the cure is more tools for each: one order at a time on all eight tools had hot orders on time {Math.round(100 * lots.wide.hotOnTime)}% of the time. Keeping a set free for them ({Math.round(100 * lots.reserved.hotOnTime)}% on time) left the tools {Math.round(100 * lots.reserved.busy)}% busy instead of {Math.round(100 * lots.priority.busy)}%.
             </p>
           </li>
         </ol>

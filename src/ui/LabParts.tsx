@@ -183,7 +183,7 @@ export interface DepthPoint {
 }
 
 // Cycle time and tools' busy time against the lots kept in the system: cycle time climbs in a straight
-// line while the tools stop getting busier as soon as every set has a lot.
+// line while the tools stop getting busier as soon as tools can run no more at once.
 export function DepthChart({ points, sets, current, limit }: { points: DepthPoint[]; sets: number; current: number; limit: number }) {
   const W2 = 560
   const H2 = 250
@@ -195,7 +195,7 @@ export function DepthChart({ points, sets, current, limit }: { points: DepthPoin
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round((top * f) / 5) * 5)
   return (
     <figure className="lab-chart">
-      <svg viewBox={`0 0 ${W2} ${H2}`} role="img" aria-label="Lot cycle time and tools busy against the number of lots in the system">
+      <svg viewBox={`0 0 ${W2} ${H2}`} role="img" aria-label="Order cycle time and tools busy against the number of orders in the system">
         {[...new Set(ticks)].map((c) => (
           <g key={c}>
             <line className="grid" x1={pad.left} x2={W2 - pad.right} y1={y(c)} y2={y(c)} />
@@ -206,7 +206,7 @@ export function DepthChart({ points, sets, current, limit }: { points: DepthPoin
         ))}
         <line className="full" x1={x(sets)} x2={x(sets)} y1={pad.top} y2={H2 - pad.bottom} />
         <text className="note" x={x(sets) + 5} y={pad.top + 12}>
-          every set has a lot
+          tools can run no more at once
         </text>
         <line className="limit" x1={pad.left} x2={W2 - pad.right} y1={y(limit)} y2={y(limit)} />
         <text className="note limit-text" x={pad.left + 6} y={y(limit) - 6}>
@@ -229,10 +229,10 @@ export function DepthChart({ points, sets, current, limit }: { points: DepthPoin
           </g>
         ))}
         <text className="axis-label" x={(pad.left + W2 - pad.right) / 2} y={H2 - 4} textAnchor="middle">
-          Lots in the system (and, under each, the share of tool time spent running)
+          Orders in the system (and, under each, the share of tool time spent running)
         </text>
         <text className="axis-label" transform={`translate(13 ${(pad.top + H2 - pad.bottom) / 2}) rotate(-90)`} textAnchor="middle">
-          Lot cycle time (hours)
+          Order cycle time (hours)
         </text>
       </svg>
     </figure>

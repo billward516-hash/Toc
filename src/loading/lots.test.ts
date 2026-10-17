@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { HOT_ROUND, hotAdvice, hotLotsPerDay, judgeHot, judgeLots, LOT_ROUND, lotAdvice, lotSnapshotAt, timeSplit } from './lotRound.ts'
-import { HORIZON, LOAD, MIN_LOAD, nextLoad, runLots, SPEEDS, toolSets, type LotPlan } from './lots.ts'
+import { HOT_ROUND, hotAdvice, hotOrdersPerDay, judgeHot, judgeLots, LOT_ROUND, lotAdvice, lotSnapshotAt, staggerHours, timeSplit } from './lotRound.ts'
+import { HORIZON, LOAD, MIN_LOAD, nextLoad, ORDER_SIZES, runLots, SPEEDS, sublotSizes, toolSets, type LotPlan } from './lots.ts'
 
 const SEEDS = Array.from({ length: 12 }, (_, s) => s + 1)
-const plan = (p: Partial<LotPlan>): LotPlan => ({ size: 1200, toolsPerLot: 4, depth: 2, order: 'first', ...p })
+const plan = (p: Partial<LotPlan>): LotPlan => ({ size: 'demand', toolsPerLot: 4, depth: 2, split: 1, order: 'first', ...p })
 const mean = (plan: LotPlan, pick: (r: ReturnType<typeof runLots>) => number) => SEEDS.reduce((sum, s) => sum + pick(runLots(plan, s)), 0) / SEEDS.length
 const wins = (p: LotPlan) => SEEDS.filter((s) => judgeLots(runLots(p, s)).passed).length / SEEDS.length
+const hotWins = (p: LotPlan) => SEEDS.filter((s) => judgeHot(runLots(p, s)).passed).length / SEEDS.length
 
 describe('tool sets', () => {
   it('deal tools out fastest first and leave the slowest over', () => {
@@ -25,31 +26,44 @@ describe('tool sets', () => {
       if (remaining > LOAD) expect(remaining - load === 0 || remaining - load >= MIN_LOAD).toBe(true)
     }
   })
+
+  it('cut an order into sublots that add up to it', () => {
+    for (const size of ORDER_SIZES) {
+      for (let split = 1; split <= 4; split++) {
+        const parts = sublotSizes(size, split)
+        expect(parts).toHaveLength(split)
+        expect(parts.reduce((a, b) => a + b, 0)).toBe(size)
+        expect(parts.every((p) => p % LOAD === 0)).toBe(true)
+      }
+    }
+  })
 })
 
-describe('the lot simulation', () => {
+describe('the order simulation', () => {
   it('is deterministic and keeps the books', () => {
     const a = runLots(plan({}), 3)
     expect(runLots(plan({}), 3)).toEqual(a)
     const split = timeSplit(a)
     expect(split.running + split.tail + split.starved + split.unused).toBeCloseTo(1, 6)
     expect(a.busy).toBeCloseTo(split.running, 6)
-    // Lots in the system never differ from the depth.
-    const waiting = a.lots.filter((l) => l.start === null).length
-    const running = a.lots.filter((l) => l.start !== null && l.end === null).length
-    expect(waiting + running).toBe(2)
+    // Orders in the system never differ from the depth.
+    expect(a.orders.filter((o) => o.end === null).length).toBe(2)
+    expect(a.orders.every((o) => ORDER_SIZES.includes(o.size))).toBe(true)
   })
 
-  it('processes whole lots, a lot at a time on its own tools', () => {
-    const r = runLots(plan({ size: 600, toolsPerLot: 2, depth: 4 }), 1)
+  it('ships an order only when its last sublot is done, and runs each sublot on its own set', () => {
+    const r = runLots(plan({ toolsPerLot: 2, depth: 3, split: 3 }), 1)
     const runs = r.events.filter((e) => e.type === 'run')
+    for (const order of r.orders.filter((o) => o.end !== null)) {
+      const parts = order.sublots.map((id) => r.lots[id])
+      expect(order.end).toBe(Math.max(...parts.map((p) => p.end ?? Infinity)))
+      expect(parts.reduce((sum, p) => sum + p.size, 0)).toBe(order.size)
+    }
     for (const lot of r.lots.filter((l) => l.end !== null)) {
       const own = runs.filter((e) => e.lot === lot.id)
       expect(own.reduce((sum, e) => sum + e.wafers, 0)).toBe(lot.size)
-      const tools = new Set(own.map((e) => e.tool))
-      expect([...tools].every((tool) => r.groups[lot.group ?? 0].includes(tool))).toBe(true)
+      expect(own.every((e) => r.groups[lot.group ?? 0].includes(e.tool))).toBe(true)
     }
-    // No two lots on one tool at once.
     for (let tool = 0; tool < 8; tool++) {
       const own = runs.filter((e) => e.tool === tool).sort((a, b) => a.t - b.t)
       for (let i = 1; i < own.length; i++) expect(own[i].t).toBeGreaterThanOrEqual(own[i - 1].end - 1e-9)
@@ -57,134 +71,149 @@ describe('the lot simulation', () => {
   })
 
   it('matches the snapshot to the log', () => {
-    const r = runLots(plan({ size: 600, toolsPerLot: 2, depth: 4 }), 2)
+    const r = runLots(plan({ toolsPerLot: 2, depth: 4, split: 2 }), 2)
     const end = lotSnapshotAt(r, HORIZON, 8)
     expect(end.finished).toBe(r.finished)
     expect(end.wafers).toBe(r.wafers)
     expect(end.busy).toBeCloseTo(r.busy, 6)
+    const held = r.lots.filter((l) => l.end !== null && r.orders[l.order].end === null).reduce((sum, l) => sum + l.size, 0)
+    expect(end.held).toBe(held)
     const mid = lotSnapshotAt(r, HORIZON / 2, 8)
-    expect(mid.waiting.length + mid.sets.filter((s) => s !== null).length).toBe(4)
+    expect(mid.held).toBeGreaterThanOrEqual(0)
   })
 })
 
-describe('what the lab teaches about lots', () => {
-  it('has cycle time follow the lots in the system, not the output', () => {
+describe('what the lab teaches about orders', () => {
+  it('has cycle time follow the orders in the system, not the output', () => {
     const lean = plan({ depth: 2 })
     const heavy = plan({ depth: 8 })
     expect(mean(heavy, (r) => r.cycleHours)).toBeGreaterThan(mean(lean, (r) => r.cycleHours) * 3)
     expect(Math.abs(mean(heavy, (r) => r.good) - mean(lean, (r) => r.good)) / mean(lean, (r) => r.good)).toBeLessThan(0.03)
   })
 
-  it('starves the tools when fewer lots than sets are in the system', () => {
-    const r = runLots(plan({ toolsPerLot: 2, depth: 2 }), 1)
-    expect(timeSplit(r).starved).toBeGreaterThan(0.4)
-    expect(mean(plan({ toolsPerLot: 2, depth: 2 }), (x) => x.busy)).toBeLessThan(0.55)
+  it('starves the tools when fewer orders than sets are in the system', () => {
+    const p = plan({ toolsPerLot: 2, depth: 1 })
+    expect(timeSplit(runLots(p, 1)).starved).toBeGreaterThan(0.6)
+    expect(mean(p, (r) => r.busy)).toBeLessThan(0.3)
   })
 
-  it('loses a quarter of the output to leftover tools with sets of three', () => {
-    const three = mean(plan({ toolsPerLot: 3, depth: 2 }), (r) => r.busy)
-    const four = mean(plan({ toolsPerLot: 4, depth: 2 }), (r) => r.busy)
+  it('loses a quarter of the tools to sets of three', () => {
+    const three = mean(plan({ toolsPerLot: 3 }), (r) => r.busy)
+    const four = mean(plan({ toolsPerLot: 4 }), (r) => r.busy)
     expect(three).toBeLessThan(four - 0.15)
-    expect(timeSplit(runLots(plan({ toolsPerLot: 3, depth: 2 }), 1)).unused).toBe(0.25)
+    expect(timeSplit(runLots(plan({ toolsPerLot: 3 }), 1)).unused).toBe(0.25)
   })
 
-  it('wastes capacity at the tail of a lot that does not fill its tools in whole rounds', () => {
-    const even = { ...plan({ size: 600, toolsPerLot: 8, depth: 1 }) }
+  it('wastes capacity at the tail of a sublot that does not fill its tools in whole rounds', () => {
     const speeds = SPEEDS.map(() => 25)
+    const even = plan({ size: 600, toolsPerLot: 8, depth: 1 })
     // 600 wafers on eight tools is 1.5 rounds of full loads: two rounds' time for 75% of the work.
     expect(runLots(even, 1, speeds).busy).toBeGreaterThan(0.7)
     expect(runLots(even, 1, speeds).busy).toBeLessThan(0.8)
     expect(runLots({ ...even, size: 800 }, 1, speeds).busy).toBeGreaterThan(0.9)
   })
 
-  it('moves the wait to the big lots, not away, when the shortest go first', () => {
-    const first = plan({ size: 'mixed', toolsPerLot: 4, depth: 4, order: 'first' })
+  it('gains nothing from cutting an order into sublots that start at different times', () => {
+    const whole = plan({ toolsPerLot: 4, depth: 2, split: 1 })
+    const cut = { ...whole, split: 4 }
+    expect(mean(cut, (r) => r.cycleHours)).toBeGreaterThan(mean(whole, (r) => r.cycleHours))
+    expect(mean(cut, (r) => r.busy)).toBeLessThan(mean(whole, (r) => r.busy) - 0.05)
+    const staggered = runLots({ ...whole, toolsPerLot: 2, depth: 4, split: 4 }, 1)
+    expect(staggerHours(staggered)).toBeGreaterThan(1)
+    // Finished sublots sit on the shelf waiting for the rest of their order.
+    expect(Math.max(...Array.from({ length: 20 }, (_, k) => lotSnapshotAt(staggered, (k + 1) * 1000, 8).held))).toBeGreaterThan(0)
+  })
+
+  it('helps only when the sublots can all run at once', () => {
+    const alone = plan({ toolsPerLot: 2, depth: 1 })
+    expect(mean({ ...alone, split: 4 }, (r) => r.cycleHours)).toBeLessThan(mean(alone, (r) => r.cycleHours) * 0.5)
+    expect(staggerHours(runLots({ ...alone, split: 4 }, 1))).toBeLessThan(0.5)
+  })
+
+  it('moves the wait to the big orders, not away, when the shortest go first', () => {
+    const first = plan({ toolsPerLot: 4, depth: 4 })
     const shortest = { ...first, order: 'shortest' as const }
-    const sum = (p: LotPlan, size: number) => mean(p, (r) => r.cycleBySize[size] ?? 0)
-    expect(sum(shortest, 600)).toBeLessThan(sum(first, 600) * 0.6)
-    expect(sum(shortest, 2400)).toBeGreaterThan(sum(first, 2400) * 1.1)
+    const by = (p: LotPlan, size: number) => mean(p, (r) => r.cycleBySize[size] ?? 0)
+    expect(by(shortest, 600)).toBeLessThan(by(first, 600) * 0.7)
+    expect(by(shortest, 2400)).toBeGreaterThan(by(first, 2400) * 1.1)
     expect(Math.abs(mean(shortest, (r) => r.cycleHours) - mean(first, (r) => r.cycleHours)) / mean(first, (r) => r.cycleHours)).toBeLessThan(0.1)
   })
 })
 
-describe('the mission', () => {
-  it('is won by small lots, several tools to a lot, and only as many lots as there are sets', () => {
-    expect(wins(plan({ size: 1200, toolsPerLot: 4, depth: 2 }))).toBeGreaterThanOrEqual(0.8)
-    expect(wins(plan({ size: 600, toolsPerLot: 2, depth: 4 }))).toBeGreaterThanOrEqual(0.8)
-    expect(wins(plan({ size: 1500, toolsPerLot: 4, depth: 2 }))).toBeGreaterThanOrEqual(0.5)
+describe('the order mission', () => {
+  it('is won by giving each order the tools, and only as many orders as can run at once', () => {
+    expect(wins(plan({ toolsPerLot: 8, depth: 1 }))).toBeGreaterThanOrEqual(0.7)
+    expect(wins(plan({ toolsPerLot: 4, depth: 2 }))).toBeGreaterThanOrEqual(0.5)
+    expect(wins(plan({ toolsPerLot: 4, depth: 1, split: 2 }))).toBeGreaterThanOrEqual(0.7)
+    expect(wins(plan({ toolsPerLot: 2, depth: 2, split: 2 }))).toBeGreaterThanOrEqual(0.5)
   })
 
-  it('is lost by crowding the system, by big lots, and by sets that waste tools', () => {
-    expect(wins(plan({ size: 1200, toolsPerLot: 4, depth: 6 }))).toBe(0)
-    expect(wins(plan({ size: 2400, toolsPerLot: 4, depth: 2 }))).toBe(0)
-    expect(wins(plan({ size: 1200, toolsPerLot: 3, depth: 2 }))).toBe(0)
-    expect(wins(plan({ size: 1200, toolsPerLot: 8, depth: 1 }))).toBe(0)
-    expect(wins(plan({ size: 600, toolsPerLot: 2, depth: 2 }))).toBe(0)
+  it('is lost by crowding the system, by sets that waste tools, and by cutting orders for nothing', () => {
     expect(wins(LOT_ROUND.start)).toBe(0)
+    expect(wins(plan({ depth: 6 }))).toBe(0)
+    expect(wins(plan({ toolsPerLot: 3 }))).toBe(0)
+    expect(wins(plan({ toolsPerLot: 2, depth: 1 }))).toBe(0)
+    expect(wins(plan({ depth: 2, split: 4 }))).toBe(0)
   })
 
   it('gives advice that names the cause', () => {
     const advise = (p: LotPlan) => lotAdvice(runLots(p, LOT_ROUND.day))
     expect(advise(plan({ toolsPerLot: 3 }))).toMatch(/in no set/)
-    expect(advise(plan({ toolsPerLot: 2, depth: 2 }))).toMatch(/no lot to run/)
-    expect(advise(plan({ size: 600, toolsPerLot: 8, depth: 1 }))).toMatch(/multiple of 50/)
-    expect(advise(plan({ depth: 6 }))).toMatch(/Keep only as many lots/)
-    expect(advise(plan({ size: 2400 }))).toMatch(/smaller/)
-    expect(advise(plan({ size: 1200 }))).toBe('Mission done.')
+    expect(advise(plan({ toolsPerLot: 2, depth: 1 }))).toMatch(/no sublot to run/)
+    expect(advise(plan({ toolsPerLot: 8, depth: 1, split: 2 }))).toMatch(/idle while the others/)
+    expect(advise(plan({ depth: 6 }))).toMatch(/always waiting/)
+    expect(advise(plan({ toolsPerLot: 2, depth: 4, split: 2 }))).toMatch(/sublots started .* hours apart|always waiting/)
+    expect(advise(plan({ toolsPerLot: 4, depth: 2 }))).toMatch(/Mission done|can't be made smaller/)
   })
 })
 
-describe('hot lots', () => {
-  const hot = (p: Partial<LotPlan>): LotPlan => ({ size: 600, toolsPerLot: 2, depth: 6, order: 'hot', hot: 0.25, reserve: false, ...p })
-  const hotWins = (p: LotPlan) => SEEDS.filter((s) => judgeHot(runLots(p, s)).passed).length / SEEDS.length
+describe('hot orders', () => {
+  const hot = (p: Partial<LotPlan>): LotPlan => ({ size: 'demand', toolsPerLot: 8, depth: 2, split: 1, order: 'hot', hot: 0.15, reserve: false, ...p })
   const stat = (p: LotPlan, pick: (r: ReturnType<typeof runLots>) => number) => mean(p, pick)
 
-  it('arrive on top of the lots kept in the system, at about the share of capacity asked for', () => {
+  it('arrive on top of the orders kept in the system, at about the share of capacity asked for', () => {
     const r = runLots(hot({}), 3)
-    const hotLots = r.lots.filter((l) => l.hot)
-    expect(hotLots.length / 14).toBeGreaterThan(hotLotsPerDay(hot({})) * 0.7)
-    expect(hotLots.length / 14).toBeLessThan(hotLotsPerDay(hot({})) * 1.3)
-    // Lots in the system stay at the depth: finished hot lots are not replaced.
-    const regular = r.lots.filter((l) => !l.hot)
-    expect(regular.filter((l) => l.end === null).length).toBe(6)
-    expect(runLots(hot({ hot: 0 }), 3).lots.some((l) => l.hot)).toBe(false)
+    const hotOrders = r.orders.filter((o) => o.hot)
+    expect(hotOrders.length / 14).toBeGreaterThan(hotOrdersPerDay(hot({})) * 0.6)
+    expect(hotOrders.length / 14).toBeLessThan(hotOrdersPerDay(hot({})) * 1.4)
+    expect(r.orders.filter((o) => !o.hot && o.end === null).length).toBe(2)
+    expect(runLots(hot({ hot: 0 }), 3).orders.some((o) => o.hot)).toBe(false)
   })
 
   it('miss their promise with no priority, and keep it when they go first', () => {
     const first = hot({ order: 'first' })
-    expect(stat(first, (r) => r.promises.hot.onTime)).toBeLessThan(0.3)
+    expect(stat(first, (r) => r.promises.hot.onTime)).toBeLessThan(0.5)
     expect(stat(hot({}), (r) => r.promises.hot.onTime)).toBeGreaterThan(0.85)
-    expect(stat(hot({}), (r) => r.promises.hot.cycleHours)).toBeLessThan(stat(first, (r) => r.promises.hot.cycleHours) * 0.8)
+    expect(stat(hot({}), (r) => r.promises.hot.cycleHours)).toBeLessThan(stat(first, (r) => r.promises.hot.cycleHours) * 0.7)
   })
 
-  it('are sped up by going first, at a small cost to the other lots', () => {
-    const first = hot({ order: 'first', hot: 0.4 })
-    const priority = hot({ hot: 0.4 })
+  it('go faster at little cost to the other orders', () => {
+    const first = hot({ order: 'first', depth: 3, hot: 0.25 })
+    const priority = hot({ depth: 3, hot: 0.25 })
     expect(stat(priority, (r) => r.promises.normal.cycleHours)).toBeGreaterThanOrEqual(stat(first, (r) => r.promises.normal.cycleHours))
     expect(stat(priority, (r) => r.promises.normal.cycleHours)).toBeLessThan(stat(first, (r) => r.promises.normal.cycleHours) * 1.15)
-    expect(stat(priority, (r) => r.promises.hot.cycleHours)).toBeLessThan(stat(first, (r) => r.promises.hot.cycleHours) * 0.6)
   })
 
-  it('cannot interrupt a lot being run out, so big lots break the promise even first in line', () => {
-    expect(stat(hot({ size: 2400, toolsPerLot: 4, depth: 4 }), (r) => r.promises.hot.onTime)).toBeLessThan(0.1)
-    expect(stat(hot({ size: 1200, toolsPerLot: 4, depth: 4 }), (r) => r.promises.hot.onTime)).toBeLessThan(0.9)
-    expect(stat(hot({ size: 600, toolsPerLot: 4, depth: 4 }), (r) => r.promises.hot.onTime)).toBeGreaterThan(0.95)
+  it('cannot interrupt a sublot being run out, so small sets break the promise even first in line', () => {
+    expect(stat(hot({ toolsPerLot: 2, depth: 4 }), (r) => r.promises.hot.onTime)).toBeLessThan(0.4)
+    expect(stat(hot({ toolsPerLot: 4, depth: 4 }), (r) => r.promises.hot.onTime)).toBeLessThan(0.6)
+    expect(stat(hot({ toolsPerLot: 8, depth: 2 }), (r) => r.promises.hot.onTime)).toBeGreaterThan(0.85)
   })
 
-  it('are made quick by a reserved set, at the cost of the capacity it leaves idle', () => {
-    const big = hot({ size: 1200, toolsPerLot: 4, depth: 4, hot: 0.1 })
-    const reserved = { ...big, reserve: true }
-    expect(stat(reserved, (r) => r.promises.hot.onTime)).toBeGreaterThan(stat(big, (r) => r.promises.hot.onTime) + 0.2)
-    expect(stat(reserved, (r) => r.busy)).toBeLessThan(stat(big, (r) => r.busy) - 0.2)
+  it('are made quicker by a reserved set, at the cost of the capacity it leaves idle', () => {
+    const base = hot({ toolsPerLot: 4, depth: 3, hot: 0.1 })
+    const reserved = { ...base, reserve: true }
+    expect(stat(reserved, (r) => r.promises.hot.onTime)).toBeGreaterThan(stat(base, (r) => r.promises.hot.onTime) + 0.15)
+    expect(stat(reserved, (r) => r.busy)).toBeLessThan(stat(base, (r) => r.busy) - 0.2)
     expect(timeSplit(runLots(reserved, 1)).starved).toBeGreaterThan(0.2)
   })
 
-  it('make the mission winnable with small lots and priority, and not otherwise', () => {
-    expect(hotWins(hot({}))).toBeGreaterThanOrEqual(0.6)
-    expect(hotWins(hot({ toolsPerLot: 4, depth: 4 }))).toBeGreaterThanOrEqual(0.6)
+  it('make the mission winnable with big sets and priority, and not otherwise', () => {
+    expect(hotWins(hot({ depth: 1 }))).toBeGreaterThanOrEqual(0.5)
+    expect(hotWins(hot({ toolsPerLot: 4, depth: 1, split: 2 }))).toBeGreaterThanOrEqual(0.5)
     expect(hotWins(hot({ order: 'first' }))).toBe(0)
-    expect(hotWins(hot({ size: 2400, toolsPerLot: 4, depth: 4 }))).toBe(0)
-    expect(hotWins(hot({ size: 1200, toolsPerLot: 4, depth: 4, reserve: true, hot: 0.25 }))).toBe(0)
+    expect(hotWins(hot({ toolsPerLot: 2, depth: 4 }))).toBe(0)
+    expect(hotWins(hot({ toolsPerLot: 4, depth: 3, reserve: true }))).toBe(0)
     expect(hotWins(HOT_ROUND.start)).toBe(0)
     expect(hotWins(hot({ hot: 0 }))).toBe(0)
   })
@@ -192,8 +221,8 @@ describe('hot lots', () => {
   it('gives advice that names the cause', () => {
     const advise = (p: LotPlan) => hotAdvice(runLots(p, HOT_ROUND.day))
     expect(advise(hot({ order: 'first' }))).toMatch(/waited their turn/)
-    expect(advise(hot({ size: 2400, toolsPerLot: 4, depth: 4 }))).toMatch(/interrupt/)
-    expect(advise(hot({ hot: 0 }))).toMatch(/Hardly any hot lots/)
-    expect(advise(hot({}))).toBe('Mission done.')
+    expect(advise(hot({ toolsPerLot: 2, depth: 4 }))).toMatch(/interrupt|still waits/)
+    expect(advise(hot({ hot: 0 }))).toMatch(/Hardly any hot orders/)
+    expect(advise(hot({ depth: 1 }))).toBe('Mission done.')
   })
 })

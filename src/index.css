@@ -4865,3 +4865,12 @@ p.exam-taught,
 .promise-table {
   font-size: 15px;
 }
+
+.lot-floor .bin-label.held {
+  font-size: 13px;
+  fill: var(--muted);
+}
+
+.lot-floor .bin-label.held.some {
+  fill: var(--red);
+}
