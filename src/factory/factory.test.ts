@@ -205,3 +205,30 @@ describe('the words', () => {
     expect(words(load(level, 0.8)).lines[0]).toContain('all about as slow')
   })
 })
+
+describe('counting per week', () => {
+  const week: Factory = { ...EXAMPLE, perWeek: true, weekDays: 5 }
+
+  it('speak in weeks, and multiply the day numbers by the days in the week', () => {
+    const a = analyze(week)
+    const m = measure(week)
+    const v = verdict(week, a, m, reach(week, a.capacity), whatIf(week, m))
+    const text = v.lines.join(' ')
+    expect(text).toContain('a week')
+    expect(text).not.toContain('a day')
+    expect(text).toContain(Math.round(a.capacity * 5).toLocaleString('en-US'))
+  })
+
+  it('leave the cycle time alone, since demand is kept per day', () => {
+    expect(measure(week).cycle).toBe(measure(EXAMPLE).cycle)
+  })
+
+  it('read a factory saved before weeks existed as per day, and keep a saved week', () => {
+    const { perWeek, weekDays, ...old } = EXAMPLE
+    expect(perWeek).toBe(false)
+    expect(weekDays).toBe(7)
+    expect(cleanFactory(old)).toEqual(EXAMPLE)
+    expect(cleanFactory(JSON.parse(JSON.stringify(week)))).toEqual(week)
+    expect(cleanFactory({ ...week, weekDays: 9 })?.weekDays).toBe(7)
+  })
+})

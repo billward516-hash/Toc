@@ -20,8 +20,11 @@ export type Variation = 'low' | 'medium' | 'high'
 
 export interface Factory {
   steps: Step[]
-  // Good units wanted a day (24 hours).
+  // Good units wanted a day (24 hours). Always kept per day; `perWeek` only changes how it is shown and typed.
   demand: number
+  // Whether demand and capacity are shown and typed per week, and the days in the person's week (1 to 7).
+  perWeek: boolean
+  weekDays: number
   // Units in an order, or the batch that moves together: from the smallest to the largest.
   sizeMin: number
   sizeMax: number
@@ -42,6 +45,7 @@ export const LIMITS = {
   size: { min: 1, max: 1000000, step: 10 },
   yieldPct: { min: 1, max: 100, step: 1 },
   target: { min: 0.1, max: 100000, step: 1 },
+  weekDays: { min: 1, max: 7, step: 1 },
 }
 
 // How much a time swings from order to order around its average (a share of it, either way), and how
@@ -61,6 +65,8 @@ export const EXAMPLE: Factory = {
     { name: 'Finish', tools: 3, rate: 35, load: 1, divided: false },
   ],
   demand: 1500,
+  perWeek: false,
+  weekDays: 7,
   sizeMin: 100,
   sizeMax: 400,
   yieldPct: 90,
@@ -69,6 +75,10 @@ export const EXAMPLE: Factory = {
 }
 
 export const NEW_STEP: Step = { name: 'New step', tools: 2, rate: 30, load: 1, divided: false }
+
+// How many days a shown amount covers, and what to call it.
+export const periodDays = (f: Factory): number => (f.perWeek ? f.weekDays : 1)
+export const periodName = (f: Factory): string => (f.perWeek ? 'week' : 'day')
 
 export const meanSize = (f: Factory): number => (f.sizeMin + f.sizeMax) / 2
 
@@ -93,5 +103,8 @@ export function cleanFactory(value: unknown): Factory | null {
   if (!inRange(demand, LIMITS.demand) || !inRange(sizeMin, LIMITS.size) || !inRange(sizeMax, LIMITS.size) || sizeMax < sizeMin) return null
   if (!inRange(yieldPct, LIMITS.yieldPct) || !inRange(target, LIMITS.target)) return null
   if (variation !== 'low' && variation !== 'medium' && variation !== 'high') return null
-  return { steps: clean, demand, sizeMin, sizeMax, yieldPct, variation, target }
+  // Saved before the week view existed: shown per day.
+  const { perWeek, weekDays } = value as Record<string, unknown>
+  const week = inRange(weekDays, LIMITS.weekDays) && Number.isInteger(weekDays) ? weekDays : 7
+  return { steps: clean, demand, perWeek: perWeek === true, weekDays: week, sizeMin, sizeMax, yieldPct, variation, target }
 }

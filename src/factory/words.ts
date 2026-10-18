@@ -1,4 +1,4 @@
-import type { Factory } from './model.ts'
+import { periodDays, periodName, type Factory } from './model.ts'
 import type { Analysis, Measure, Reach, WhatIf } from './sim.ts'
 
 // What the numbers mean, in plain words, for the person looking at their factory.
@@ -21,7 +21,7 @@ export function verdict(f: Factory, a: Analysis, m: Measure, r: Reach, tries: Wh
       `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are all about as slow, ${pct(slow.utilization)} busy or close to it. With several bottlenecks, orders wait in front of each of them, and a delay at one shows up at the next.`,
     )
   } else {
-    lines.push(`${slow.name} is the bottleneck: ${pct(slow.utilization)} busy. It limits the factory to about ${units(a.capacity)} good units a day, and you ask for ${units(f.demand)}.`)
+    lines.push(`${slow.name} is the bottleneck: ${pct(slow.utilization)} busy. It limits the factory to about ${units(a.capacity * periodDays(f))} good units a ${periodName(f)}, and you ask for ${units(f.demand * periodDays(f))}.`)
   }
   if (a.overloaded) {
     lines.push(
@@ -37,11 +37,11 @@ export function verdict(f: Factory, a: Analysis, m: Measure, r: Reach, tries: Wh
       `Even a nearly empty factory takes ${hours(r.floor)} hours to make an order, which is more than the ${hours(f.target)} you want. The work itself is too slow: add tools where orders spend most of their time, or ask whether a smaller batch would do.`,
     )
   } else {
-    lines.push(`Cycle time stays within ${hours(f.target)} hours up to about ${units(r.demand)} good units a day, ${pct(r.load ?? 0)} of what the factory can make. Past that, it climbs steeply: that is the knee.`)
+    lines.push(`Cycle time stays within ${hours(f.target)} hours up to about ${units(r.demand * periodDays(f))} good units a ${periodName(f)}, ${pct(r.load ?? 0)} of what the factory can make. Past that, it climbs steeply: that is the knee.`)
   }
   const best = tries.reduce((x, y) => (y.saved > x.saved ? y : x), tries[0])
   if (best && best.saved > 0.05 * Math.max(1, m.cycle)) {
-    lines.push(`One more tool at ${a.steps[best.step].name} would take about ${hours(best.saved)} hours off an order and lift capacity to ${units(best.capacity)} units a day.`)
+    lines.push(`One more tool at ${a.steps[best.step].name} would take about ${hours(best.saved)} hours off an order and lift capacity to ${units(best.capacity * periodDays(f))} units a ${periodName(f)}.`)
   } else if (best) {
     const step = f.steps[a.bottleneck]
     lines.push(

@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { EXAMPLE, LIMITS, NEW_STEP, type Factory, type Step, type Variation } from '../factory/model.ts'
+import { EXAMPLE, LIMITS, NEW_STEP, periodDays, periodName, type Factory, type Step, type Variation } from '../factory/model.ts'
 import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
 import { FactoryCurve, NumberField } from './FactoryParts.tsx'
@@ -39,6 +39,9 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
   const shown = useDeferredValue(factory)
   const result = useMemo(() => work(shown), [shown])
   const { a, m, r, tries, points, v } = result
+  const days = periodDays(factory)
+  const shownDays = periodDays(shown)
+  const scaled = points.map((p) => ({ ...p, demand: p.demand * shownDays }))
 
   const change = (next: Factory) => {
     setFactory(next)
@@ -81,12 +84,34 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
         <section className="card" aria-label="What you ask of it">
           <h2 className="card-title">What you ask of it</h2>
           <div className="field-grid">
-            <NumberField label="Good units wanted a day" value={factory.demand} min={LIMITS.demand.min} max={LIMITS.demand.max} step={LIMITS.demand.step} onChange={(demand) => change({ ...factory, demand })} hint={`The factory can make about ${units(a.capacity)} a day.`} />
+            <NumberField
+              label={`Good units wanted a ${periodName(factory)}`}
+              value={Math.round(factory.demand * days * 100) / 100}
+              min={LIMITS.demand.min * days}
+              max={LIMITS.demand.max * days}
+              step={factory.perWeek ? 100 : LIMITS.demand.step}
+              decimals={2}
+              onChange={(wanted) => change({ ...factory, demand: Math.max(LIMITS.demand.min, wanted / days) })}
+              hint={`The factory can make about ${units(a.capacity * days)} a ${periodName(factory)}.`}
+            />
+            {factory.perWeek && (
+              <NumberField label="Days in your week" value={factory.weekDays} min={LIMITS.weekDays.min} max={LIMITS.weekDays.max} onChange={(weekDays) => change({ ...factory, weekDays })} hint="Days the factory runs, 24 hours each." />
+            )}
             <NumberField label="Cycle time wanted (hours)" value={factory.target} min={LIMITS.target.min} max={LIMITS.target.max} step={1} decimals={1} onChange={(target) => change({ ...factory, target })} hint="From an order's arrival to its leaving the last step." />
             <NumberField label="Smallest batch (units)" value={factory.sizeMin} min={LIMITS.size.min} max={LIMITS.size.max} step={LIMITS.size.step} onChange={(sizeMin) => change({ ...factory, sizeMin, sizeMax: Math.max(sizeMin, factory.sizeMax) })} />
             <NumberField label="Largest batch (units)" value={factory.sizeMax} min={LIMITS.size.min} max={LIMITS.size.max} step={LIMITS.size.step} onChange={(sizeMax) => change({ ...factory, sizeMax, sizeMin: Math.min(sizeMax, factory.sizeMin) })} hint="A batch, order, or lot moves through every step together." />
             <NumberField label="Yield (% good)" value={factory.yieldPct} min={LIMITS.yieldPct.min} max={LIMITS.yieldPct.max} step={1} onChange={(yieldPct) => change({ ...factory, yieldPct })} hint="Lower yield means more units started for the same good ones." />
           </div>
+          <fieldset className="lever">
+            <legend>Count units per</legend>
+            <div className="chips">
+              {([false, true] as const).map((week) => (
+                <button key={String(week)} className={`chip${factory.perWeek === week ? ' on' : ''}`} aria-pressed={factory.perWeek === week} onClick={() => change({ ...factory, perWeek: week })}>
+                  {week ? 'Week' : 'Day'}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <fieldset className="lever">
             <legend>
               <Icon name="even" /> How much times and arrivals vary
@@ -103,7 +128,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
 
         <section className="card" aria-label="Cycle time against demand">
           <h2 className="card-title">Cycle time against demand</h2>
-          <FactoryCurve points={points} capacity={a.capacity} demand={shown.demand} cycle={m.cycle} target={shown.target} reach={r} />
+          <FactoryCurve points={scaled} capacity={a.capacity * shownDays} demand={shown.demand * shownDays} cycle={m.cycle} target={shown.target} reach={{ ...r, demand: r.demand === null ? null : r.demand * shownDays }} period={periodName(shown)} />
           <p className="hint">
             Each dot is the average of several runs, each with its own luck. The line climbs slowly, then steeply: the bend is the knee, and it comes before the factory is full.
           </p>
@@ -114,15 +139,16 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
         <h2 className="section-title">Your workgroups, in the order an order goes through them</h2>
         <ol className="step-cards">
           {factory.steps.map((step, i) => {
+            // The results trail typing a little: a step just added has none until they catch up.
             const s = a.steps[i]
             const tool = tries[i]
-            const level = s.utilization > 0.9 ? 'hot' : s.utilization > 0.7 ? 'warm' : 'cool'
+            const level = s && s.utilization > 0.9 ? 'hot' : s && s.utilization > 0.7 ? 'warm' : 'cool'
             return (
-              <li key={i} className={`card step-card${s.bottleneck ? ' neck' : ''}`}>
+              <li key={i} className={`card step-card${s?.bottleneck ? ' neck' : ''}`}>
                 <header>
                   <span className="level-num">{i + 1}</span>
                   <input className="step-name" aria-label={`Name of step ${i + 1}`} maxLength={40} value={step.name} onChange={(event) => editStep(i, { name: event.target.value })} />
-                  {s.bottleneck && <span className="neck-tag">Bottleneck</span>}
+                  {s?.bottleneck && <span className="neck-tag">Bottleneck</span>}
                 </header>
                 <div className="field-grid">
                   <NumberField label="Tools" value={step.tools} min={LIMITS.tools.min} max={LIMITS.tools.max} onChange={(tools) => editStep(i, { tools })} />
@@ -132,6 +158,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
                 <label className="check">
                   <input type="checkbox" checked={step.divided} onChange={(event) => editStep(i, { divided: event.target.checked })} /> This workgroup can be divided, one tool to a batch
                 </label>
+                {s && tool && (
                 <div className="readout">
                   <p>
                     Can make <strong>{units(s.effective)}</strong> units an hour with your batches
@@ -147,6 +174,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
                     {tool.saved > 0.05 * Math.max(1, m.cycle) ? `One more tool: ${hours(tool.saved)} h off an order.` : 'One more tool: little change.'}
                   </p>
                 </div>
+                )}
                 <div className="step-actions">
                   <button className="btn small" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${step.name} earlier`}>
                     <Icon name="back" /> Earlier

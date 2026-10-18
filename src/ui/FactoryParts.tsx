@@ -72,12 +72,14 @@ interface CurveProps {
   cycle: number
   target: number
   reach: Reach
+  // 'day' or 'week': what demand and capacity are counted per. Their numbers come already in it.
+  period: string
 }
 
 // Cycle time against demand for the person's own factory: flat, then the knee, then a wall. The cycle
 // time wanted is the dashed red line, the demand asked for is the dot, and the most it can take for the
 // time wanted is marked in green.
-export function FactoryCurve({ points, capacity, demand, cycle, target, reach }: CurveProps) {
+export function FactoryCurve({ points, capacity, demand, cycle, target, reach, period }: CurveProps) {
   const xMax = Math.max(capacity * 1.18, demand * 1.05)
   const yMax = Math.max(target * 2.2, points.find((p) => p.load >= 0.93)?.cycle ?? 0, cycle * 1.15, 1)
   const x = (value: number) => PAD.left + (value / xMax) * (W - PAD.left - PAD.right)
@@ -126,7 +128,7 @@ export function FactoryCurve({ points, capacity, demand, cycle, target, reach }:
           you: {Math.round(cycle * 10) / 10} h
         </text>
         <text className="axis-label" x={(PAD.left + W - PAD.right) / 2} y={H - 8} textAnchor="middle">
-          Good units a day asked for
+          Good units a {period} asked for
         </text>
         <text className="axis-label" transform={`translate(14 ${(PAD.top + H - PAD.bottom) / 2}) rotate(-90)`} textAnchor="middle">
           Cycle time (hours)

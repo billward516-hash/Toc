@@ -474,3 +474,5 @@ The course guides and the loading lab (added 2026-10-18, owner's request): the l
 ### 13.x My factory (added 2026-10-18, owner's request)
 
 A screen where the owner describes their own line and sees its bottleneck and cycle time as numbers are typed. Inputs: per workgroup the tools, units an hour per tool, units a tool takes at once, and whether the workgroup can be divided into single tools; for the line the demand, the smallest and largest order, yield, how much times and arrivals vary, and the cycle time wanted. Outputs, live: the bottleneck (several when close), each workgroup's busy share and wait, the cycle time, the load, a curve of cycle time against demand with the knee, the most demand that still meets the cycle time wanted, and what one more tool at each workgroup would do. Part-full runs lower a workgroup's real capacity, and the screen says so. The example line is made up. Numbers are kept in the browser only and are never sent anywhere or put in the repository.
+
+Demand and capacity can be shown and typed per day or per week (the owner sets the days in their week, 1 to 7); the cycle time is the same either way.
