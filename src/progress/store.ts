@@ -155,6 +155,19 @@ export function saveSandbox(learnerId: string, setup: unknown, storage: KeyValue
 // A player's own notes for the course, one per tier, kept on the device and never sent anywhere.
 export type Notes = Record<string, string>
 
+// The factory a person described in "My factory". It stays on this device, and is never sent anywhere.
+export function loadFactory(learnerId: string, storage: KeyValue | null = browserStorage()): unknown {
+  try {
+    return JSON.parse(storage?.getItem(`${PREFIX}:factory:${learnerId}`) ?? 'null')
+  } catch {
+    return null
+  }
+}
+
+export function saveFactory(learnerId: string, factory: unknown, storage: KeyValue | null = browserStorage()) {
+  write(storage, `${PREFIX}:factory:${learnerId}`, factory)
+}
+
 export function loadNotes(learnerId: string, storage: KeyValue | null = browserStorage()): Notes {
   try {
     const parsed: unknown = JSON.parse(storage?.getItem(`${PREFIX}:notes:${learnerId}`) ?? '{}')

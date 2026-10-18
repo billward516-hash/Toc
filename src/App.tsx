@@ -13,10 +13,12 @@ import {
   completedLevels,
   devicePlayers,
   loadOrCreateLearner,
+  loadFactory,
   loadNotes,
   loadPreferences,
   loadSandbox,
   localProgressStore,
+  saveFactory,
   saveNotes,
   savePreferences,
   saveSandbox,
@@ -25,10 +27,12 @@ import {
   type StoredEvent,
 } from './progress/store.ts'
 import { ClassCards, ClassPrompts, JoinClassDialog } from './ui/ClassMember.tsx'
+import { cleanFactory, EXAMPLE } from './factory/model.ts'
 import { FreePlay } from './ui/FreePlay.tsx'
 import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
 import { LoadingLab } from './ui/LoadingLab.tsx'
+import { MyFactory } from './ui/MyFactory.tsx'
 import { PlayerBar } from './ui/PlayerBar.tsx'
 import type { Guide } from './ui/types.ts'
 
@@ -47,6 +51,7 @@ export default function App() {
   const [open, setOpen] = useState<Level | null>(null)
   const [free, setFree] = useState(false)
   const [lab, setLab] = useState(false)
+  const [mine, setMine] = useState(false)
   // The course guide for learners, the trainer's guide, or the exam, when one is open.
   const [guide, setGuide] = useState<Guide | null>(null)
   // Settings changed this session, by player, over what's stored on the device.
@@ -70,7 +75,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [open, free, lab, hostView, guide])
+  }, [open, free, lab, mine, hostView, guide])
 
   // The class code has done its job once read; a reload shouldn't ask to join again.
   useEffect(() => {
@@ -177,6 +182,15 @@ export default function App() {
     )
   } else if (lab) {
     screen = <LoadingLab onExit={() => setLab(false)} />
+  } else if (mine) {
+    screen = (
+      <MyFactory
+        key={learner.id}
+        initial={cleanFactory(loadFactory(learner.id)) ?? EXAMPLE}
+        onSave={(factory) => saveFactory(learner.id, factory)}
+        onExit={() => setMine(false)}
+      />
+    )
   } else if (free) {
     screen = (
       <FreePlay
@@ -228,6 +242,7 @@ export default function App() {
         onOpen={setOpen}
         onFreePlay={() => setFree(true)}
         onLab={() => setLab(true)}
+        onMine={() => setMine(true)}
         onGuide={setGuide}
       />
     )
@@ -245,6 +260,7 @@ export default function App() {
           onGo={(level) => {
             setFree(false)
             setLab(false)
+            setMine(false)
             setOpen(level)
           }}
         />

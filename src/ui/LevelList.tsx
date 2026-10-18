@@ -24,6 +24,7 @@ interface LevelListProps {
   onFreePlay: () => void
   // Opens the loading lab, a short game about load and cycle time.
   onLab: () => void
+  onMine: () => void
   // Opens the course guide for learners, the trainer's guide, or the exam.
   onGuide: (guide: Guide) => void
 }
@@ -32,7 +33,7 @@ interface LevelListProps {
 const CORE_DONE = 'tier3-read'
 
 export function LevelList(props: LevelListProps) {
-  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay, onLab, onGuide } = props
+  const { levels, tierNames, completed, stars, player, classCards, classLevel = null, preferences, onPreferences, onOpen, onFreePlay, onLab, onMine, onGuide } = props
   const tiers = [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b)
   return (
     <div className="screen home">
@@ -71,6 +72,18 @@ export function LevelList(props: LevelListProps) {
         </span>
         <span className="level-state">
           Play <Icon name="next" />
+        </span>
+      </button>
+      <button className="level-card free" onClick={onMine}>
+        <span className="level-number">
+          <Icon name="build" />
+        </span>
+        <span className="level-text">
+          <strong>My factory</strong>
+          <span className="principle">Type in your own workgroups, tools, speeds and order sizes. See the bottleneck and the cycle time as you change them.</span>
+        </span>
+        <span className="level-state">
+          Open <Icon name="next" />
         </span>
       </button>
       <button className="level-card free" onClick={onFreePlay}>

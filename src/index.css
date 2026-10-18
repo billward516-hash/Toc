@@ -4906,3 +4906,180 @@ p.exam-taught,
   border-radius: 14px;
   background: var(--ink);
 }
+
+/* My factory: the person's own line, typed in */
+.my-factory .privacy {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+}
+.my-factory .verdict-card.ok {
+  border-color: var(--green-deep);
+  box-shadow: 0 6px 0 var(--green-deep);
+}
+.my-factory .verdict-card.warn {
+  border-color: var(--amber-ink);
+  box-shadow: 0 6px 0 var(--amber-ink);
+}
+.my-factory .verdict-card.bad {
+  border-color: var(--red);
+  box-shadow: 0 6px 0 var(--red);
+}
+.my-factory .plain-list {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+}
+.my-factory .plain-list li {
+  margin: 4px 0;
+}
+.my-factory .dock {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+.my-factory .dock .card {
+  margin: 0;
+}
+.my-factory .field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 10px 0;
+}
+.number-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.number-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.number-row input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 4px;
+  color: var(--ink);
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+}
+.number-field .unit {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.step-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.step-card.neck {
+  border-color: var(--red);
+  box-shadow: 0 6px 0 var(--red);
+}
+.step-card header,
+.step-card .step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.step-name {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px dashed var(--disabled);
+  padding: 4px 2px;
+}
+.neck-tag {
+  background: var(--red);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.step-card .check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.busy-bar {
+  height: 16px;
+  background: var(--blue-soft);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.busy-bar > * {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.busy-bar.warm > * {
+  background: var(--amber);
+}
+.busy-bar.hot > * {
+  background: var(--red);
+}
+.step-actions,
+.my-factory .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tool-hint,
+.busy-text {
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+}
+.tool-hint {
+  color: var(--muted);
+}
+.factory-curve {
+  width: 100%;
+  height: auto;
+}
+.step-cards > li,
+.my-factory .dock > * {
+  min-width: 0;
+}
+.my-factory .field-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+}
+.my-factory .dock {
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+}
+.my-factory .privacy svg,
+.number-row svg {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+}
+.number-row .chip.step {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.number-row input {
+  min-width: 56px;
+}
