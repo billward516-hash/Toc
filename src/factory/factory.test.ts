@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cases, csv } from './cases.ts'
 import { recommend, ropeStudy, ropeWords } from './rope.ts'
 import { endOf, frame } from './watch.ts'
+import { need, tryRate } from './improve.ts'
 import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
 import { verdict } from './words.ts'
 import { analyze, curve, effectiveRate, measure, reach, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
@@ -365,5 +366,45 @@ describe('drum, buffer, rope', () => {
   it('have nothing to recommend when nothing feeds the bottleneck', () => {
     const first = { ...roped(3), steps: EXAMPLE.steps.map((s, i) => (i === 0 ? { ...s, tools: 1, rate: 5 } : s)) }
     expect(recommend(first)).toBeNull()
+  })
+})
+
+describe('what if: the speed a workgroup needs', () => {
+  const hot = (demand: number): Factory => ({ ...EXAMPLE, demand })
+
+  it('say the rate that just keeps up, which makes the workgroup exactly full', () => {
+    const f = hot(1900)
+    const bottleneck = analyze(f).bottleneck
+    const n = need(f, bottleneck)
+    const g = { ...f, steps: f.steps.map((s, i) => (i === bottleneck ? { ...s, rate: n.output.rate } : s)) }
+    expect(analyze(g).steps[bottleneck].utilization).toBeCloseTo(1, 6)
+  })
+
+  it('ask for more speed when the demand is past what the workgroup can make, and for less when there is room', () => {
+    expect(need(hot(2300), 1).output.more).toBeGreaterThan(0)
+    expect(need(hot(1000), 1).output.more).toBeLessThan(0)
+  })
+
+  it('find a speed that meets the cycle time, and a trial at it agrees', () => {
+    const f = hot(1900)
+    const n = need(f, 1)
+    expect(n.cycle).not.toBeNull()
+    expect(n.cycle!.rate).toBeGreaterThanOrEqual(n.output.rate)
+    expect(tryRate(f, 1, n.cycle!.rate).meetsCycle).toBe(true)
+    expect(tryRate(f, 1, n.cycle!.rate * 0.9).meetsCycle).toBe(false)
+  })
+
+  it('say another workgroup is the limit when speeding this one up cannot do it', () => {
+    const n = need(hot(2300), 1)
+    expect(n.cycle).toBeNull()
+    expect(n.limitedBy).not.toBeNull()
+    expect(n.limitedBy).not.toBe('Process')
+    expect(n.tools.cycle).toBeNull()
+  })
+
+  it('give the tools that keep up, at least the tools it has', () => {
+    const n = need(hot(2300), 1)
+    expect(n.tools.output).toBeGreaterThan(4)
+    expect(analyze({ ...hot(2300), steps: EXAMPLE.steps.map((s, i) => (i === 1 ? { ...s, tools: n.tools.output } : s)) }).steps[1].utilization).toBeLessThanOrEqual(1)
   })
 })

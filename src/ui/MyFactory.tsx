@@ -4,6 +4,7 @@ import { cases, csv, rows } from '../factory/cases.ts'
 import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
 import { FactoryCurve, NumberField } from './FactoryParts.tsx'
+import { WhatIfCard } from './WhatIfCard.tsx'
 import { RopeCard } from './RopeCard.tsx'
 import { recommend, ropeStudy } from '../factory/rope.ts'
 import { FactoryWatch } from './FactoryWatch.tsx'
@@ -159,6 +160,8 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
           </p>
         </section>
       </div>
+
+      <WhatIfCard factory={shown} analysis={a} onApply={(step, rate) => editStep(step, { rate })} />
 
       <RopeCard factory={factory} study={rope} advice={advice} onChange={change} />
 

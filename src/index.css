@@ -5260,3 +5260,29 @@ p.exam-taught,
 .rope .advice p {
   margin: 0 0 6px;
 }
+.whatif .trial {
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  background: var(--blue-soft);
+}
+.whatif .trial.ok {
+  border-color: var(--green-deep);
+}
+.whatif .trial.warn {
+  border-color: var(--amber-ink);
+}
+.whatif .trial.bad {
+  border-color: var(--red);
+}
+.whatif select {
+  font: inherit;
+  font-weight: 700;
+  padding: 8px;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  max-width: 320px;
+}
