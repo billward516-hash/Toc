@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { cases, csv } from './cases.ts'
+import { endOf, frame } from './watch.ts'
 import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
 import { verdict } from './words.ts'
-import { analyze, curve, effectiveRate, measure, reach, runFactory, startsFor, stepHours, whatIf } from './sim.ts'
+import { analyze, curve, effectiveRate, measure, reach, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
 
 const one = (patch: Partial<Factory['steps'][number]>, f: Factory = EXAMPLE): Factory => ({ ...f, steps: f.steps.map((s, i) => (i === 1 ? { ...s, ...patch } : s)) })
 const load = (f: Factory, share: number): Factory => ({ ...f, demand: share * analyze(f).capacity })
@@ -265,5 +266,34 @@ describe('too low, midpoint, too high', () => {
     expect(lines[0]).toContain('Good units a day')
     const week: Factory = { ...EXAMPLE, perWeek: true, weekDays: 5 }
     expect(csv(week, cases(week))).toContain('Good units a week')
+  })
+})
+
+describe('watching a run', () => {
+  const run = schedule(EXAMPLE, EXAMPLE.demand, 1, 60)
+
+  it('puts every arrived order in exactly one place, and ships them all by the end', () => {
+    for (const t of [0, 10, 50, 120, 200]) {
+      const fr = frame(run, t)
+      const placed = fr.waiting.flat().length + fr.working.flat().length
+      expect(placed + fr.shipped).toBe(fr.arrived)
+    }
+    const end = frame(run, endOf(run) + 1)
+    expect(end.shipped).toBe(60)
+    expect(end.waiting.flat().length + end.working.flat().length).toBe(0)
+  })
+
+  it('never has more orders at a whole-fleet step than one, and one a tool at a divided one', () => {
+    for (let t = 0; t < endOf(run); t += 3) {
+      const fr = frame(run, t)
+      EXAMPLE.steps.forEach((step, s) => expect(fr.working[s].length).toBeLessThanOrEqual(step.divided ? step.tools : 1))
+    }
+  })
+
+  it('agrees with the numbers: the average cycle time of the shipped orders is that of the run', () => {
+    const end = frame(run, endOf(run) + 1)
+    const last = EXAMPLE.steps.length - 1
+    const mean = run.arrive.reduce((sum, a, k) => sum + run.done[last][k] - a, 0) / 60
+    expect(end.cycle).toBeCloseTo(mean, 9)
   })
 })

@@ -5110,3 +5110,123 @@ p.exam-taught,
   color: var(--red);
   font-weight: 800;
 }
+
+/* My factory: watching a run */
+.watch-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.watch-scrub {
+  width: 100%;
+  margin: 4px 0 10px;
+  accent-color: var(--blue);
+}
+.watch-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.watch-stats span {
+  display: flex;
+  flex-direction: column;
+  background: var(--blue-soft);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 6px 10px;
+}
+.watch-stats span.over strong {
+  color: var(--red);
+}
+.watch-stats small {
+  color: var(--muted);
+  font-weight: 700;
+}
+.watch-line {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+}
+.watch-step {
+  flex: 1 0 150px;
+  min-width: 150px;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 10px;
+}
+.watch-step.neck {
+  border-color: var(--red);
+}
+.watch-step h3 {
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.watch-step small {
+  color: var(--muted);
+  font-weight: 700;
+}
+.watch-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.watch-tool {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 3px solid var(--ink);
+  background: var(--card);
+  transition: background 0.15s;
+}
+.watch-tool.on {
+  background: var(--green);
+}
+.order-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 26px;
+}
+.order-chip {
+  min-width: 28px;
+  padding: 2px 4px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  border: 2px solid var(--ink);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--green);
+}
+.order-chip.warm {
+  background: var(--amber);
+}
+.order-chip.hot {
+  background: var(--red);
+  color: #fff;
+}
+.order-more {
+  align-self: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.watch-step.done {
+  background: var(--blue-soft);
+}
+.watch-count {
+  font-size: 2.2rem;
+}

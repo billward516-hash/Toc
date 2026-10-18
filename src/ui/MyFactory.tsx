@@ -4,6 +4,7 @@ import { cases, csv, rows } from '../factory/cases.ts'
 import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
 import { FactoryCurve, NumberField } from './FactoryParts.tsx'
+import { FactoryWatch } from './FactoryWatch.tsx'
 import { Icon } from './icons.tsx'
 import { ScreenHeader, type Stat } from './parts.tsx'
 
@@ -156,6 +157,8 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
           </p>
         </section>
       </div>
+
+      <FactoryWatch factory={shown} analysis={a} />
 
       <section className="card cases" aria-label="Too low, midpoint, too high">
         <h2 className="card-title">Too low, midpoint, too high</h2>

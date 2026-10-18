@@ -1,0 +1,51 @@
+import type { Schedule } from './sim.ts'
+
+// Where every order is at one moment of a run: waiting in front of a step, being worked on at a step (and
+// on which tool), or shipped. Orders are numbered from 1 in the order they arrive.
+export interface Placed {
+  order: number
+  // Hours since the order arrived.
+  age: number
+  tool: number
+}
+
+export interface Frame {
+  clock: number
+  // For each step, the orders waiting for it (longest waiting first) and the orders being worked on.
+  waiting: Placed[][]
+  working: Placed[][]
+  arrived: number
+  shipped: number
+  // Average hours from arrival to leaving the last step, over the orders shipped so far; null before any.
+  cycle: number | null
+}
+
+export function frame(run: Schedule, t: number): Frame {
+  const steps = run.ready.length
+  const waiting: Placed[][] = Array.from({ length: steps }, () => [])
+  const working: Placed[][] = Array.from({ length: steps }, () => [])
+  let arrived = 0
+  let shipped = 0
+  let total = 0
+  run.arrive.forEach((arrival, k) => {
+    if (arrival > t) return
+    arrived++
+    const last = run.done[steps - 1][k]
+    if (last <= t) {
+      shipped++
+      total += last - arrival
+      return
+    }
+    for (let s = 0; s < steps; s++) {
+      if (t < run.ready[s][k]) break
+      if (t < run.start[s][k]) waiting[s].push({ order: k + 1, age: t - arrival, tool: 0 })
+      else if (t < run.done[s][k]) working[s].push({ order: k + 1, age: t - arrival, tool: run.tool[s][k] })
+      else continue
+      break
+    }
+  })
+  return { clock: t, waiting, working, arrived, shipped, cycle: shipped > 0 ? total / shipped : null }
+}
+
+// When the last order of the run ships.
+export const endOf = (run: Schedule): number => Math.max(...run.done[run.done.length - 1])

@@ -478,3 +478,5 @@ A screen where the owner describes their own line and sees its bottleneck and cy
 Demand and capacity can be shown and typed per day or per week (the owner sets the days in their week, 1 to 7); the cycle time is the same either way.
 
 A table of six cases: demand too low (half the midpoint), midpoint (just inside the most that meets the cycle time wanted), and too high (nearly all the factory can make); and batch size smallest, middle, and largest at the demand asked for. Each shows the bottleneck, load, cycle time, and whether the cycle time wanted is met. It downloads as a CSV or a PowerPoint file, made on the device.
+
+Once the numbers are set, the owner can watch the factory run: 150 orders arrive as the numbers say and move through the workgroups, with play, pause, three speeds, a scrubber, and a different-luck button. Each order is a numbered block colored by how long it has been in the factory against the cycle time wanted, so piles forming in front of the bottleneck can be seen. Changing any number starts a new run, paused.

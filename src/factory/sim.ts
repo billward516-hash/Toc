@@ -85,10 +85,20 @@ export interface Measure {
 const ORDERS = 320
 const WARM = 80
 
-// One run of the factory at `demand` good units a day: ORDERS orders arrive, unevenly, each a size drawn
-// between the smallest and largest, and go through the steps in order, waiting their turn at each. The
-// first WARM orders, who find an empty factory, are left out of the averages.
-export function runFactory(f: Factory, demand: number, seed: number): Measure {
+// The whole of one run, order by order: when each arrived, its units started, and for every step when it
+// reached the step, when it began there, when it left, and on which tool.
+export interface Schedule {
+  arrive: number[]
+  units: number[]
+  ready: number[][]
+  start: number[][]
+  done: number[][]
+  tool: number[][]
+}
+
+// `orders` orders arrive, unevenly, at `demand` good units a day, each a size drawn between the smallest
+// and largest, and go through the steps in order, waiting their turn at each.
+export function schedule(f: Factory, demand: number, seed: number, orders = ORDERS): Schedule {
   const spread = SPREAD[f.variation]
   const sizeDraws = stream(seed, 'size')
   const gapDraws = stream(seed, 'arrive')
@@ -96,42 +106,55 @@ export function runFactory(f: Factory, demand: number, seed: number): Measure {
   const arrive: number[] = []
   const units: number[] = []
   let t = 0
-  for (let k = 0; k < ORDERS; k++) {
+  for (let k = 0; k < orders; k++) {
     t += meanGap * (1 - spread.arrival + 2 * spread.arrival * gapDraws())
     arrive.push(t)
     units.push(startsFor(Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin)), f.yieldPct))
   }
-  const release = [...arrive]
-  const waits = f.steps.map(() => 0)
-  const work = new Array<number>(ORDERS).fill(0)
+  const out: Schedule = { arrive, units, ready: [], start: [], done: [], tool: [] }
   let ready = [...arrive]
   f.steps.forEach((step, s) => {
     const draws = stream(seed, `svc:${s}`)
     // Orders in the order they reach this step; with several tools to an order, they can overtake.
     const order = ready.map((_, k) => k).sort((a, b) => ready[a] - ready[b] || a - b)
     const free = new Array<number>(step.divided ? step.tools : 1).fill(0)
-    const done = new Array<number>(ORDERS).fill(0)
+    const start = new Array<number>(orders).fill(0)
+    const done = new Array<number>(orders).fill(0)
+    const tool = new Array<number>(orders).fill(0)
     for (const k of order) {
       const hours = stepHours(step, units[k]) * (1 - spread.service + 2 * spread.service * draws())
       let server = 0
       for (let m = 1; m < free.length; m++) if (free[m] < free[server]) server = m
-      const start = Math.max(ready[k], free[server])
-      free[server] = start + hours
-      done[k] = start + hours
-      if (k >= WARM) {
-        waits[s] += start - ready[k]
-        work[k] += hours
-      }
+      start[k] = Math.max(ready[k], free[server])
+      free[server] = start[k] + hours
+      done[k] = start[k] + hours
+      tool[k] = server
     }
+    out.ready.push(ready)
+    out.start.push(start)
+    out.done.push(done)
+    out.tool.push(tool)
     ready = done
   })
-  const counted = ORDERS - WARM
+  return out
+}
+
+// One run of the factory at `demand` good units a day, ORDERS orders long. The first WARM orders, who find
+// an empty factory, are left out of the averages.
+export function runFactory(f: Factory, demand: number, seed: number): Measure {
+  const run = schedule(f, demand, seed)
+  const meanGap = meanSize(f) / (demand / 24)
+  const waits = f.steps.map(() => 0)
   let cycle = 0
   let working = 0
   for (let k = WARM; k < ORDERS; k++) {
-    cycle += ready[k] - release[k]
-    working += work[k]
+    f.steps.forEach((_, s) => {
+      waits[s] += run.start[s][k] - run.ready[s][k]
+      working += run.done[s][k] - run.start[s][k]
+    })
+    cycle += run.done[f.steps.length - 1][k] - run.arrive[k]
   }
+  const counted = ORDERS - WARM
   cycle /= counted
   working /= counted
   return { cycle, working, waiting: Math.max(0, cycle - working), waits: waits.map((w) => w / counted), wip: cycle / meanGap, orders: counted }
