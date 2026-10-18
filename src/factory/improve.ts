@@ -26,6 +26,8 @@ export interface Need {
   // The same as tools at the rate it has now: to keep up, and to meet the cycle time wanted (null if no number of
   // tools does it).
   tools: { output: number; cycle: number | null }
+  // The same as availability, in percent, at today's rate: null when even always being up is not enough.
+  availability: { now: number; output: number | null; cycle: number | null }
 }
 
 const withRate = (f: Factory, step: number, rate: number): Factory => ({ ...f, steps: f.steps.map((s, i) => (i === step ? { ...s, rate } : s)) })
@@ -73,7 +75,20 @@ export function need(f: Factory, step: number): Need {
       break
     }
   }
-  return { step, name: f.steps[step].name, rate: now, output: gain(now, keepUp), cycle, limitedBy, tools: { output: toolsOutput, cycle: toolsCycle } }
+  const up = (g: Gain | null) => {
+    const needed = g === null ? null : (f.steps[step].availability * g.rate) / now
+    return needed !== null && needed <= 100 + 1e-9 ? Math.min(100, needed) : null
+  }
+  return {
+    step,
+    name: f.steps[step].name,
+    rate: now,
+    output: gain(now, keepUp),
+    cycle,
+    limitedBy,
+    tools: { output: toolsOutput, cycle: toolsCycle },
+    availability: { now: f.steps[step].availability, output: up(gain(now, keepUp)), cycle: up(cycle) },
+  }
 }
 
 // A workgroup trying a rate: what the line then makes and how long an order takes.

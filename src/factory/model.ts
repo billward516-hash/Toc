@@ -14,6 +14,9 @@ export interface Step {
   // Whether the workgroup can be divided, one tool to an order. Otherwise the whole fleet is dedicated to
   // one order at a time, which keeps orders from mixing.
   divided: boolean
+  // Share of the time the tools are up, in percent: what is left after repairs, maintenance, and waiting
+  // for help. Their pace is the rate times this.
+  availability: number
 }
 
 // Drum, buffer, rope: the bottleneck is the drum, and the rope holds back the workgroup that feeds it so
@@ -55,6 +58,7 @@ export const LIMITS = {
   tools: { min: 1, max: 200, step: 1 },
   rate: { min: 0.1, max: 100000, step: 1 },
   load: { min: 1, max: 100000, step: 1 },
+  availability: { min: 1, max: 100, step: 1 },
   demand: { min: 1, max: 10000000, step: 10 },
   size: { min: 1, max: 1000000, step: 10 },
   yieldPct: { min: 1, max: 100, step: 1 },
@@ -75,10 +79,10 @@ export const SPREAD: Record<Variation, { service: number; arrival: number }> = {
 // A made-up factory to start from: five workgroups, orders of 100 to 400 units.
 export const EXAMPLE: Factory = {
   steps: [
-    { name: 'Prepare', tools: 3, rate: 40, load: 20, divided: false },
-    { name: 'Process', tools: 4, rate: 25, load: 25, divided: false },
-    { name: 'Inspect', tools: 2, rate: 60, load: 10, divided: true },
-    { name: 'Finish', tools: 3, rate: 35, load: 1, divided: false },
+    { name: 'Prepare', tools: 3, rate: 40, load: 20, divided: false, availability: 96 },
+    { name: 'Process', tools: 4, rate: 25, load: 25, divided: false, availability: 90 },
+    { name: 'Inspect', tools: 2, rate: 60, load: 10, divided: true, availability: 93 },
+    { name: 'Finish', tools: 3, rate: 35, load: 1, divided: false, availability: 97 },
   ],
   demand: 1500,
   perWeek: false,
@@ -91,7 +95,7 @@ export const EXAMPLE: Factory = {
   rope: { on: false, at: 0, buffer: 3, issue: 10 },
 }
 
-export const NEW_STEP: Step = { name: 'New step', tools: 2, rate: 30, load: 1, divided: false }
+export const NEW_STEP: Step = { name: 'New step', tools: 2, rate: 30, load: 1, divided: false, availability: 100 }
 
 // How many days a shown amount covers, and what to call it.
 export const periodDays = (f: Factory): number => (f.perWeek ? f.weekDays : 1)
@@ -103,10 +107,11 @@ const inRange = (value: unknown, { min, max }: { min: number; max: number }): va
 
 function cleanStep(value: unknown): Step | null {
   if (typeof value !== 'object' || value === null) return null
-  const { name, tools, rate, load, divided } = value as Record<string, unknown>
+  const { name, tools, rate, load, divided, availability } = value as Record<string, unknown>
   if (typeof name !== 'string' || name.length > 40 || typeof divided !== 'boolean') return null
   if (!inRange(tools, LIMITS.tools) || !Number.isInteger(tools) || !inRange(rate, LIMITS.rate) || !inRange(load, LIMITS.load) || !Number.isInteger(load)) return null
-  return { name, tools, rate, load, divided }
+  // Saved before availability existed: always up.
+  return { name, tools, rate, load, divided, availability: inRange(availability, LIMITS.availability) ? availability : 100 }
 }
 
 // A factory kept on the device, checked field by field: anything unexpected gives null, and the person

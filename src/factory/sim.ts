@@ -9,7 +9,7 @@ export const startsFor = (size: number, yieldPct: number): number => Math.ceil(s
 // tools; with the workgroup divided, the order is on one tool.
 export function stepHours(step: Step, units: number): number {
   const runs = step.divided ? Math.ceil(units / step.load - 1e-9) : Math.ceil(units / (step.tools * step.load) - 1e-9)
-  return runs * (step.load / step.rate)
+  return (runs * (step.load / step.rate)) / (step.availability / 100)
 }
 
 // Units an hour a step can really make on orders of `units`: its tools' pace, less what part-full runs

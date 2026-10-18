@@ -11,7 +11,7 @@ const one = (patch: Partial<Factory['steps'][number]>, f: Factory = EXAMPLE): Fa
 const load = (f: Factory, share: number): Factory => ({ ...f, demand: share * analyze(f).capacity })
 
 describe('how long a step takes', () => {
-  const whole = { name: 'A', tools: 4, rate: 25, load: 25, divided: false }
+  const whole = { name: 'A', tools: 4, rate: 25, load: 25, divided: false, availability: 100 }
 
   it('shares an order among the whole fleet, in runs that take the same time however full', () => {
     // 400 units on four tools taking 25 a run: 4 runs of an hour each across the fleet, one round.
@@ -173,7 +173,7 @@ describe('a factory kept on the device', () => {
 
 describe('part-full runs', () => {
   it('can make one more tool useless until it saves a whole round', () => {
-    const step = { name: 'A', tools: 4, rate: 25, load: 25, divided: false }
+    const step = { name: 'A', tools: 4, rate: 25, load: 25, divided: false, availability: 100 }
     // 278 units: three rounds of 100, and with five tools (125 a round) still three.
     expect(stepHours(step, 278)).toBe(stepHours({ ...step, tools: 5 }, 278))
     expect(stepHours({ ...step, tools: 6 }, 278)).toBeLessThan(stepHours(step, 278))
@@ -406,5 +406,39 @@ describe('what if: the speed a workgroup needs', () => {
     const n = need(hot(2300), 1)
     expect(n.tools.output).toBeGreaterThan(4)
     expect(analyze({ ...hot(2300), steps: EXAMPLE.steps.map((s, i) => (i === 1 ? { ...s, tools: n.tools.output } : s)) }).steps[1].utilization).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('availability', () => {
+  const step = { name: 'A', tools: 4, rate: 25, load: 25, divided: false, availability: 100 }
+
+  it('stretches the time a step takes by the share of the time it is down', () => {
+    expect(stepHours({ ...step, availability: 80 }, 100)).toBeCloseTo(stepHours(step, 100) / 0.8, 9)
+    expect(effectiveRate({ ...step, availability: 50 }, 100)).toBeCloseTo(effectiveRate(step, 100) / 2, 9)
+  })
+
+  it('lowers the capacity of the factory and lengthens the cycle time, with the bottleneck in the step that is down most', () => {
+    const steady: Factory = { ...EXAMPLE, steps: EXAMPLE.steps.map((s) => ({ ...s, availability: 100 })) }
+    expect(analyze(steady).capacity).toBeGreaterThan(analyze(EXAMPLE).capacity)
+    expect(measure(steady).cycle).toBeLessThan(measure(EXAMPLE).cycle)
+    const down = { ...steady, steps: steady.steps.map((s, i) => (i === 0 ? { ...s, availability: 40 } : s)) }
+    expect(analyze(down).bottleneck).toBe(0)
+  })
+
+  it('reads a step saved before availability existed as always up, and rejects a bad one', () => {
+    const { availability, ...old } = EXAMPLE.steps[0]
+    expect(availability).toBe(96)
+    const saved = { ...EXAMPLE, steps: [old, ...EXAMPLE.steps.slice(1)] }
+    expect(cleanFactory(JSON.parse(JSON.stringify(saved)))?.steps[0].availability).toBe(100)
+    expect(cleanFactory({ ...EXAMPLE, steps: [{ ...old, availability: 500 }, ...EXAMPLE.steps.slice(1)] })?.steps[0].availability).toBe(100)
+  })
+
+  it('say the availability a workgroup needs to keep up, or that none is enough', () => {
+    const f: Factory = { ...EXAMPLE, demand: 1600 }
+    const n = need(f, 1)
+    expect(n.availability.now).toBe(90)
+    expect(n.availability.cycle).toBeGreaterThan(90)
+    expect(need({ ...EXAMPLE, demand: 3000 }, 1).availability.output).toBeNull()
+    expect(need({ ...EXAMPLE, demand: 1800 }, 1).availability.cycle).toBeNull()
   })
 })

@@ -22,6 +22,13 @@ function change(g: Gain, tools: number) {
   return `${one(up(g.rate))} units an hour per tool, ${one(up(g.more))} more than now (${pct(g.share)} faster), which is ${one(up(g.more * tools))} more units an hour across its ${tools} ${tools === 1 ? 'tool' : 'tools'}`
 }
 
+// Availability, in percent: what it must reach, or that it cannot be enough on its own.
+function availabilityText(now: number, needed: number | null, what: string) {
+  if (needed === null) return `even always up is not enough to ${what}`
+  if (needed <= now + 1e-9) return `it is up ${Math.round(now)}% of the time already, enough to ${what}`
+  return `${Math.ceil(needed * 10 - 1e-9) / 10}% up, from ${Math.round(now)}%, to ${what}`
+}
+
 // What would have to improve in one workgroup, the bottleneck to begin with, for the factory to make the
 // output wanted: the units an hour per tool it must reach, or the tools it must have, and a place to try a
 // speed and see what the line does.
@@ -80,6 +87,9 @@ export function WhatIfCard({ factory, analysis, onApply }: WhatIfProps) {
         <li>
           Or by tools at today's speed: {needs.tools.output > s.tools ? `${needs.tools.output - s.tools} more to keep up` : 'none more to keep up'}
           {needs.tools.cycle === null ? ', and no number of tools meets the cycle time on its own.' : needs.tools.cycle > s.tools ? `, ${needs.tools.cycle - s.tools} more to meet the cycle time too.` : ', and none more to meet the cycle time.'}
+        </li>
+        <li>
+          Or by availability, at today's speed: {availabilityText(needs.availability.now, needs.availability.output, 'keep up')}, and {availabilityText(needs.availability.now, needs.availability.cycle, 'meet the cycle time too')}.
         </li>
       </ul>
       <h3 className="card-title">Try a speed</h3>

@@ -221,6 +221,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
                 <div className="field-grid">
                   <NumberField label="Tools" value={step.tools} min={LIMITS.tools.min} max={LIMITS.tools.max} onChange={(tools) => editStep(i, { tools })} />
                   <NumberField label="Units an hour per tool" value={step.rate} min={LIMITS.rate.min} max={LIMITS.rate.max} step={1} decimals={1} onChange={(rate) => editStep(i, { rate })} hint="At full loads." />
+                  <NumberField label="Availability (% of the time up)" value={step.availability} min={LIMITS.availability.min} max={LIMITS.availability.max} onChange={(availability) => editStep(i, { availability })} hint="What is left after repairs and maintenance. 100 if always up." />
                   <NumberField label="Units a tool takes at once" value={step.load} min={LIMITS.load.min} max={LIMITS.load.max} onChange={(load) => editStep(i, { load })} hint="1 if it works on one at a time. A run takes the same time however full it is." />
                 </div>
                 <label className="check">
@@ -229,7 +230,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
                 {s && tool && (
                 <div className="readout">
                   <p>
-                    Can make <strong>{units(s.effective)}</strong> units an hour with your batches
+                    Can make <strong>{units(s.effective)}</strong> units an hour with your batches and downtime
                     {Math.round(s.paper) !== Math.round(s.effective) && <span> ({units(s.paper)} on paper)</span>}.
                   </p>
                   <div className={`busy-bar ${level}`} role="img" aria-label={`${Math.round(s.utilization * 100)}% busy`}>
