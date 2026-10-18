@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cases, csv } from './cases.ts'
-import { ropeStudy, ropeWords } from './rope.ts'
+import { recommend, ropeStudy, ropeWords } from './rope.ts'
 import { endOf, frame } from './watch.ts'
 import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
 import { verdict } from './words.ts'
@@ -343,5 +343,27 @@ describe('drum, buffer, rope', () => {
     const f = roped(4, 7)
     expect(cleanFactory(JSON.parse(JSON.stringify(f)))).toEqual(f)
     expect(cleanFactory({ ...f, rope: { on: true, at: 99, buffer: -3, issue: 'x' } })?.rope).toEqual({ on: true, at: 0, buffer: 3, issue: 10 })
+  })
+
+  it('recommend the smallest buffer that keeps the bottleneck as busy as it is without the rope', () => {
+    const f = load(roped(3), 0.95)
+    const advice = recommend(f)!
+    expect(advice.buffer).toBeGreaterThanOrEqual(1)
+    const tie = measure(f, f.demand, 6, false).busy[1]
+    const at = (buffer: number) => measure({ ...f, rope: { ...f.rope, buffer } }, f.demand, 6, true).busy[1]
+    expect(at(advice.buffer)).toBeGreaterThanOrEqual(tie - 0.015)
+    if (advice.buffer > 1 && advice.because === 'your numbers') expect(at(advice.buffer - 1)).toBeLessThan(tie - 0.015)
+    expect(advice.hours).toBeGreaterThan(0)
+  })
+
+  it('ask for a bigger buffer when the line is uneven and heavily loaded than when it is steady and light', () => {
+    const light = recommend(load({ ...roped(3), variation: 'low' }, 0.6))!
+    const heavy = recommend(load({ ...roped(3), variation: 'high' }, 0.95))!
+    expect(heavy.buffer).toBeGreaterThan(light.buffer)
+  })
+
+  it('have nothing to recommend when nothing feeds the bottleneck', () => {
+    const first = { ...roped(3), steps: EXAMPLE.steps.map((s, i) => (i === 0 ? { ...s, tools: 1, rate: 5 } : s)) }
+    expect(recommend(first)).toBeNull()
   })
 })

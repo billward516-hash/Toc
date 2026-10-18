@@ -1,5 +1,5 @@
-import type { Factory } from './model.ts'
-import { measure, ropeOf, type Measure } from './sim.ts'
+import { meanSize, type Factory } from './model.ts'
+import { measure, ropeOf, startsFor, stepHours, type Measure } from './sim.ts'
 
 // What the rope does for the person's factory, side by side: the line as it runs now, and with the rope,
 // both at the yield asked for and with a yield problem.
@@ -72,4 +72,55 @@ export function ropeWords(f: Factory, s: RopeStudy): string[] {
   else lines.push(`At your yield the rope costs ${s.bottleneck} almost nothing: it is busy ${pct(s.normal.roped.bottleneckBusy)} of the time against ${pct(s.normal.plain.bottleneckBusy)}.`)
   if (s.normal.roped.cycle > s.normal.plain.cycle * 1.15) lines.push(`Orders held back wait before the line, so the time from arrival to leaving is longer with the rope (${hours(s.normal.roped.cycle)} against ${hours(s.normal.plain.cycle)} hours). What the rope protects is the work in the line and the units wasted, not the customer's clock.`)
   return lines
+}
+
+// One buffer size tried at the yield asked for: how busy the bottleneck stays, the pile in front of it, and
+// the orders held back.
+export interface Tried {
+  buffer: number
+  bottleneckBusy: number
+  inFront: number
+  heldBack: number
+}
+
+export interface Recommendation {
+  // The smallest buffer that keeps the bottleneck as busy as it is with no rope, within a point and a half,
+  // in every case tried: as described, with the most uneven times and arrivals, and with the yield problem.
+  buffer: number
+  // Hours of the bottleneck's work in that many orders of average size.
+  hours: number
+  // What decided it.
+  because: 'your numbers' | 'very uneven times and arrivals' | 'the yield problem'
+  // The buffers tried for the case that decided it, up to the one chosen.
+  tried: Tried[]
+}
+
+const SLACK = 0.015
+const MOST = 40
+
+// Try buffers from one up and take the smallest that does not starve the bottleneck: a bigger one only lets
+// more work pile up in front of it. Null with no rope to size.
+function smallest(g: Factory, bottleneck: number): { buffer: number; tried: Tried[] } {
+  const plain = measure(g, g.demand, 6, false).busy[bottleneck]
+  const tried: Tried[] = []
+  for (let b = 1; b <= MOST; b++) {
+    const m = measure({ ...g, rope: { ...g.rope, on: true, buffer: b } }, g.demand, 6, true)
+    tried.push({ buffer: b, bottleneckBusy: m.busy[bottleneck], inFront: m.waits[bottleneck] / m.meanGap, heldBack: m.held / m.meanGap })
+    if (m.busy[bottleneck] >= plain - SLACK) return { buffer: b, tried }
+  }
+  return { buffer: MOST, tried }
+}
+
+export function recommend(f: Factory): Recommendation | null {
+  const tie = ropeOf({ ...f, rope: { ...f.rope, on: true } })
+  if (!tie) return null
+  const cases: [Recommendation['because'], Factory][] = [
+    ['your numbers', f],
+    ['very uneven times and arrivals', { ...f, variation: 'high' }],
+    ['the yield problem', { ...f, yieldPct: Math.max(1, f.yieldPct - f.rope.issue) }],
+  ]
+  const results = cases.map(([because, g]) => ({ because, ...smallest(g, tie.bottleneck) }))
+  const best = results.reduce((a, b) => (b.buffer > a.buffer ? b : a))
+  const bottleneck = f.steps[tie.bottleneck]
+  return { buffer: best.buffer, hours: best.buffer * stepHours(bottleneck, startsFor(meanSize(f), f.yieldPct)), because: best.because, tried: best.tried.slice(-6) }
 }

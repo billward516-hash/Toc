@@ -5250,3 +5250,13 @@ p.exam-taught,
   text-align: left;
   white-space: normal;
 }
+.rope .advice {
+  background: var(--blue-soft);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+.rope .advice p {
+  margin: 0 0 6px;
+}

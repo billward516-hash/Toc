@@ -1,11 +1,12 @@
 import { LIMITS, type Factory } from '../factory/model.ts'
 import { ropeOf } from '../factory/sim.ts'
-import { ropeWords, type RopeStudy, type Side } from '../factory/rope.ts'
+import { ropeWords, type Recommendation, type RopeStudy, type Side } from '../factory/rope.ts'
 import { NumberField } from './FactoryParts.tsx'
 
 interface RopeProps {
   factory: Factory
   study: RopeStudy | null
+  advice: Recommendation | null
   onChange: (factory: Factory) => void
 }
 
@@ -23,7 +24,7 @@ const ROWS: [string, (s: Side) => string][] = [
 
 // Drum, buffer, rope: the workgroup that feeds the bottleneck idles when the buffer in front of the bottleneck
 // is full, so a yield problem does not turn into piles of work nobody can use.
-export function RopeCard({ factory, study, onChange }: RopeProps) {
+export function RopeCard({ factory, study, advice, onChange }: RopeProps) {
   const tie = ropeOf({ ...factory, rope: { ...factory.rope, on: true } })
   const rope = factory.rope
   const set = (patch: Partial<typeof rope>) => onChange({ ...factory, rope: { ...rope, ...patch } })
@@ -55,6 +56,19 @@ export function RopeCard({ factory, study, onChange }: RopeProps) {
             <NumberField label="Buffer (orders in front of the bottleneck)" value={rope.buffer} min={LIMITS.buffer.min} max={LIMITS.buffer.max} onChange={(buffer) => set({ buffer })} hint="Too few starves the bottleneck. Too many lets work pile up." />
             <NumberField label="Yield problem to test (points lower)" value={rope.issue} min={LIMITS.issue.min} max={LIMITS.issue.max} onChange={(issue) => set({ issue })} hint={`Tests ${study.troubledYield}% instead of ${factory.yieldPct}%.`} />
           </div>
+          {advice && (
+            <div className="advice" aria-live="polite">
+              <p>
+                <strong>The simulation recommends a buffer of {advice.buffer} {advice.buffer === 1 ? 'order' : 'orders'}</strong>, about {one(advice.hours)} hours of {factory.steps[tie.bottleneck].name} work. It is the smallest that keeps {factory.steps[tie.bottleneck].name} as busy as it is without the rope, judged on {advice.because}, the hardest case it tried.
+              </p>
+              <p className="hint">
+                Tried: {advice.tried.map((t) => `${t.buffer} → ${pct(t.bottleneckBusy)} busy`).join(', ')}. Bigger only lets more work pile up in front of the bottleneck.
+              </p>
+              <button className="btn small" disabled={rope.buffer === advice.buffer && rope.on} onClick={() => set({ buffer: advice.buffer, on: true })}>
+                Use {advice.buffer}
+              </button>
+            </div>
+          )}
           <ul className="plain-list">
             {ropeWords(factory, study).map((line, i) => (
               <li key={i}>{line}</li>

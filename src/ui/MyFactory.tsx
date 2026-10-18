@@ -5,7 +5,7 @@ import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
 import { FactoryCurve, NumberField } from './FactoryParts.tsx'
 import { RopeCard } from './RopeCard.tsx'
-import { ropeStudy } from '../factory/rope.ts'
+import { recommend, ropeStudy } from '../factory/rope.ts'
 import { FactoryWatch } from './FactoryWatch.tsx'
 import { Icon } from './icons.tsx'
 import { ScreenHeader, type Stat } from './parts.tsx'
@@ -41,7 +41,7 @@ function work(factory: Factory) {
   const m = measure(factory)
   const r = reach(factory, a.capacity)
   const tries = whatIf(factory, m)
-  return { a, m, r, tries, list: cases(factory), rope: ropeStudy(factory), points: curve(factory, a.capacity), v: verdict(factory, a, m, r, tries) }
+  return { a, m, r, tries, list: cases(factory), rope: ropeStudy(factory), advice: recommend(factory), points: curve(factory, a.capacity), v: verdict(factory, a, m, r, tries) }
 }
 
 // "My factory": a line of workgroups the person describes with their own numbers, with the bottleneck, the
@@ -52,7 +52,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
   // The heavy part trails a little behind typing, so the boxes stay quick.
   const shown = useDeferredValue(factory)
   const result = useMemo(() => work(shown), [shown])
-  const { a, m, r, tries, list, rope, points, v } = result
+  const { a, m, r, tries, list, rope, advice, points, v } = result
   const table = rows(shown, list)
   const [making, setMaking] = useState(false)
   const download = async () => {
@@ -160,7 +160,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
         </section>
       </div>
 
-      <RopeCard factory={factory} study={rope} onChange={change} />
+      <RopeCard factory={factory} study={rope} advice={advice} onChange={change} />
 
       <FactoryWatch factory={shown} analysis={a} />
 
