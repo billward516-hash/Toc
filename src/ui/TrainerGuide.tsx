@@ -3,7 +3,7 @@ import { levels } from '../levels/index.ts'
 import { scriptMarkdown } from '../course/markdown.ts'
 import { branches, formats, overview } from '../course/overview.ts'
 import { clockAt, resolvedSession, type ResolvedPlay, type ResolvedSegment, type ResolvedSession } from '../course/resolve.ts'
-import { sessions } from '../course/sessions/index.ts'
+import { sessions, trainerSessions } from '../course/sessions/index.ts'
 import { duration, formatMinutes } from '../course/summary.ts'
 import { Blocks, GuideTabs, Steps } from './GuideParts.tsx'
 import { Icon } from './icons.tsx'
@@ -40,7 +40,7 @@ export function TrainerGuide({ onExit }: { onExit: () => void }) {
         chip="Trainer"
         title="Trainer guide"
         stats={[
-          { label: 'Sessions', value: sessions.length },
+          { label: 'Sessions', value: trainerSessions.length },
           { label: 'Levels', value: levels.length },
         ]}
         onExit={onExit}
@@ -119,10 +119,11 @@ function Formats() {
 function SessionList({ onOpen }: { onOpen: (tier: number) => void }) {
   return (
     <ol className="level-cards session-list">
-      {sessions.map((session) => {
+      {trainerSessions.map((session) => {
         const resolved = resolvedSession(session)
         const { core, optional } = resolved.minutes
         const count = resolved.segments.filter((segment) => segment.kind === 'play').length
+        const rounds = resolved.segments.filter((segment) => segment.kind === 'talk' && /round \d/i.test(segment.title)).length
         return (
           <li key={session.tier}>
             <button className="level-card unlocked" onClick={() => onOpen(session.tier)}>
@@ -134,7 +135,7 @@ function SessionList({ onOpen }: { onOpen: (tier: number) => void }) {
               <span className="level-state">
                 {duration(core)}
                 <small>
-                  {count} {count === 1 ? 'level' : 'levels'}
+                  {count > 0 ? `${count} ${count === 1 ? 'level' : 'levels'}` : `${rounds} rounds`}
                   {optional > 0 ? `, ${optional} min optional` : ''}
                 </small>
               </span>
@@ -147,10 +148,10 @@ function SessionList({ onOpen }: { onOpen: (tier: number) => void }) {
 }
 
 function SessionPage({ tier, onOpen, onBack }: { tier: number; onOpen: (tier: number) => void; onBack: () => void }) {
-  const index = sessions.findIndex((s) => s.tier === tier)
-  const resolved = useMemo(() => resolvedSession(sessions[index]), [index])
-  const before = sessions[index - 1]
-  const after = sessions[index + 1]
+  const index = trainerSessions.findIndex((s) => s.tier === tier)
+  const resolved = useMemo(() => resolvedSession(trainerSessions[index]), [index])
+  const before = trainerSessions[index - 1]
+  const after = trainerSessions[index + 1]
   const nav = (
     <div className="session-nav print-hide">
       <button className="btn small" onClick={onBack}>
@@ -363,7 +364,7 @@ function AnswerKey() {
 // The whole guide and every session in one long page, to print, and as text to save or copy.
 function WholeScript() {
   const [note, setNote] = useState<string | null>(null)
-  const all = useMemo(() => sessions.map(resolvedSession), [])
+  const all = useMemo(() => trainerSessions.map(resolvedSession), [])
   return (
     <>
       <section className="card guide-card print-hide">

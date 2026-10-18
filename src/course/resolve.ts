@@ -6,6 +6,9 @@ import { levelFiller } from './facts.ts'
 import { levelNumber } from './numbering.ts'
 import { act } from './steps.ts'
 import { sessionMinutes } from './summary.ts'
+import { labInfo } from './labInfo.ts'
+import { fillLab, fillLabStep, LAB_NAME } from './lab.ts'
+import { LAB_TIER } from './sessions/lab.ts'
 import { tierInfoFor } from './tiers.ts'
 import type { Session, Step } from './types.ts'
 
@@ -56,14 +59,18 @@ export interface ResolvedSession {
 }
 
 export function resolveSession(session: Session): ResolvedSession {
-  const info = tierInfoFor(session.tier)
+  // The loading lab sits outside the tiers: its own words for what learners are told, and its own
+  // numbers filled into the script.
+  const isLab = session.tier === LAB_TIER
+  const info = isLab ? { tier: LAB_TIER, ...labInfo } : tierInfoFor(session.tier)
+  const text = (value: string) => (isLab ? fillLab(value) : value)
   let clock = 0
   const starts: (number | null)[] = []
   const segments = session.segments.map<ResolvedSegment>((segment) => {
     if (segment.kind === 'talk') {
       starts.push(segment.optional ? null : clock)
       if (!segment.optional) clock += segment.minutes
-      return { kind: 'talk', title: segment.title, minutes: segment.minutes, optional: segment.optional ?? false, steps: segment.steps }
+      return { kind: 'talk', title: segment.title, minutes: segment.minutes, optional: segment.optional ?? false, steps: isLab ? segment.steps.map(fillLabStep) : segment.steps }
     }
     starts.push(clock)
     clock += segment.minutes
@@ -112,15 +119,15 @@ export function resolveSession(session: Session): ResolvedSession {
   })
   return {
     tier: session.tier,
-    name: tierNames[session.tier],
-    summary: session.summary,
+    name: isLab ? LAB_NAME : tierNames[session.tier],
+    summary: text(session.summary),
     objectives: info.objectives,
-    before: session.before,
+    before: session.before.map(text),
     segments,
     starts,
     minutes: sessionMinutes(session),
-    short: session.short,
-    extend: session.extend,
+    short: session.short.map(text),
+    extend: session.extend.map(text),
   }
 }
 

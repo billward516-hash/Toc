@@ -1,8 +1,9 @@
 import { EXAM } from '../exam/config.ts'
 import { correctToPass } from '../exam/rules.ts'
+import { labFacts } from '../loading/facts.ts'
 import { levels } from '../levels/index.ts'
 import type { Level } from '../levels/types.ts'
-import { sessions } from './sessions/index.ts'
+import { labSession, sessions } from './sessions/index.ts'
 import type { PlaySegment, Segment, Session, Step } from './types.ts'
 
 export const isPlay = (segment: Segment): segment is PlaySegment => segment.kind === 'play'
@@ -72,12 +73,17 @@ export function courseNumbers(): Record<string, string> {
     examPass: String(EXAM.passPercent),
     examToPass: String(correctToPass()),
     examExtra: String(EXAM.maxExtra),
+    // The loading lab's session, outside the tiers.
+    labMinutes: String(sessionMinutes(labSession).core),
+    labOptional: String(sessionMinutes(labSession).optional),
   }
 }
 
+// Texts quote the course's numbers as {levels}, and the loading lab's as {lab90}, {fleetOne}, and so on.
+// The lab's are worked out by running its model, so that waits until a text asks for one.
 export const fillCourse = (text: string): string => {
   const numbers = courseNumbers()
-  return text.replace(/\{(\w+)\}/g, (token, name: string) => numbers[name] ?? token)
+  return text.replace(/\{(\w+)\}/g, (token, name: string) => numbers[name] ?? labFacts()[name] ?? token)
 }
 
 // A step of the overview, with the course's numbers filled in.

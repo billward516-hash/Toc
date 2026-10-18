@@ -1,5 +1,6 @@
 import { act, ask, look, say, tip } from './steps.ts'
-import type { Format } from './summary.ts'
+import { labSession } from './sessions/index.ts'
+import { sessionMinutes, type Format } from './summary.ts'
 import type { OverviewSection } from './types.ts'
 
 // The trainer's "Start here": what the course is, how to run it, and how to close it. Numbers written
@@ -16,6 +17,10 @@ export const overview: OverviewSection[] = [
       {
         kind: 'p',
         text: 'There are {levels} levels in {sessions} sessions, one session for each tier of the game. A session is about an hour: you put the game on a big screen, learners play on their own devices, and you guide the talk between levels. This guide gives you the words to say, the questions to ask, the answers, and the wrong turns to expect.',
+      },
+      {
+        kind: 'p',
+        text: 'There is also the loading lab, a short game outside the levels about what load does to cycle time. It has its own session, Session 11, of about {labMinutes} minutes with {labOptional} more if you run the two optional fab rounds, and it can stand alone once Tier 3 is done. It is not on the class screen: learners play it on their own devices.',
       },
       { kind: 'p', text: 'By the end of the course, learners can:' },
       {
@@ -236,6 +241,11 @@ export const formats: Format[] = [
     who: 'Foundations, then one of Tiers 4 to 10, chosen for the audience (see the list below).',
     sessions: [0, 1, 2, 3],
     extra: 70,
+  },
+  {
+    name: 'Loading lab workshop',
+    who: 'A stand-alone workshop on what load does to cycle time and on how many bottlenecks a line has, for a group that has done Tier 3. The two optional fab rounds are left out.',
+    extra: sessionMinutes(labSession).core,
   },
   {
     name: 'The full course',

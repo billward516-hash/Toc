@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { glossary } from '../course/glossary.ts'
 import { gettingStarted } from '../course/learner.ts'
+import { LAB_NAME, labGettingStarted, labTerms } from '../course/lab.ts'
+import { labIdeas, labInfo } from '../course/labInfo.ts'
 import { levelNumber } from '../course/numbering.ts'
 import { tierInfoFor } from '../course/tiers.ts'
 import { levelState, maxStars } from '../levels/graph.ts'
@@ -9,6 +11,7 @@ import type { Level } from '../levels/types.ts'
 import type { Notes } from '../progress/store.ts'
 import { Blocks, GuideTabs } from './GuideParts.tsx'
 import { Icon } from './icons.tsx'
+import { Explainer } from './LoadingLab.tsx'
 import { ScreenHeader, Stars } from './parts.tsx'
 
 type Tab = 'start' | 'map' | 'principles' | 'terms' | 'notes'
@@ -30,13 +33,15 @@ interface CourseGuideProps {
   initialNotes: Notes
   onSaveNotes: (notes: Notes) => void
   onOpen: (level: Level) => void
+  // Opens the loading lab, which sits outside the levels.
+  onLab: () => void
   onExit: () => void
 }
 
 // The learner's guide to the course: how to play, what each tier teaches and how far along they are,
 // the principles they have found, the key words, and a place for their own notes.
 export function CourseGuide(props: CourseGuideProps) {
-  const { levels, tierNames, completed, stars, initialNotes, onSaveNotes, onOpen, onExit } = props
+  const { levels, tierNames, completed, stars, initialNotes, onSaveNotes, onOpen, onLab, onExit } = props
   const [tab, setTab] = useState<Tab>('start')
   const tiers = useMemo(() => [...new Set(levels.map((l) => l.tier))].sort((a, b) => a - b), [levels])
 
@@ -46,7 +51,7 @@ export function CourseGuide(props: CourseGuideProps) {
       <GuideTabs label="Course guide" tabs={TABS} value={tab} onChange={setTab} panel="course-panel" />
       <div id="course-panel" role="tabpanel" aria-labelledby={`course-panel-tab-${tab}`} className="guide-panel">
         {tab === 'start' && <GetStarted />}
-        {tab === 'map' && <CourseMap levels={levels} tiers={tiers} tierNames={tierNames} completed={completed} stars={stars} onOpen={onOpen} />}
+        {tab === 'map' && <CourseMap levels={levels} tiers={tiers} tierNames={tierNames} completed={completed} stars={stars} onOpen={onOpen} onLab={onLab} />}
         {tab === 'principles' && <Principles levels={levels} completed={completed} />}
         {tab === 'terms' && <KeyTerms levels={levels} tiers={tiers} tierNames={tierNames} completed={completed} />}
         {tab === 'notes' && <MyNotes tiers={tiers} tierNames={tierNames} initial={initialNotes} onSave={onSaveNotes} />}
@@ -58,7 +63,7 @@ export function CourseGuide(props: CourseGuideProps) {
 function GetStarted() {
   return (
     <div className="guide-columns">
-      {gettingStarted.map((section) => (
+      {[...gettingStarted, ...labGettingStarted].map((section) => (
         <section key={section.id} className="card guide-card">
           <h2>{section.title}</h2>
           <Blocks blocks={section.blocks} />
@@ -75,10 +80,11 @@ interface MapProps {
   completed: ReadonlySet<string>
   stars: ReadonlyMap<string, number>
   onOpen: (level: Level) => void
+  onLab: () => void
 }
 
 // Each tier as a session of the course: what it teaches, and how far along the learner is.
-function CourseMap({ levels, tiers, tierNames, completed, stars, onOpen }: MapProps) {
+function CourseMap({ levels, tiers, tierNames, completed, stars, onOpen, onLab }: MapProps) {
   return (
     <ol className="course-tiers">
       {tiers.map((tier) => {
@@ -135,6 +141,31 @@ function CourseMap({ levels, tiers, tierNames, completed, stars, onOpen }: MapPr
           </li>
         )
       })}
+      <li className="card course-tier course-lab">
+        <header>
+          <span className="tier-chip">Extra</span>
+          <h2>{LAB_NAME}</h2>
+          <span className="tier-progress">5 rounds, not scored</span>
+        </header>
+        <p className="objectives-title">By the end you can:</p>
+        <ul className="plain-list">
+          {labInfo.objectives.map((objective) => (
+            <li key={objective}>{objective}</li>
+          ))}
+        </ul>
+        <p className="objectives-title">The ideas it leaves you with:</p>
+        <ul className="plain-list">
+          {labIdeas.map((idea) => (
+            <li key={idea}>{idea}</li>
+          ))}
+        </ul>
+        <Explainer />
+        <div className="actions">
+          <button className="btn primary small" onClick={onLab}>
+            Play the loading lab <Icon name="next" />
+          </button>
+        </div>
+      </li>
     </ol>
   )
 }
@@ -217,6 +248,19 @@ function KeyTerms({ levels, tiers, tierNames, completed }: TermsProps) {
           </section>
         )
       })}
+      <section className="card guide-card">
+        <h2>
+          <span className="tier-chip">Extra</span> {LAB_NAME}
+        </h2>
+        <dl className="terms">
+          {labTerms.map((entry) => (
+            <div key={entry.term}>
+              <dt>{entry.term}</dt>
+              <dd>{entry.meaning}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
     </div>
   )
 }
@@ -231,7 +275,7 @@ interface NotesProps {
 // A place to answer each tier's questions in the learner's own words. It stays on the device.
 function MyNotes({ tiers, tierNames, initial, onSave }: NotesProps) {
   const [notes, setNotes] = useState<Notes>(initial)
-  const write = (tier: number, text: string) => {
+  const write = (tier: number | 'lab', text: string) => {
     const next = { ...notes, [tier]: text }
     setNotes(next)
     onSave(next)
@@ -263,6 +307,18 @@ function MyNotes({ tiers, tierNames, initial, onSave }: NotesProps) {
           </div>
         )
       })}
+      <div className="note">
+        <label htmlFor="note-lab">
+          <span className="tier-chip">Extra</span> <strong>{LAB_NAME}</strong>
+          {labInfo.reflect.map((prompt) => (
+            <span key={prompt} className="prompt-line">
+              {prompt}
+            </span>
+          ))}
+        </label>
+        <textarea id="note-lab" className="print-hide" rows={4} value={notes.lab ?? ''} placeholder="Write your thoughts here" onChange={(event) => write('lab', event.target.value)} />
+        <p className="print-only note-print">{notes.lab || ' '}</p>
+      </div>
     </section>
   )
 }

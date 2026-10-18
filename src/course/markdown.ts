@@ -1,7 +1,7 @@
 import { duration, fillCourse, fillStep, formatMinutes } from './summary.ts'
 import { branches, formats, overview } from './overview.ts'
 import { clockAt, resolvedSession, type ResolvedPlay, type ResolvedSession } from './resolve.ts'
-import { sessions } from './sessions/index.ts'
+import { trainerSessions } from './sessions/index.ts'
 import type { Step, StepKind } from './types.ts'
 
 const LABEL: Record<StepKind, string> = { say: 'Say', ask: 'Ask', do: 'Do', look: 'Look for', tip: 'Tip' }
@@ -90,6 +90,6 @@ export function scriptMarkdown(): string {
       lines.push('')
     }
   }
-  for (const s of sessions) lines.push(...session(resolvedSession(s)))
+  for (const s of trainerSessions) lines.push(...session(resolvedSession(s)))
   return lines.join('\n')
 }

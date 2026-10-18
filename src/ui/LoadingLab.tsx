@@ -88,9 +88,9 @@ export function LoadingLab({ onExit }: { onExit: () => void }) {
       key={ROUNDS[index].id}
       round={ROUNDS[index]}
       number={index + 1}
-      onFinish={(entry) => {
+      onFinish={(entry, skipFabRounds) => {
         setLog([...log, entry])
-        setIndex(index + 1)
+        setIndex(skipFabRounds ? TOTAL : index + 1)
       }}
       onExit={onExit}
     />
@@ -114,7 +114,7 @@ function names(minutes: number[], upgraded: boolean[]): string {
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]
 }
 
-function LabRound({ round, number, onFinish, onExit }: { round: Round; number: number; onFinish: (log: RoundLog) => void; onExit: () => void }) {
+function LabRound({ round, number, onFinish, onExit }: { round: Round; number: number; onFinish: (log: RoundLog, skipFabRounds?: boolean) => void; onExit: () => void }) {
   const [rate, setRate] = useState(round.predictAt ?? round.start)
   const [upgraded, setUpgraded] = useState(() => noUpgrades(round.minutes))
   const [runs, setRuns] = useState<Run[]>([])
@@ -187,19 +187,22 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
     showFloor()
   }
 
-  const finish = () => {
+  const finish = (skipFabRounds = false) => {
     const right = guess && reference && runs[0] ? rightGuess(runs[0].outcome.cycle / reference.cycle) : null
     const winner = runs.find((r) => judge(round, r.outcome).passed)
-    onFinish({
-      id: round.id,
-      title: round.title,
-      tries: runs.length,
-      passed,
-      detail: [
-        guess && right ? `. You guessed "${guess.text.toLowerCase()}"; it was "${right.text.toLowerCase()}"` : '',
-        round.upgrades > 0 && winner ? `. Bottleneck left at ${names(round.minutes, winner.upgraded)}` : '',
-      ].join(''),
-    })
+    onFinish(
+      {
+        id: round.id,
+        title: round.title,
+        tries: runs.length,
+        passed,
+        detail: [
+          guess && right ? `. You guessed "${guess.text.toLowerCase()}"; it was "${right.text.toLowerCase()}"` : '',
+          round.upgrades > 0 && winner ? `. Bottleneck left at ${names(round.minutes, winner.upgraded)}` : '',
+        ].join(''),
+      },
+      skipFabRounds,
+    )
   }
 
   const stats: Stat[] = [
@@ -295,8 +298,13 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
               {predicting ? 'Run it and see' : 'Run the day'} <Icon name="play" />
             </button>
             {(passed || runs.length >= 4) && (
-              <button className={`btn big${passed ? ' next' : ''}`} onClick={finish}>
+              <button className={`btn big${passed ? ' next' : ''}`} onClick={() => finish()}>
                 {passed ? 'Next round' : 'Skip this round'} <Icon name="next" />
+              </button>
+            )}
+            {round.id === 'many' && (passed || runs.length >= 4) && (
+              <button className="btn big" onClick={() => finish(true)}>
+                Skip the fab rounds: see what it shows <Icon name="next" />
               </button>
             )}
           </div>
@@ -307,7 +315,7 @@ function LabRound({ round, number, onFinish, onExit }: { round: Round; number: n
 }
 
 // The explainer video, folded away so nothing downloads until it is opened.
-function Explainer() {
+export function Explainer() {
   return (
     <details className="explainer">
       <summary>

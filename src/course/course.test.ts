@@ -11,9 +11,13 @@ import { glossary } from './glossary.ts'
 import { gettingStarted } from './learner.ts'
 import { scriptMarkdown } from './markdown.ts'
 import { levelNumber } from './numbering.ts'
+import { labFacts } from '../loading/facts.ts'
+import { LAB_NAME, labGettingStarted, labTerms } from './lab.ts'
+import { labIdeas, labInfo } from './labInfo.ts'
 import { branches, formats, overview } from './overview.ts'
 import { clockAt, resolveSession } from './resolve.ts'
-import { sessions } from './sessions/index.ts'
+import { labSession, sessions, trainerSessions } from './sessions/index.ts'
+import { LAB_TIER } from './sessions/lab.ts'
 import { courseNumbers, fillCourse, formatMinutes, isPlay, segmentFor, sessionMinutes } from './summary.ts'
 import { tierInfo, tierInfoFor } from './tiers.ts'
 import type { PlaySegment, Step } from './types.ts'
@@ -256,5 +260,88 @@ describe('the printable script', () => {
     expect(text).not.toMatch(/[{}]/)
     expect(text).toContain('**Say:** "')
     expect(text).toContain('## Start here'.replace('Start here', 'What this course is'))
+  })
+})
+
+describe('the loading lab in the course', () => {
+  const resolved = resolveSession(labSession)
+  const texts = [
+    resolved.summary,
+    ...resolved.before,
+    ...resolved.short,
+    ...resolved.extend,
+    ...resolved.segments.flatMap((segment) => (segment.kind === 'talk' ? stepText(segment.steps) : [])),
+  ]
+
+  it('is a session after the tiers, of talks only, with an opening, rounds, and a close', () => {
+    expect(trainerSessions).toEqual([...sessions, labSession])
+    expect(LAB_TIER).toBeGreaterThan(Math.max(...sessions.map((s) => s.tier)))
+    expect(labSession.segments.every((segment) => segment.kind === 'talk')).toBe(true)
+    const titles = labSession.segments.map((segment) => (segment.kind === 'talk' ? segment.title : ''))
+    expect(titles.filter((title) => /round \d/i.test(title))).toHaveLength(5)
+    const last = labSession.segments.at(-1)
+    expect(last?.kind === 'talk' ? last.title : '').toBe('Close')
+    for (const field of [labSession.before, labSession.short, labSession.extend]) expect(field.length).toBeGreaterThan(0)
+  })
+
+  it('runs for a sensible time, with the two fab rounds optional', () => {
+    const { core, optional } = sessionMinutes(labSession)
+    expect(core).toBeGreaterThanOrEqual(40)
+    expect(core).toBeLessThanOrEqual(110)
+    const optionalTitles = labSession.segments.filter((segment) => segment.kind === 'talk' && segment.optional).map((segment) => (segment.kind === 'talk' ? segment.title : ''))
+    expect(optionalTitles.every((title) => /round [45]/i.test(title))).toBe(true)
+    expect(optional).toBeGreaterThan(0)
+    expect(courseNumbers().labMinutes).toBe(String(core))
+    expect(courseNumbers().labOptional).toBe(String(optional))
+  })
+
+  it("quotes the lab's own numbers, with none left unfilled", () => {
+    for (const text of texts) expect(text, text).not.toMatch(/[{}]/)
+    const said = texts.join(' ')
+    const facts = labFacts()
+    for (const name of ['lab60', 'lab90', 'lab95', 'lab100', 'lab110', 'labShipGain', 'two95', 'five95', 'fixed95', 'fleetOne', 'fleetFour']) {
+      expect(said, name).toContain(facts[name])
+    }
+    expect([facts.lab60, facts.lab90, facts.lab95, facts.lab100, facts.lab110]).toEqual(['11', '18', '25', '40', '91'])
+    expect(Number(facts.lab110)).toBeGreaterThan(Number(facts.lab100))
+    expect(Number(facts.labRatio)).toBeGreaterThan(2)
+    expect(Number(facts.five95)).toBeGreaterThan(Number(facts.two95))
+    expect(Number(facts.two95)).toBeGreaterThan(Number(facts.lab95))
+  })
+
+  it('tells learners what it teaches, and asks them to reflect, in the words the trainer closes with', () => {
+    expect(labInfo.objectives.length).toBeGreaterThanOrEqual(3)
+    expect(labIdeas.length).toBeGreaterThanOrEqual(4)
+    const close = labSession.segments.at(-1)!
+    const said = close.kind === 'talk' ? stepText(close.steps).join(' ') : ''
+    expect(said).toContain(labInfo.reflect[0])
+    expect(said).toContain(labInfo.bridge)
+  })
+
+  it('has key terms, each once and not already in the glossary, and a page for learners with numbers filled in', () => {
+    const terms = labTerms.map((entry) => entry.term.toLowerCase())
+    expect(new Set(terms).size).toBe(terms.length)
+    const known = new Set(glossary.map((entry) => entry.term.toLowerCase()))
+    for (const entry of labTerms) {
+      expect(known.has(entry.term.toLowerCase()), entry.term).toBe(false)
+      expect(entry.meaning.length, entry.term).toBeGreaterThan(20)
+    }
+    const words = labGettingStarted.flatMap((section) => section.blocks.flatMap((block) => (block.kind === 'p' ? [block.text] : block.kind === 'list' ? block.items : [])))
+    for (const text of words) expect(fillCourse(text), text).not.toMatch(/[{}]/)
+    expect(fillCourse(words.join(' '))).toContain('20 days')
+  })
+
+  it('is in the printable script and among the ways to run the course', () => {
+    expect(scriptMarkdown()).toContain(`## Session ${LAB_TIER}: ${LAB_NAME}`)
+    const workshop = formats.find((format) => format.name === 'Loading lab workshop')
+    expect(workshop).toBeDefined()
+    expect(formatMinutes(workshop!)).toBe(sessionMinutes(labSession).core)
+  })
+
+  it('is mentioned in the overview, with its length filled in', () => {
+    const about = overview.find((section) => section.id === 'about')!
+    const text = about.blocks.map((block) => (block.kind === 'p' ? fillCourse(block.text) : '')).join(' ')
+    expect(text).toContain('loading lab')
+    expect(text).toContain(`${sessionMinutes(labSession).core} minutes`)
   })
 })

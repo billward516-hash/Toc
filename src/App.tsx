@@ -166,6 +166,10 @@ export default function App() {
               setGuide(null)
               setOpen(level)
             }}
+            onLab={() => {
+              setGuide(null)
+              setLab(true)
+            }}
             onExit={() => setGuide(null)}
           />
         )}
