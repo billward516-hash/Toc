@@ -51,7 +51,10 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
   const [speed, setSpeed] = useState(SPEEDS[1][0])
   const [playing, setPlaying] = useState(false)
   const [clock, setClock] = useState(0)
-  const run = useMemo(() => schedule(factory, factory.demand, luck, ORDERS), [factory, luck])
+  // Whether to watch with the yield problem from the rope card, so the rope's work can be seen.
+  const [trouble, setTrouble] = useState(false)
+  const watched = useMemo(() => (trouble ? { ...factory, yieldPct: Math.max(1, factory.yieldPct - factory.rope.issue) } : factory), [factory, trouble])
+  const run = useMemo(() => schedule(watched, watched.demand, luck, ORDERS, watched.rope.on), [watched, luck])
   const end = useMemo(() => endOf(run), [run])
   // New numbers or new luck start a new run, paused.
   const [seen, setSeen] = useState(run)
@@ -77,7 +80,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
   }, [playing, step, end])
 
   const now = useMemo(() => frame(run, clock), [run, clock])
-  const inFactory = now.arrived - now.shipped
+  const inFactory = now.arrived - now.shipped - now.held.length
   const waitingNow = now.waiting.reduce((sum, w) => sum + w.length, 0)
   const finished = clock >= end
 
@@ -101,6 +104,11 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
             </button>
           ))}
         </div>
+        {factory.rope.issue > 0 && (
+          <label className="check">
+            <input type="checkbox" checked={trouble} onChange={(event) => setTrouble(event.target.checked)} /> With the yield problem ({Math.max(1, factory.yieldPct - factory.rope.issue)}%)
+          </label>
+        )}
         <button className="btn small" onClick={() => setLuck(luck + 1)}>
           <Icon name="swap" /> Different luck
         </button>
@@ -145,6 +153,19 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
                 ))}
                 {s.tools > SHOWN_TOOLS && <span className="order-more">+{s.tools - SHOWN_TOOLS}</span>}
               </div>
+              {i === run.ropeAt && (
+                <>
+                  <small>Held back by the rope: {now.held.length}</small>
+                  <div className="order-stack" aria-hidden="true">
+                    {now.held.slice(0, SHOWN_WAITING).map((p) => (
+                      <span key={p.order} className="order-chip held">
+                        {p.order}
+                      </span>
+                    ))}
+                    {now.held.length > SHOWN_WAITING && <span className="order-more">+{now.held.length - SHOWN_WAITING}</span>}
+                  </div>
+                </>
+              )}
               <small>Working on</small>
               <Orders placed={working} target={factory.target} limit={SHOWN_TOOLS} />
               <small>Waiting: {now.waiting[i].length}</small>

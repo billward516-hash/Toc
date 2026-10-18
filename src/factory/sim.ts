@@ -78,6 +78,11 @@ export interface Measure {
   waits: number[]
   // Orders in the factory, on average (Little's law).
   wip: number
+  // Hours an order was held back by the rope, on average (0 with no rope), how busy each step was, and the
+  // hours between orders arriving.
+  held: number
+  busy: number[]
+  meanGap: number
   // Orders the average is over.
   orders: number
 }
@@ -86,7 +91,8 @@ const ORDERS = 320
 const WARM = 80
 
 // The whole of one run, order by order: when each arrived, its units started, and for every step when it
-// reached the step, when it began there, when it left, and on which tool.
+// reached the step, when it began there, when it left, and on which tool. With the rope on, `held` is the
+// hours each order was held back at the rope's workgroup, which is part of its wait there.
 export interface Schedule {
   arrive: number[]
   units: number[]
@@ -94,11 +100,24 @@ export interface Schedule {
   start: number[][]
   done: number[][]
   tool: number[][]
+  held: number[]
+  // The workgroup the rope idles, or null with no rope.
+  ropeAt: number | null
+}
+
+// The workgroup the rope is tied to: the first bottleneck, and the workgroup that idles for it, which must
+// come before it. Null when there is none to idle (the bottleneck is first, or the rope is off).
+export function ropeOf(f: Factory): { at: number; bottleneck: number } | null {
+  if (!f.rope.on) return null
+  const bottleneck = Math.min(...analyze(f).bottlenecks)
+  if (bottleneck === 0) return null
+  return { at: Math.min(f.rope.at, bottleneck - 1), bottleneck }
 }
 
 // `orders` orders arrive, unevenly, at `demand` good units a day, each a size drawn between the smallest
-// and largest, and go through the steps in order, waiting their turn at each.
-export function schedule(f: Factory, demand: number, seed: number, orders = ORDERS): Schedule {
+// and largest, and go through the steps in order, waiting their turn at each. With `rope`, the rope's
+// workgroup starts an order only once the order `buffer` places ahead of it has started at the bottleneck.
+export function schedule(f: Factory, demand: number, seed: number, orders = ORDERS, rope = false): Schedule {
   const spread = SPREAD[f.variation]
   const sizeDraws = stream(seed, 'size')
   const gapDraws = stream(seed, 'arrive')
@@ -111,7 +130,37 @@ export function schedule(f: Factory, demand: number, seed: number, orders = ORDE
     arrive.push(t)
     units.push(startsFor(Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin)), f.yieldPct))
   }
-  const out: Schedule = { arrive, units, ready: [], start: [], done: [], tool: [] }
+  const tie = rope ? ropeOf({ ...f, rope: { ...f.rope, on: true } }) : null
+  const out: Schedule = { arrive, units, ready: [], start: [], done: [], tool: [], held: new Array<number>(orders).fill(0), ropeAt: tie?.at ?? null }
+  const grid = () => f.steps.map(() => new Array<number>(orders).fill(0))
+  if (tie) {
+    // Order by order, since the rope ties an order to ones ahead of it at a later step.
+    out.ready = grid()
+    out.start = grid()
+    out.done = grid()
+    out.tool = grid()
+    const draws = f.steps.map((_, s) => stream(seed, `svc:${s}`))
+    const free = f.steps.map((step) => new Array<number>(step.divided ? step.tools : 1).fill(0))
+    for (let k = 0; k < orders; k++) {
+      let at = arrive[k]
+      f.steps.forEach((step, s) => {
+        out.ready[s][k] = at
+        let allowed = at
+        if (s === tie.at && k >= f.rope.buffer) allowed = Math.max(at, out.start[tie.bottleneck][k - f.rope.buffer])
+        if (s === tie.at) out.held[k] = allowed - at
+        const hours = stepHours(step, units[k]) * (1 - spread.service + 2 * spread.service * draws[s]())
+        let server = 0
+        for (let m = 1; m < free[s].length; m++) if (free[s][m] < free[s][server]) server = m
+        const begin = Math.max(allowed, free[s][server])
+        free[s][server] = begin + hours
+        out.start[s][k] = begin
+        out.done[s][k] = begin + hours
+        out.tool[s][k] = server
+        at = begin + hours
+      })
+    }
+    return out
+  }
   let ready = [...arrive]
   f.steps.forEach((step, s) => {
     const draws = stream(seed, `svc:${s}`)
@@ -141,28 +190,54 @@ export function schedule(f: Factory, demand: number, seed: number, orders = ORDE
 
 // One run of the factory at `demand` good units a day, ORDERS orders long. The first WARM orders, who find
 // an empty factory, are left out of the averages.
-export function runFactory(f: Factory, demand: number, seed: number): Measure {
-  const run = schedule(f, demand, seed)
+export function runFactory(f: Factory, demand: number, seed: number, rope = false): Measure {
+  const run = schedule(f, demand, seed, ORDERS, rope)
   const meanGap = meanSize(f) / (demand / 24)
+  const last = f.steps.length - 1
   const waits = f.steps.map(() => 0)
   let cycle = 0
   let working = 0
+  let held = 0
   for (let k = WARM; k < ORDERS; k++) {
     f.steps.forEach((_, s) => {
-      waits[s] += run.start[s][k] - run.ready[s][k]
+      waits[s] += run.start[s][k] - run.ready[s][k] - (s === run.ropeAt ? run.held[k] : 0)
       working += run.done[s][k] - run.start[s][k]
     })
-    cycle += run.done[f.steps.length - 1][k] - run.arrive[k]
+    cycle += run.done[last][k] - run.arrive[k]
+    held += run.held[k]
   }
   const counted = ORDERS - WARM
   cycle /= counted
   working /= counted
-  return { cycle, working, waiting: Math.max(0, cycle - working), waits: waits.map((w) => w / counted), wip: cycle / meanGap, orders: counted }
+  held /= counted
+  // How busy a step was over the time the counted orders were in it, as a share of its tools' time.
+  const busy = (s: number) => {
+    let work = 0
+    let first = Infinity
+    let finish = 0
+    for (let k = WARM; k < ORDERS; k++) {
+      work += run.done[s][k] - run.start[s][k]
+      first = Math.min(first, run.start[s][k])
+      finish = Math.max(finish, run.done[s][k])
+    }
+    return Math.min(1, work / ((finish - first) * (f.steps[s].divided ? f.steps[s].tools : 1)))
+  }
+  return {
+    cycle,
+    working,
+    waiting: Math.max(0, cycle - working - held),
+    waits: waits.map((w) => w / counted),
+    wip: cycle / meanGap,
+    orders: counted,
+    held,
+    busy: f.steps.map((_, s) => busy(s)),
+    meanGap,
+  }
 }
 
 // The average of several runs, each with its own luck, so one run doesn't mislead.
-export function measure(f: Factory, demand = f.demand, seeds = 6): Measure {
-  const runs = Array.from({ length: seeds }, (_, k) => runFactory(f, demand, k + 1))
+export function measure(f: Factory, demand = f.demand, seeds = 6, rope = false): Measure {
+  const runs = Array.from({ length: seeds }, (_, k) => runFactory(f, demand, k + 1, rope))
   const mean = (pick: (m: Measure) => number) => runs.reduce((sum, m) => sum + pick(m), 0) / runs.length
   return {
     cycle: mean((m) => m.cycle),
@@ -170,6 +245,9 @@ export function measure(f: Factory, demand = f.demand, seeds = 6): Measure {
     waiting: mean((m) => m.waiting),
     waits: f.steps.map((_, s) => mean((m) => m.waits[s])),
     wip: mean((m) => m.wip),
+    held: mean((m) => m.held),
+    busy: f.steps.map((_, s) => mean((m) => m.busy[s])),
+    meanGap: runs[0].meanGap,
     orders: runs[0].orders,
   }
 }

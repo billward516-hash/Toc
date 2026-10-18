@@ -14,6 +14,8 @@ export interface Frame {
   // For each step, the orders waiting for it (longest waiting first) and the orders being worked on.
   waiting: Placed[][]
   working: Placed[][]
+  // Orders held back by the rope in front of its workgroup.
+  held: Placed[]
   arrived: number
   shipped: number
   // Average hours from arrival to leaving the last step, over the orders shipped so far; null before any.
@@ -24,6 +26,7 @@ export function frame(run: Schedule, t: number): Frame {
   const steps = run.ready.length
   const waiting: Placed[][] = Array.from({ length: steps }, () => [])
   const working: Placed[][] = Array.from({ length: steps }, () => [])
+  const held: Placed[] = []
   let arrived = 0
   let shipped = 0
   let total = 0
@@ -38,13 +41,14 @@ export function frame(run: Schedule, t: number): Frame {
     }
     for (let s = 0; s < steps; s++) {
       if (t < run.ready[s][k]) break
-      if (t < run.start[s][k]) waiting[s].push({ order: k + 1, age: t - arrival, tool: 0 })
+      if (s === run.ropeAt && t < run.ready[s][k] + run.held[k]) held.push({ order: k + 1, age: t - arrival, tool: 0 })
+      else if (t < run.start[s][k]) waiting[s].push({ order: k + 1, age: t - arrival, tool: 0 })
       else if (t < run.done[s][k]) working[s].push({ order: k + 1, age: t - arrival, tool: run.tool[s][k] })
       else continue
       break
     }
   })
-  return { clock: t, waiting, working, arrived, shipped, cycle: shipped > 0 ? total / shipped : null }
+  return { clock: t, waiting, working, held, arrived, shipped, cycle: shipped > 0 ? total / shipped : null }
 }
 
 // When the last order of the run ships.

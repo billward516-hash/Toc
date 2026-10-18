@@ -16,6 +16,19 @@ export interface Step {
   divided: boolean
 }
 
+// Drum, buffer, rope: the bottleneck is the drum, and the rope holds back the workgroup that feeds it so
+// that no more than `buffer` orders wait in front of the bottleneck. When the bottleneck makes less than
+// expected (a yield problem, say), the feeding workgroup idles instead of piling up work nobody can use.
+export interface Rope {
+  on: boolean
+  // The workgroup that idles when the buffer is full (it must come before the bottleneck).
+  at: number
+  // Orders allowed between that workgroup and the bottleneck.
+  buffer: number
+  // A yield problem to test, in points lower than the yield above.
+  issue: number
+}
+
 export type Variation = 'low' | 'medium' | 'high'
 
 export interface Factory {
@@ -34,6 +47,7 @@ export interface Factory {
   variation: Variation
   // The cycle time wanted, in hours, from an order's arrival to its leaving the last step.
   target: number
+  rope: Rope
 }
 
 export const LIMITS = {
@@ -46,6 +60,8 @@ export const LIMITS = {
   yieldPct: { min: 1, max: 100, step: 1 },
   target: { min: 0.1, max: 100000, step: 1 },
   weekDays: { min: 1, max: 7, step: 1 },
+  buffer: { min: 1, max: 50, step: 1 },
+  issue: { min: 0, max: 50, step: 1 },
 }
 
 // How much a time swings from order to order around its average (a share of it, either way), and how
@@ -72,6 +88,7 @@ export const EXAMPLE: Factory = {
   yieldPct: 90,
   variation: 'medium',
   target: 24,
+  rope: { on: false, at: 0, buffer: 3, issue: 10 },
 }
 
 export const NEW_STEP: Step = { name: 'New step', tools: 2, rate: 30, load: 1, divided: false }
@@ -106,5 +123,13 @@ export function cleanFactory(value: unknown): Factory | null {
   // Saved before the week view existed: shown per day.
   const { perWeek, weekDays } = value as Record<string, unknown>
   const week = inRange(weekDays, LIMITS.weekDays) && Number.isInteger(weekDays) ? weekDays : 7
-  return { steps: clean, demand, perWeek: perWeek === true, weekDays: week, sizeMin, sizeMax, yieldPct, variation, target }
+  // Saved before the rope existed: off, at the first workgroup.
+  const saved = (value as { rope?: Record<string, unknown> }).rope
+  const rope: Rope = {
+    on: saved?.on === true,
+    at: Number.isInteger(saved?.at) && (saved?.at as number) >= 0 && (saved?.at as number) < clean.length ? (saved?.at as number) : 0,
+    buffer: Number.isInteger(saved?.buffer) && inRange(saved?.buffer, LIMITS.buffer) ? (saved?.buffer as number) : EXAMPLE.rope.buffer,
+    issue: inRange(saved?.issue, LIMITS.issue) ? (saved?.issue as number) : EXAMPLE.rope.issue,
+  }
+  return { steps: clean, demand, perWeek: perWeek === true, weekDays: week, sizeMin, sizeMax, yieldPct, variation, target, rope }
 }

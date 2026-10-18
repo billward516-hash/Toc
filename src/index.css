@@ -5083,16 +5083,19 @@ p.exam-taught,
 .number-row input {
   min-width: 56px;
 }
-.cases .table-scroll {
+.table-scroll {
   overflow-x: auto;
 }
-.cases table {
+.cases table,
+.rope table {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.92rem;
 }
 .cases th,
-.cases td {
+.cases td,
+.rope th,
+.rope td {
   padding: 6px 8px;
   text-align: center;
   border-bottom: 2px solid var(--disabled);
@@ -5229,4 +5232,21 @@ p.exam-taught,
 }
 .watch-count {
   font-size: 2.2rem;
+}
+.order-chip.held {
+  background: var(--disabled);
+  border-style: dashed;
+}
+.rope select {
+  font: inherit;
+  font-weight: 700;
+  padding: 8px;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+}
+.rope table th[scope='row'] {
+  text-align: left;
+  white-space: normal;
 }

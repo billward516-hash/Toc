@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cases, csv } from './cases.ts'
+import { ropeStudy, ropeWords } from './rope.ts'
 import { endOf, frame } from './watch.ts'
 import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
 import { verdict } from './words.ts'
@@ -226,7 +227,8 @@ describe('counting per week', () => {
   })
 
   it('read a factory saved before weeks existed as per day, and keep a saved week', () => {
-    const { perWeek, weekDays, ...old } = EXAMPLE
+    const { perWeek, weekDays, rope, ...old } = EXAMPLE
+    expect(rope.on).toBe(false)
     expect(perWeek).toBe(false)
     expect(weekDays).toBe(7)
     expect(cleanFactory(old)).toEqual(EXAMPLE)
@@ -275,12 +277,12 @@ describe('watching a run', () => {
   it('puts every arrived order in exactly one place, and ships them all by the end', () => {
     for (const t of [0, 10, 50, 120, 200]) {
       const fr = frame(run, t)
-      const placed = fr.waiting.flat().length + fr.working.flat().length
+      const placed = fr.waiting.flat().length + fr.working.flat().length + fr.held.length
       expect(placed + fr.shipped).toBe(fr.arrived)
     }
     const end = frame(run, endOf(run) + 1)
     expect(end.shipped).toBe(60)
-    expect(end.waiting.flat().length + end.working.flat().length).toBe(0)
+    expect(end.waiting.flat().length + end.working.flat().length + end.held.length).toBe(0)
   })
 
   it('never has more orders at a whole-fleet step than one, and one a tool at a divided one', () => {
@@ -295,5 +297,51 @@ describe('watching a run', () => {
     const last = EXAMPLE.steps.length - 1
     const mean = run.arrive.reduce((sum, a, k) => sum + run.done[last][k] - a, 0) / 60
     expect(end.cycle).toBeCloseTo(mean, 9)
+  })
+})
+
+describe('drum, buffer, rope', () => {
+  const roped = (buffer: number, issue = 10): Factory => ({ ...EXAMPLE, rope: { on: true, at: 0, buffer, issue } })
+
+  it('tie an order to the one a buffer ahead of it at the bottleneck', () => {
+    const f = roped(2)
+    const run = schedule(f, f.demand, 1, 80, true)
+    expect(run.ropeAt).toBe(0)
+    for (let k = 2; k < 80; k++) expect(run.start[0][k]).toBeGreaterThanOrEqual(run.start[1][k - 2] - 1e-9)
+    expect(run.held.some((h) => h > 0)).toBe(true)
+  })
+
+  it('leave the numbers alone when the rope is off, and the headline numbers alone when it is on', () => {
+    expect(schedule(EXAMPLE, EXAMPLE.demand, 1, 40).ropeAt).toBeNull()
+    expect(measure(roped(3)).cycle).toBe(measure(EXAMPLE).cycle)
+  })
+
+  it('keep the pile in front of the bottleneck to the buffer in a yield problem, where it grows without one', () => {
+    const study = ropeStudy(roped(3, 25))
+    expect(study).not.toBeNull()
+    const { plain, roped: held } = study!.troubled
+    expect(plain.inFront).toBeGreaterThan(10)
+    expect(held.inFront).toBeLessThanOrEqual(3.5)
+    expect(held.heldBack).toBeGreaterThan(plain.heldBack)
+    expect(held.lineCycle).toBeLessThan(plain.lineCycle)
+    expect(held.feederIdle).toBeGreaterThan(plain.feederIdle)
+  })
+
+  it('starve the bottleneck when the buffer is one and the line is uneven, and say so', () => {
+    const f: Factory = load({ ...roped(1), variation: 'high' }, 0.93)
+    const study = ropeStudy(f)!
+    expect(study.normal.roped.bottleneckBusy).toBeLessThan(study.normal.plain.bottleneckBusy)
+    expect(ropeWords(f, study).join(' ')).toContain('buffer is too small')
+  })
+
+  it('have nothing to idle when the bottleneck is the first workgroup', () => {
+    const first = { ...roped(3), steps: EXAMPLE.steps.map((s, i) => (i === 0 ? { ...s, tools: 1, rate: 5 } : s)) }
+    expect(ropeStudy(first)).toBeNull()
+  })
+
+  it('keep a saved rope, and clean a bad one', () => {
+    const f = roped(4, 7)
+    expect(cleanFactory(JSON.parse(JSON.stringify(f)))).toEqual(f)
+    expect(cleanFactory({ ...f, rope: { on: true, at: 99, buffer: -3, issue: 'x' } })?.rope).toEqual({ on: true, at: 0, buffer: 3, issue: 10 })
   })
 })
