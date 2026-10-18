@@ -161,7 +161,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
         </section>
       </div>
 
-      <WhatIfCard factory={shown} analysis={a} onApply={(step, rate) => editStep(step, { rate })} />
+      <WhatIfCard factory={shown} analysis={a} onApply={(step, patch) => editStep(step, patch)} />
 
       <RopeCard factory={factory} study={rope} advice={advice} onChange={change} />
 

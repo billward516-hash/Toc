@@ -91,7 +91,7 @@ export function need(f: Factory, step: number): Need {
   }
 }
 
-// A workgroup trying a rate: what the line then makes and how long an order takes.
+// A workgroup trying a rate, and an availability: what the line then makes and how long an order takes.
 export interface Trial {
   capacity: number
   // How busy the tried workgroup is, the workgroup that is busiest then, and how busy.
@@ -102,8 +102,8 @@ export interface Trial {
   meetsCycle: boolean
 }
 
-export function tryRate(f: Factory, step: number, rate: number): Trial {
-  const g = withRate(f, step, rate)
+export function tryRate(f: Factory, step: number, rate: number, availability = f.steps[step].availability): Trial {
+  const g: Factory = { ...f, steps: f.steps.map((s, i) => (i === step ? { ...s, rate, availability } : s)) }
   const a = analyze(g)
   const m = measure(g, g.demand, 6)
   const busiest = a.steps.reduce((best, s, i) => (s.utilization > a.steps[best].utilization ? i : best), 0)

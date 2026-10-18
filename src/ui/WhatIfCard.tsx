@@ -8,7 +8,7 @@ interface WhatIfProps {
   factory: Factory
   analysis: Analysis
   // Gives a workgroup the speed tried.
-  onApply: (step: number, rate: number) => void
+  onApply: (step: number, patch: { rate: number; availability: number }) => void
 }
 
 // Units an hour, to a tenth, so what is shown is what is tried and used.
@@ -36,11 +36,15 @@ export function WhatIfCard({ factory, analysis, onApply }: WhatIfProps) {
   const [picked, setPicked] = useState<number | null>(null)
   const step = Math.min(picked ?? analysis.bottleneck, factory.steps.length - 1)
   const needs = useMemo(() => need(factory, step), [factory, step])
-  const [trial, setTrial] = useState<number | null>(null)
+  // What the person has typed to try: a speed, an availability, or neither yet.
+  const [trial, setTrial] = useState<{ rate?: number; availability?: number }>({})
   const suggested = up((needs.cycle ?? needs.output).rate)
-  const rate = trial ?? suggested
-  const result = useMemo(() => tryRate(factory, step, rate), [factory, step, rate])
+  const rate = trial.rate ?? (trial.availability === undefined ? suggested : factory.steps[step].rate)
+  const availability = trial.availability ?? factory.steps[step].availability
+  const result = useMemo(() => tryRate(factory, step, rate, availability), [factory, step, rate, availability])
+  const untouched = trial.rate === undefined && trial.availability === undefined
   const s = factory.steps[step]
+  const wanted = needs.availability.cycle ?? needs.availability.output
   const days = periodDays(factory)
   const kind = analysis.bottlenecks.includes(step) ? ' (a bottleneck)' : ''
   return (
@@ -51,7 +55,7 @@ export function WhatIfCard({ factory, analysis, onApply }: WhatIfProps) {
       </p>
       <label className="number-field">
         <span className="setting-label">Workgroup to improve</span>
-        <select value={step} onChange={(event) => (setPicked(Number(event.target.value)), setTrial(null))} aria-label="Workgroup to improve">
+        <select value={step} onChange={(event) => (setPicked(Number(event.target.value)), setTrial({}))} aria-label="Workgroup to improve">
           {factory.steps.map((x, i) => (
             <option key={i} value={i}>
               {x.name}
@@ -92,20 +96,26 @@ export function WhatIfCard({ factory, analysis, onApply }: WhatIfProps) {
           Or by availability, at today's speed: {availabilityText(needs.availability.now, needs.availability.output, 'keep up')}, and {availabilityText(needs.availability.now, needs.availability.cycle, 'meet the cycle time too')}.
         </li>
       </ul>
-      <h3 className="card-title">Try a speed</h3>
+      <h3 className="card-title">Try a speed and an availability</h3>
       <div className="field-grid">
-        <NumberField label={`${s.name}: units an hour per tool`} value={rate} min={0.1} max={100000} step={1} decimals={1} onChange={setTrial} hint={trial === null ? 'Starts at what it needs.' : undefined} />
+        <NumberField label={`${s.name}: units an hour per tool`} value={rate} min={0.1} max={100000} step={1} decimals={1} onChange={(value) => setTrial({ ...trial, rate: value })} hint={untouched ? 'Starts at what it needs.' : undefined} />
+        <NumberField label={`${s.name}: availability (% up)`} value={availability} min={1} max={100} step={1} onChange={(value) => setTrial({ ...trial, availability: value })} />
       </div>
       <p className={`trial ${result.meetsCycle ? 'ok' : result.keepsUp ? 'warn' : 'bad'}`} aria-live="polite">
-        At {one(rate)}: {result.keepsUp ? `the line makes up to ${Math.round(result.capacity * days).toLocaleString('en-US')} good units a ${periodName(factory)}` : `${s.name} still cannot keep up`}, {s.name} is {pct(result.busy)} busy, and an order takes {hours(result.cycle)} hours
+        At {one(rate)} units an hour and {Math.round(availability)}% up: {result.keepsUp ? `the line makes up to ${Math.round(result.capacity * days).toLocaleString('en-US')} good units a ${periodName(factory)}` : `${s.name} still cannot keep up`}, {s.name} is {pct(result.busy)} busy, and an order takes {hours(result.cycle)} hours
         {result.meetsCycle ? `, inside the ${hours(factory.target)} you want.` : result.keepsUp ? `, over the ${hours(factory.target)} you want.` : '.'}
         {result.next.name !== s.name && result.next.busy > result.busy ? ` Then ${result.next.name} is the busiest, at ${pct(result.next.busy)}.` : ''}
       </p>
       <div className="actions">
-        <button className="btn small" disabled={rate === s.rate} onClick={() => (onApply(step, rate), setTrial(null))}>
-          Use {one(rate)} for {s.name}
+        <button className="btn small" disabled={rate === s.rate && availability === s.availability} onClick={() => (onApply(step, { rate, availability }), setTrial({}))}>
+          Use these for {s.name}
         </button>
-        <button className="btn small" disabled={trial === null} onClick={() => setTrial(null)}>
+        {wanted !== null && wanted > s.availability && (
+          <button className="btn small" onClick={() => setTrial({ rate: s.rate, availability: Math.ceil(wanted - 1e-9) })}>
+            Try {Math.ceil(wanted - 1e-9)}% up, what it needs
+          </button>
+        )}
+        <button className="btn small" disabled={untouched} onClick={() => setTrial({})}>
           Back to what it needs
         </button>
       </div>

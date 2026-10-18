@@ -442,3 +442,16 @@ describe('availability', () => {
     expect(need({ ...EXAMPLE, demand: 1800 }, 1).availability.cycle).toBeNull()
   })
 })
+
+describe('what if: trying an availability', () => {
+  it('give the same answer as setting that availability, and meet the cycle time at the availability that is needed', () => {
+    const f: Factory = { ...EXAMPLE, demand: 1600 }
+    const n = need(f, 1)
+    const needed = Math.ceil(n.availability.cycle! * 10) / 10
+    const trial = tryRate(f, 1, f.steps[1].rate, needed)
+    expect(trial.meetsCycle).toBe(true)
+    const set: Factory = { ...f, steps: f.steps.map((s, i) => (i === 1 ? { ...s, availability: needed } : s)) }
+    expect(trial.cycle).toBe(measure(set).cycle)
+    expect(tryRate(f, 1, f.steps[1].rate, 60).keepsUp).toBe(false)
+  })
+})
