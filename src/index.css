@@ -5083,3 +5083,30 @@ p.exam-taught,
 .number-row input {
   min-width: 56px;
 }
+.cases .table-scroll {
+  overflow-x: auto;
+}
+.cases table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+}
+.cases th,
+.cases td {
+  padding: 6px 8px;
+  text-align: center;
+  border-bottom: 2px solid var(--disabled);
+  white-space: nowrap;
+}
+.cases th {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.cases tr.meets td:last-child {
+  color: var(--green-deep);
+  font-weight: 800;
+}
+.cases tr.misses td:last-child {
+  color: var(--red);
+  font-weight: 800;
+}

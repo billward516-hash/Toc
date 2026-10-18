@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { cases, csv } from './cases.ts'
 import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
 import { verdict } from './words.ts'
 import { analyze, curve, effectiveRate, measure, reach, runFactory, startsFor, stepHours, whatIf } from './sim.ts'
@@ -230,5 +231,39 @@ describe('counting per week', () => {
     expect(cleanFactory(old)).toEqual(EXAMPLE)
     expect(cleanFactory(JSON.parse(JSON.stringify(week)))).toEqual(week)
     expect(cleanFactory({ ...week, weekDays: 9 })?.weekDays).toBe(7)
+  })
+})
+
+describe('too low, midpoint, too high', () => {
+  const list = cases(EXAMPLE)
+  const of = (group: string) => list.filter((c) => c.group === group)
+
+  it('give three cases for demand and three for batch size, in order', () => {
+    expect(of('Demand').map((c) => c.spot)).toEqual(['Too low', 'Midpoint', 'Too high'])
+    expect(of('Batch size').map((c) => c.spot)).toEqual(['Too low', 'Midpoint', 'Too high'])
+  })
+
+  it('meet the cycle time wanted at too low and the midpoint but not too high', () => {
+    const [low, mid, high] = of('Demand')
+    expect(low.meets).toBe(true)
+    expect(mid.meets).toBe(true)
+    expect(high.meets).toBe(false)
+    expect(low.demand).toBeLessThan(mid.demand)
+    expect(mid.demand).toBeLessThan(high.demand)
+    expect(low.cycle).toBeLessThanOrEqual(mid.cycle)
+  })
+
+  it('use the smallest, middle and largest batch at the demand asked for', () => {
+    const [small, middle, large] = of('Batch size')
+    expect([small.sizeMin, middle.sizeMin, large.sizeMin]).toEqual([100, 250, 400])
+    expect(new Set([small.demand, middle.demand, large.demand])).toEqual(new Set([EXAMPLE.demand]))
+  })
+
+  it('write a spreadsheet with a header and a row for every case, in weeks when asked', () => {
+    const lines = csv(EXAMPLE, list).trim().split('\r\n')
+    expect(lines).toHaveLength(7)
+    expect(lines[0]).toContain('Good units a day')
+    const week: Factory = { ...EXAMPLE, perWeek: true, weekDays: 5 }
+    expect(csv(week, cases(week))).toContain('Good units a week')
   })
 })

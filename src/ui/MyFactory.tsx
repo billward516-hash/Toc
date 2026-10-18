@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { EXAMPLE, LIMITS, NEW_STEP, periodDays, periodName, type Factory, type Step, type Variation } from '../factory/model.ts'
+import { cases, csv, rows } from '../factory/cases.ts'
 import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
 import { FactoryCurve, NumberField } from './FactoryParts.tsx'
@@ -21,13 +22,23 @@ const VARIATIONS: [Variation, string][] = [
 const hours = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
 const units = (n: number) => Math.round(n).toLocaleString('en-US')
 
+// Hands a file made on this device to the person's browser to save.
+function save(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 // Everything worked out for the factory as described, for the screen to show.
 function work(factory: Factory) {
   const a = analyze(factory)
   const m = measure(factory)
   const r = reach(factory, a.capacity)
   const tries = whatIf(factory, m)
-  return { a, m, r, tries, points: curve(factory, a.capacity), v: verdict(factory, a, m, r, tries) }
+  return { a, m, r, tries, list: cases(factory), points: curve(factory, a.capacity), v: verdict(factory, a, m, r, tries) }
 }
 
 // "My factory": a line of workgroups the person describes with their own numbers, with the bottleneck, the
@@ -38,7 +49,18 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
   // The heavy part trails a little behind typing, so the boxes stay quick.
   const shown = useDeferredValue(factory)
   const result = useMemo(() => work(shown), [shown])
-  const { a, m, r, tries, points, v } = result
+  const { a, m, r, tries, list, points, v } = result
+  const table = rows(shown, list)
+  const [making, setMaking] = useState(false)
+  const download = async () => {
+    setMaking(true)
+    try {
+      const { deck } = await import('../factory/deck.ts')
+      save(await deck(shown, list), 'my-factory-cases.pptx')
+    } finally {
+      setMaking(false)
+    }
+  }
   const days = periodDays(factory)
   const shownDays = periodDays(shown)
   const scaled = points.map((p) => ({ ...p, demand: p.demand * shownDays }))
@@ -134,6 +156,42 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
           </p>
         </section>
       </div>
+
+      <section className="card cases" aria-label="Too low, midpoint, too high">
+        <h2 className="card-title">Too low, midpoint, too high</h2>
+        <p className="hint">
+          Demand: the midpoint is just inside the most the factory can take and still meet your cycle time, too low is half of that, and too high is nearly all it can make. Batch size: your smallest, middle, and largest, at the demand you ask for.
+        </p>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                {table[0].map((head) => (
+                  <th key={head}>{head}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.slice(1).map((row, k) => (
+                <tr key={k} className={list[k].meets ? 'meets' : 'misses'}>
+                  {row.map((cell, i) => (
+                    <td key={i}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="actions">
+          <button className="btn small" onClick={() => save(new Blob([csv(shown, list)], { type: 'text/csv' }), 'my-factory-cases.csv')}>
+            <Icon name="clipboard" /> Download as a spreadsheet (CSV)
+          </button>
+          <button className="btn small" disabled={making} onClick={() => void download()}>
+            <Icon name="clipboard" /> {making ? 'Making the slides…' : 'Download as PowerPoint'}
+          </button>
+        </div>
+        <p className="hint">These files are made on this device from your numbers.</p>
+      </section>
 
       <section aria-label="Your workgroups">
         <h2 className="section-title">Your workgroups, in the order an order goes through them</h2>
