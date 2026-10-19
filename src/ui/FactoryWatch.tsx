@@ -19,7 +19,7 @@ const SPEEDS: [number, string][] = [
 const hours = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
 // Good units in some orders.
 const unitsOf = (placed: Placed[]) => placed.reduce((sum, p) => sum + p.units, 0).toLocaleString('en-US')
-const clockText = (t: number) => `Day ${Math.floor(t / 24) + 1}, ${String(Math.floor(t % 24)).padStart(2, '0')}:00`
+const clockText = (t: number, day: number) => `Day ${Math.floor(t / day) + 1}, ${String(Math.floor(t % day)).padStart(2, '0')}:00`
 
 // How long an order has been in the factory against the cycle time wanted.
 const mood = (age: number, target: number) => (age > target ? 'hot' : age > target * 0.6 ? 'warm' : 'cool')
@@ -75,7 +75,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
     setClock(0)
     setPlaying(false)
   }
-  const meanGap = meanSize(factory) / (factory.demand / 24)
+  const meanGap = meanSize(factory) / (factory.demand / factory.hoursPerDay)
   const step = speed * meanGap * (TICK / 1000)
   useEffect(() => {
     if (!playing) return
@@ -146,7 +146,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
       <div className="watch-stats">
         <span>
           <small>Time</small>
-          <strong>{clockText(clock)}</strong>
+          <strong>{clockText(clock, factory.hoursPerDay)}</strong>
         </span>
         <span>
           <small>Orders arrived</small>

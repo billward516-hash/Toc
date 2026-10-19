@@ -3,7 +3,7 @@ import { cases, csv } from './cases.ts'
 import { recommend, ropeStudy, ropeWords } from './rope.ts'
 import { endOf, frame } from './watch.ts'
 import { need, tryRate } from './improve.ts'
-import { cleanFactory, EXAMPLE, meanSize, type Factory } from './model.ts'
+import { calendarFactor, cleanFactory, EXAMPLE, meanSize, type Factory } from './model.ts'
 import { verdict } from './words.ts'
 import { analyze, curve, effectiveRate, measure, reach, MOST, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
 
@@ -511,5 +511,49 @@ describe('a run for a quantity asked for', () => {
 
   it('stops at the most orders when the quantity is huge', () => {
     expect(schedule({ ...EXAMPLE, sizeMin: 1, sizeMax: 1 }, 1500, 1, 0, false, 1e9).arrive).toHaveLength(MOST)
+  })
+})
+
+describe('productive hours a day', () => {
+  const two: Factory = { ...EXAMPLE, hoursPerDay: 16, weekDays: 5 }
+
+  it('puts demand over the hours the factory runs, so capacity is per productive day', () => {
+    expect(analyze(two).capacity).toBeCloseTo((analyze(EXAMPLE).capacity * 16) / 24, 6)
+    expect(analyze(two).steps[1].utilization).toBeCloseTo((analyze(EXAMPLE).steps[1].utilization * 24) / 16, 6)
+  })
+
+  it('has orders arrive faster in productive time when the day is shorter, for the same demand a day', () => {
+    const long = schedule(EXAMPLE, EXAMPLE.demand, 1, 40)
+    const short = schedule(two, two.demand, 1, 40)
+    expect(short.arrive[39]).toBeCloseTo((long.arrive[39] * 16) / 24, 6)
+  })
+
+  it('leaves a 24 hour factory as it was, and keeps the same load when the demand is scaled to the hours', () => {
+    expect(measure({ ...EXAMPLE, hoursPerDay: 24 }).cycle).toBe(measure(EXAMPLE).cycle)
+    const scaled: Factory = { ...two, demand: (EXAMPLE.demand * 16) / 24 }
+    expect(analyze(scaled).load).toBeCloseTo(analyze(EXAMPLE).load, 6)
+    expect(measure(scaled).cycle).toBeCloseTo(measure(EXAMPLE).cycle, 6)
+  })
+
+  it('says what the cycle time is on the calendar when the factory stops nights and weekends, and not when it never does', () => {
+    expect(calendarFactor(EXAMPLE)).toBe(1)
+    expect(calendarFactor(two)).toBeCloseTo(168 / 80, 9)
+    const easy: Factory = { ...two, demand: 800 }
+    const a = analyze(easy)
+    const m = measure(easy)
+    const text = verdict(easy, a, m, reach(easy, a.capacity), whatIf(easy, m)).lines.join(' ')
+    expect(text).toContain('on the calendar')
+    expect(text).toContain('overnight and at the weekend')
+    const plain = analyze(EXAMPLE)
+    const mm = measure(EXAMPLE)
+    expect(verdict(EXAMPLE, plain, mm, reach(EXAMPLE, plain.capacity), whatIf(EXAMPLE, mm)).lines.join(' ')).not.toContain('on the calendar')
+  })
+
+  it('reads a factory saved before it as running 24 hours a day, and rejects a bad number', () => {
+    const { hoursPerDay, ...old } = EXAMPLE
+    expect(hoursPerDay).toBe(24)
+    expect(cleanFactory(JSON.parse(JSON.stringify(old)))?.hoursPerDay).toBe(24)
+    expect(cleanFactory({ ...EXAMPLE, hoursPerDay: 30 })?.hoursPerDay).toBe(24)
+    expect(cleanFactory(JSON.parse(JSON.stringify(two)))).toEqual(two)
   })
 })

@@ -47,7 +47,7 @@ export const NEAR = 0.1
 
 export function analyze(f: Factory): Analysis {
   const units = startsFor(meanSize(f), f.yieldPct)
-  const startsPerHour = (f.demand / 24) / (f.yieldPct / 100)
+  const startsPerHour = (f.demand / f.hoursPerDay) / (f.yieldPct / 100)
   const steps = f.steps.map((step): StepAnalysis => {
     const effective = effectiveRate(step, units)
     return { name: step.name, paper: step.tools * step.rate, effective, utilization: startsPerHour / effective, bottleneck: false }
@@ -56,7 +56,7 @@ export function analyze(f: Factory): Analysis {
   const bottlenecks = steps.flatMap((s, i) => (s.utilization >= top * (1 - NEAR) ? [i] : []))
   for (const i of bottlenecks) steps[i].bottleneck = true
   const slowest = Math.min(...steps.map((s) => s.effective))
-  const capacity = slowest * (f.yieldPct / 100) * 24
+  const capacity = slowest * (f.yieldPct / 100) * f.hoursPerDay
   return {
     steps,
     capacity,
@@ -128,7 +128,7 @@ export function schedule(f: Factory, demand: number, seed: number, count = ORDER
   const spread = SPREAD[f.variation]
   const sizeDraws = stream(seed, 'size')
   const gapDraws = stream(seed, 'arrive')
-  const meanGap = meanSize(f) / (demand / 24)
+  const meanGap = meanSize(f) / (demand / f.hoursPerDay)
   const arrive: number[] = []
   const units: number[] = []
   const sizes: number[] = []
@@ -206,7 +206,7 @@ export function schedule(f: Factory, demand: number, seed: number, count = ORDER
 // an empty factory, are left out of the averages.
 export function runFactory(f: Factory, demand: number, seed: number, rope = false): Measure {
   const run = schedule(f, demand, seed, ORDERS, rope)
-  const meanGap = meanSize(f) / (demand / 24)
+  const meanGap = meanSize(f) / (demand / f.hoursPerDay)
   const last = f.steps.length - 1
   const waits = f.steps.map(() => 0)
   let cycle = 0

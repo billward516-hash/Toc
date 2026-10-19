@@ -23,6 +23,14 @@ const VARIATIONS: [Variation, string][] = [
   ['high', 'A lot of variation'],
 ]
 
+// Hours a day and days a week the factory runs, at a click.
+const SCHEDULES: [number, number, string][] = [
+  [24, 7, '24 hours, 7 days'],
+  [24, 5, '24 hours, 5 days'],
+  [16, 5, '16 hours, 5 days'],
+  [8, 5, '8 hours, 5 days'],
+]
+
 const hours = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
 const units = (n: number) => Math.round(n).toLocaleString('en-US')
 
@@ -118,16 +126,27 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
               step={factory.perWeek ? 100 : LIMITS.demand.step}
               decimals={2}
               onChange={(wanted) => change({ ...factory, demand: Math.max(LIMITS.demand.min, wanted / days) })}
-              hint={`The factory can make about ${units(a.capacity * days)} a ${periodName(factory)}. At ${units(meanSize(factory))} good units an order, ${units(factory.demand)} a day is about ${(factory.demand / meanSize(factory)).toFixed(1)} orders a day, one every ${hours(24 / (factory.demand / meanSize(factory)))} hours.`}
+              hint={`The factory can make about ${units(a.capacity * days)} a ${periodName(factory)}. At ${units(meanSize(factory))} good units an order, ${units(factory.demand)} a day is about ${(factory.demand / meanSize(factory)).toFixed(1)} orders a day, one every ${hours(factory.hoursPerDay / (factory.demand / meanSize(factory)))} productive hours.`}
             />
-            {factory.perWeek && (
-              <NumberField label="Days in your week" value={factory.weekDays} min={LIMITS.weekDays.min} max={LIMITS.weekDays.max} onChange={(weekDays) => change({ ...factory, weekDays })} hint="Days the factory runs, 24 hours each." />
-            )}
-            <NumberField label="Cycle time wanted (hours)" value={factory.target} min={LIMITS.target.min} max={LIMITS.target.max} step={1} decimals={1} onChange={(target) => change({ ...factory, target })} hint="From an order's arrival to its leaving the last step." />
+            <NumberField label="Cycle time wanted (hours)" value={factory.target} min={LIMITS.target.min} max={LIMITS.target.max} step={1} decimals={1} onChange={(target) => change({ ...factory, target })} hint="From an order's arrival to its leaving the last step, in productive hours." />
             <NumberField label="Smallest batch (units)" value={factory.sizeMin} min={LIMITS.size.min} max={LIMITS.size.max} step={LIMITS.size.step} onChange={(sizeMin) => change({ ...factory, sizeMin, sizeMax: Math.max(sizeMin, factory.sizeMax) })} />
             <NumberField label="Largest batch (units)" value={factory.sizeMax} min={LIMITS.size.min} max={LIMITS.size.max} step={LIMITS.size.step} onChange={(sizeMax) => change({ ...factory, sizeMax, sizeMin: Math.min(sizeMax, factory.sizeMin) })} hint="A batch, order, or lot moves through every step together." />
             <NumberField label="Yield (% good)" value={factory.yieldPct} min={LIMITS.yieldPct.min} max={LIMITS.yieldPct.max} step={1} onChange={(yieldPct) => change({ ...factory, yieldPct })} hint="Lower yield means more units started for the same good ones." />
           </div>
+          <fieldset className="lever">
+            <legend>When the factory runs</legend>
+            <div className="chips">
+              {SCHEDULES.map(([hoursPerDay, weekDays, text]) => (
+                <button key={text} className={`chip${factory.hoursPerDay === hoursPerDay && factory.weekDays === weekDays ? ' on' : ''}`} aria-pressed={factory.hoursPerDay === hoursPerDay && factory.weekDays === weekDays} onClick={() => change({ ...factory, hoursPerDay, weekDays })}>
+                  {text}
+                </button>
+              ))}
+            </div>
+            <div className="field-grid">
+              <NumberField label="Productive hours a day" value={factory.hoursPerDay} min={LIMITS.hoursPerDay.min} max={LIMITS.hoursPerDay.max} onChange={(hoursPerDay) => change({ ...factory, hoursPerDay })} hint="Hours the tools can run: 24 never stops, 16 is two shifts, 8 is one." />
+              <NumberField label="Days a week the factory runs" value={factory.weekDays} min={LIMITS.weekDays.min} max={LIMITS.weekDays.max} onChange={(weekDays) => change({ ...factory, weekDays })} hint={`That is ${factory.hoursPerDay * factory.weekDays} productive hours a week.`} />
+            </div>
+          </fieldset>
           <fieldset className="lever">
             <legend>Count units per</legend>
             <div className="chips">

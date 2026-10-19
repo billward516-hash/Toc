@@ -1,4 +1,4 @@
-import { periodDays, periodName, type Factory } from './model.ts'
+import { calendarFactor, periodDays, periodName, type Factory } from './model.ts'
 import type { Analysis, Measure, Reach, WhatIf } from './sim.ts'
 
 // What the numbers mean, in plain words, for the person looking at their factory.
@@ -29,6 +29,7 @@ export function verdict(f: Factory, a: Analysis, m: Measure, r: Reach, tries: Wh
     )
   } else {
     lines.push(`An order takes about ${hours(m.cycle)} hours: ${hours(m.working)} being worked on and ${hours(m.waiting)} waiting in piles. You wanted ${hours(f.target)}.`)
+    if (calendarFactor(f) > 1.05) lines.push(`Those are productive hours, the hours the factory runs. With it closed ${f.hoursPerDay < 24 ? 'overnight' : ''}${f.hoursPerDay < 24 && f.weekDays < 7 ? ' and ' : ''}${f.weekDays < 7 ? 'at the weekend' : ''}, an order on the calendar takes about ${hours(m.cycle * calendarFactor(f))} hours, ${(m.cycle * calendarFactor(f) / 24).toFixed(1)} days.`)
     const longest = m.waits.indexOf(Math.max(...m.waits))
     if (m.waiting > 0.1 * m.cycle) lines.push(`The longest wait is in front of ${a.steps[longest].name}: about ${hours(m.waits[longest])} hours.`)
   }
