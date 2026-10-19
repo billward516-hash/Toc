@@ -5,7 +5,7 @@ import { endOf, frame } from './watch.ts'
 import { need, tryRate } from './improve.ts'
 import { cleanFactory, EXAMPLE, meanSize, type Factory } from './model.ts'
 import { verdict } from './words.ts'
-import { analyze, curve, effectiveRate, measure, reach, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
+import { analyze, curve, effectiveRate, measure, reach, MOST, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
 
 const one = (patch: Partial<Factory['steps'][number]>, f: Factory = EXAMPLE): Factory => ({ ...f, steps: f.steps.map((s, i) => (i === 1 ? { ...s, ...patch } : s)) })
 const load = (f: Factory, share: number): Factory => ({ ...f, demand: share * analyze(f).capacity })
@@ -487,5 +487,29 @@ describe('how demand becomes orders', () => {
     const placed = [...fr.waiting.flat(), ...fr.working.flat(), ...fr.held]
     expect(placed.reduce((sum, p) => sum + p.units, 0) + fr.shippedUnits).toBe(fr.requested)
     placed.forEach((p) => expect(p.units).toBe(run.sizes[p.order - 1]))
+  })
+})
+
+describe('a run for a quantity asked for', () => {
+  it('asks for exactly that many good units, trimming the last order, and nothing else', () => {
+    for (const asked of [15000, 105000, 777]) {
+      const run = schedule(EXAMPLE, 15000, 1, 0, false, asked)
+      expect(run.sizes.reduce((sum, n) => sum + n, 0)).toBe(asked)
+      run.sizes.forEach((size) => {
+        expect(size).toBeGreaterThanOrEqual(1)
+        expect(size).toBeLessThanOrEqual(EXAMPLE.sizeMax)
+      })
+      expect(frame(run, endOf(run) + 1).requested).toBe(asked)
+    }
+  })
+
+  it('draws the same orders as a run by count, up to the trim, so nothing else changes', () => {
+    const counted = schedule(EXAMPLE, 1500, 1, 40)
+    const asked = schedule(EXAMPLE, 1500, 1, 0, false, counted.sizes.slice(0, 30).reduce((sum, n) => sum + n, 0))
+    expect(asked.sizes).toEqual(counted.sizes.slice(0, 30))
+  })
+
+  it('stops at the most orders when the quantity is huge', () => {
+    expect(schedule({ ...EXAMPLE, sizeMin: 1, sizeMax: 1 }, 1500, 1, 0, false, 1e9).arrive).toHaveLength(MOST)
   })
 })

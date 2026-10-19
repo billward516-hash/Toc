@@ -116,10 +116,15 @@ export function ropeOf(f: Factory): { at: number; bottleneck: number } | null {
   return { at: Math.min(f.rope.at, bottleneck - 1), bottleneck }
 }
 
-// `orders` orders arrive, unevenly, at `demand` good units a day, each a size drawn between the smallest
+// The most orders drawn when a run is for a quantity asked for.
+export const MOST = 5000
+
+// `count` orders arrive, unevenly, at `demand` good units a day, each a size drawn between the smallest
 // and largest, and go through the steps in order, waiting their turn at each. With `rope`, the rope's
 // workgroup starts an order only once the order `buffer` places ahead of it has started at the bottleneck.
-export function schedule(f: Factory, demand: number, seed: number, orders = ORDERS, rope = false): Schedule {
+// With `asked`, orders arrive until exactly that many good units have been asked for (the last order is
+// trimmed to fit) instead of a count of orders.
+export function schedule(f: Factory, demand: number, seed: number, count = ORDERS, rope = false, asked?: number): Schedule {
   const spread = SPREAD[f.variation]
   const sizeDraws = stream(seed, 'size')
   const gapDraws = stream(seed, 'arrive')
@@ -128,13 +133,17 @@ export function schedule(f: Factory, demand: number, seed: number, orders = ORDE
   const units: number[] = []
   const sizes: number[] = []
   let t = 0
-  for (let k = 0; k < orders; k++) {
+  let wanted = 0
+  for (let k = 0; asked === undefined ? k < count : wanted < asked && k < MOST; k++) {
     t += meanGap * (1 - spread.arrival + 2 * spread.arrival * gapDraws())
     arrive.push(t)
-    const size = Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin))
+    let size = Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin))
+    if (asked !== undefined) size = Math.max(1, Math.min(size, Math.round(asked) - wanted))
+    wanted += size
     sizes.push(size)
     units.push(startsFor(size, f.yieldPct))
   }
+  const orders = arrive.length
   const tie = rope ? ropeOf({ ...f, rope: { ...f.rope, on: true } }) : null
   const out: Schedule = { arrive, sizes, units, ready: [], start: [], done: [], tool: [], held: new Array<number>(orders).fill(0), ropeAt: tie?.at ?? null }
   const grid = () => f.steps.map(() => new Array<number>(orders).fill(0))

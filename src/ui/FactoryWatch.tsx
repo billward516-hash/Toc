@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Factory } from '../factory/model.ts'
 import { meanSize } from '../factory/model.ts'
-import { schedule, type Analysis } from '../factory/sim.ts'
+import { MOST, schedule, type Analysis } from '../factory/sim.ts'
 import { endOf, frame, type Placed } from '../factory/watch.ts'
 import { Icon } from './icons.tsx'
 
-const ORDERS = 150
 const SHOWN_TOOLS = 12
 const SHOWN_WAITING = 14
 const TICK = 50
@@ -56,7 +55,18 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
   // Whether to watch with the yield problem from the rope card, so the rope's work can be seen.
   const [trouble, setTrouble] = useState(false)
   const watched = useMemo(() => (trouble ? { ...factory, yieldPct: Math.max(1, factory.yieldPct - factory.rope.issue) } : factory), [factory, trouble])
-  const run = useMemo(() => schedule(watched, watched.demand, luck, ORDERS, watched.rope.on), [watched, luck])
+  // How long the run is: orders arrive until what is asked for over that many days has been asked for.
+  const [span, setSpan] = useState<'day' | 'week' | 'month'>(factory.perWeek ? 'week' : 'day')
+  // Counting per week or per day on the screen sets the run to match.
+  const [counted, setCounted] = useState(factory.perWeek)
+  if (counted !== factory.perWeek) {
+    setCounted(factory.perWeek)
+    setSpan(factory.perWeek ? 'week' : 'day')
+  }
+  const days = span === 'day' ? 1 : span === 'week' ? watched.weekDays : 4 * watched.weekDays
+  const asked = Math.round(watched.demand * days)
+  const run = useMemo(() => schedule(watched, watched.demand, luck, 0, watched.rope.on, asked), [watched, luck, asked])
+  const orderCount = run.arrive.length
   const end = useMemo(() => endOf(run), [run])
   // New numbers or new luck start a new run, paused.
   const [seen, setSeen] = useState(run)
@@ -94,7 +104,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
     <section className="card watch" aria-label="Watch it run">
       <h2 className="card-title">Watch it run</h2>
       <p className="hint">
-        {Math.round(watched.demand).toLocaleString('en-US')} good units a day is an order about every {hours(meanGap)} hours, {perDay.toFixed(1)} a day, since an order averages {Math.round(meanSize(watched)).toLocaleString('en-US')} good units. This run follows {ORDERS} orders: {totalRequested.toLocaleString('en-US')} good units asked for in all. Orders arrive as your numbers say, wait in front of each workgroup, are worked on, and ship. Each order is a numbered block, and its color is how long it has been in the factory against the {hours(factory.target)} hours you want: green is well inside, amber is getting close, red is over.
+        {Math.round(watched.demand).toLocaleString('en-US')} good units a day is an order about every {hours(meanGap)} hours, {perDay.toFixed(1)} a day, since an order averages {Math.round(meanSize(watched)).toLocaleString('en-US')} good units. This run covers {days === 1 ? 'one day' : `${days} days`}: {days === 1 ? '' : `${Math.round(watched.demand).toLocaleString('en-US')} a day × ${days} = `}{totalRequested.toLocaleString('en-US')} good units asked for, in {orderCount} orders{orderCount >= MOST ? ' (the first ' + MOST.toLocaleString('en-US') + ' only)' : ''}. Orders arrive as your numbers say, wait in front of each workgroup, are worked on, and ship. Each order is a numbered block, and its color is how long it has been in the factory against the {hours(factory.target)} hours you want: green is well inside, amber is getting close, red is over.
       </p>
       <div className="watch-controls">
         <button className="btn small" onClick={() => (finished ? (setClock(0), setPlaying(true)) : setPlaying(!playing))}>
@@ -115,6 +125,19 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
             <input type="checkbox" checked={trouble} onChange={(event) => setTrouble(event.target.checked)} /> With the yield problem ({Math.max(1, factory.yieldPct - factory.rope.issue)}%)
           </label>
         )}
+        <div className="chips" role="group" aria-label="Length of the run">
+          {(
+            [
+              ['day', 'One day'],
+              ['week', `${watched.weekDays} ${watched.weekDays === 1 ? 'day' : 'days'}`],
+              ['month', `${4 * watched.weekDays} days`],
+            ] as const
+          ).map(([id, text]) => (
+            <button key={id} className={`chip${span === id ? ' on' : ''}`} aria-pressed={span === id} onClick={() => setSpan(id)}>
+              {text}
+            </button>
+          ))}
+        </div>
         <button className="btn small" onClick={() => setLuck(luck + 1)}>
           <Icon name="swap" /> Different luck
         </button>
@@ -128,7 +151,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
         <span>
           <small>Orders arrived</small>
           <strong>
-            {now.arrived} of {ORDERS}
+            {now.arrived} of {orderCount}
           </strong>
         </span>
         <span>
@@ -212,7 +235,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
       </div>
       {finished && (
         <p className="hint">
-          All {ORDERS} orders shipped: {hours(now.cycle ?? 0)} hours on average, against the {hours(factory.target)} you want. {now.cycle !== null && now.cycle <= factory.target ? 'Inside it.' : 'Over it.'}
+          All {orderCount} orders shipped: {hours(now.cycle ?? 0)} hours on average, against the {hours(factory.target)} you want. {now.cycle !== null && now.cycle <= factory.target ? 'Inside it.' : 'Over it.'}
         </p>
       )}
     </section>
