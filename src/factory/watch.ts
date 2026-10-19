@@ -7,6 +7,8 @@ export interface Placed {
   // Hours since the order arrived.
   age: number
   tool: number
+  // Good units the order asks for.
+  units: number
 }
 
 export interface Frame {
@@ -48,9 +50,9 @@ export function frame(run: Schedule, t: number): Frame {
     }
     for (let s = 0; s < steps; s++) {
       if (t < run.ready[s][k]) break
-      if (s === run.ropeAt && t < run.ready[s][k] + run.held[k]) held.push({ order: k + 1, age: t - arrival, tool: 0 })
-      else if (t < run.start[s][k]) waiting[s].push({ order: k + 1, age: t - arrival, tool: 0 })
-      else if (t < run.done[s][k]) working[s].push({ order: k + 1, age: t - arrival, tool: run.tool[s][k] })
+      if (s === run.ropeAt && t < run.ready[s][k] + run.held[k]) held.push({ order: k + 1, age: t - arrival, tool: 0, units: run.sizes[k] })
+      else if (t < run.start[s][k]) waiting[s].push({ order: k + 1, age: t - arrival, tool: 0, units: run.sizes[k] })
+      else if (t < run.done[s][k]) working[s].push({ order: k + 1, age: t - arrival, tool: run.tool[s][k], units: run.sizes[k] })
       else continue
       break
     }

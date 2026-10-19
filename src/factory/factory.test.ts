@@ -481,4 +481,11 @@ describe('how demand becomes orders', () => {
     expect(end.shippedUnits).toBe(total)
     expect(frame(run, 0).requested).toBe(0)
   })
+
+  it('gives the good units of every order placed, so the units in the factory add up', () => {
+    const fr = frame(run, 100)
+    const placed = [...fr.waiting.flat(), ...fr.working.flat(), ...fr.held]
+    expect(placed.reduce((sum, p) => sum + p.units, 0) + fr.shippedUnits).toBe(fr.requested)
+    placed.forEach((p) => expect(p.units).toBe(run.sizes[p.order - 1]))
+  })
 })

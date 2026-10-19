@@ -18,6 +18,8 @@ const SPEEDS: [number, string][] = [
 ]
 
 const hours = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
+// Good units in some orders.
+const unitsOf = (placed: Placed[]) => placed.reduce((sum, p) => sum + p.units, 0).toLocaleString('en-US')
 const clockText = (t: number) => `Day ${Math.floor(t / 24) + 1}, ${String(Math.floor(t % 24)).padStart(2, '0')}:00`
 
 // How long an order has been in the factory against the cycle time wanted.
@@ -81,6 +83,8 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
 
   const now = useMemo(() => frame(run, clock), [run, clock])
   const inFactory = now.arrived - now.shipped - now.held.length
+  const inFactoryUnits = now.requested - now.shippedUnits - now.held.reduce((sum, p) => sum + p.units, 0)
+  const waitingUnits = now.waiting.flat().reduce((sum, p) => sum + p.units, 0)
   const waitingNow = now.waiting.reduce((sum, w) => sum + w.length, 0)
   const finished = clock >= end
   const totalRequested = useMemo(() => run.sizes.reduce((sum, n) => sum + n, 0), [run])
@@ -135,14 +139,18 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
         </span>
         <span>
           <small>In the factory</small>
-          <strong>{inFactory}</strong>
+          <strong>
+            {inFactory} orders, {inFactoryUnits.toLocaleString('en-US')} units
+          </strong>
         </span>
         <span>
           <small>Waiting in piles</small>
-          <strong>{waitingNow}</strong>
+          <strong>
+            {waitingNow} orders, {waitingUnits.toLocaleString('en-US')} units
+          </strong>
         </span>
         <span>
-          <small>Shipped</small>
+          <small>Produced and shipped</small>
           <strong>
             {now.shipped} orders, {now.shippedUnits.toLocaleString('en-US')} units
           </strong>
@@ -171,7 +179,9 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
               </div>
               {i === run.ropeAt && (
                 <>
-                  <small>Held back by the rope: {now.held.length}</small>
+                  <small>
+                    Held back by the rope: {now.held.length} orders, {unitsOf(now.held)} units
+                  </small>
                   <div className="order-stack" aria-hidden="true">
                     {now.held.slice(0, SHOWN_WAITING).map((p) => (
                       <span key={p.order} className="order-chip held">
@@ -182,9 +192,13 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
                   </div>
                 </>
               )}
-              <small>Working on</small>
+              <small>
+                Working on: {working.length} {working.length === 1 ? 'order' : 'orders'}, {unitsOf(working)} units
+              </small>
               <Orders placed={working} target={factory.target} limit={SHOWN_TOOLS} />
-              <small>Waiting: {now.waiting[i].length}</small>
+              <small>
+                Waiting: {now.waiting[i].length} {now.waiting[i].length === 1 ? 'order' : 'orders'}, {unitsOf(now.waiting[i])} units
+              </small>
               <Orders placed={now.waiting[i]} target={factory.target} limit={SHOWN_WAITING} />
             </div>
           )
