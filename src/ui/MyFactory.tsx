@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { EXAMPLE, LIMITS, NEW_STEP, periodDays, periodName, type Factory, type Step, type Variation } from '../factory/model.ts'
+import { EXAMPLE, LIMITS, meanSize, NEW_STEP, periodDays, periodName, type Factory, type Step, type Variation } from '../factory/model.ts'
 import { cases, csv, rows } from '../factory/cases.ts'
 import { analyze, curve, measure, reach, whatIf } from '../factory/sim.ts'
 import { verdict } from '../factory/words.ts'
@@ -118,7 +118,7 @@ export function MyFactory({ initial, onSave, onExit }: MyFactoryProps) {
               step={factory.perWeek ? 100 : LIMITS.demand.step}
               decimals={2}
               onChange={(wanted) => change({ ...factory, demand: Math.max(LIMITS.demand.min, wanted / days) })}
-              hint={`The factory can make about ${units(a.capacity * days)} a ${periodName(factory)}.`}
+              hint={`The factory can make about ${units(a.capacity * days)} a ${periodName(factory)}. At ${units(meanSize(factory))} good units an order, ${units(factory.demand)} a day is about ${(factory.demand / meanSize(factory)).toFixed(1)} orders a day, one every ${hours(24 / (factory.demand / meanSize(factory)))} hours.`}
             />
             {factory.perWeek && (
               <NumberField label="Days in your week" value={factory.weekDays} min={LIMITS.weekDays.min} max={LIMITS.weekDays.max} onChange={(weekDays) => change({ ...factory, weekDays })} hint="Days the factory runs, 24 hours each." />

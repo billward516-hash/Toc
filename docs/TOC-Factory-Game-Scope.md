@@ -492,3 +492,5 @@ Availability: each workgroup has an availability, the percent of the time its to
 The What if card's try box takes an availability as well as a speed, shows the result of both together, has a button to try the availability that is needed, and applies both to the workgroup.
 
 On a large screen My factory expands to the full width, and the watched line wraps its workgroups (and the shipped box) onto further rows when there are more than fit, instead of scrolling sideways.
+
+How demand becomes orders: demand is good units a day, not a count of orders. Orders arrive on average one every (average order size / demand a day) x 24 hours, so a day brings demand over the average size orders, each drawn between the smallest and largest, with uneven gaps. The demand box says this in numbers, and the watch card shows the orders arrived and the good units asked for, so far and in all, and the units shipped; a run is a fixed number of orders (150 watched, 320 measured), not a day count.

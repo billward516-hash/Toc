@@ -3,7 +3,7 @@ import { cases, csv } from './cases.ts'
 import { recommend, ropeStudy, ropeWords } from './rope.ts'
 import { endOf, frame } from './watch.ts'
 import { need, tryRate } from './improve.ts'
-import { cleanFactory, EXAMPLE, type Factory } from './model.ts'
+import { cleanFactory, EXAMPLE, meanSize, type Factory } from './model.ts'
 import { verdict } from './words.ts'
 import { analyze, curve, effectiveRate, measure, reach, runFactory, schedule, startsFor, stepHours, whatIf } from './sim.ts'
 
@@ -453,5 +453,32 @@ describe('what if: trying an availability', () => {
     const set: Factory = { ...f, steps: f.steps.map((s, i) => (i === 1 ? { ...s, availability: needed } : s)) }
     expect(trial.cycle).toBe(measure(set).cycle)
     expect(tryRate(f, 1, f.steps[1].rate, 60).keepsUp).toBe(false)
+  })
+})
+
+describe('how demand becomes orders', () => {
+  const run = schedule(EXAMPLE, EXAMPLE.demand, 1, 150)
+
+  it('has orders come every average size over demand a day, so a day brings demand over the average size orders', () => {
+    const gap = run.arrive[run.arrive.length - 1] / run.arrive.length
+    const expected = meanSize(EXAMPLE) / (EXAMPLE.demand / 24)
+    expect(gap).toBeGreaterThan(expected * 0.9)
+    expect(gap).toBeLessThan(expected * 1.1)
+  })
+
+  it('draws every order between the smallest and largest, and starts enough for the yield', () => {
+    run.sizes.forEach((size, k) => {
+      expect(size).toBeGreaterThanOrEqual(EXAMPLE.sizeMin)
+      expect(size).toBeLessThanOrEqual(EXAMPLE.sizeMax)
+      expect(run.units[k]).toBe(startsFor(size, EXAMPLE.yieldPct))
+    })
+  })
+
+  it('adds up the good units asked for, and ships them all by the end', () => {
+    const total = run.sizes.reduce((sum, n) => sum + n, 0)
+    const end = frame(run, endOf(run) + 1)
+    expect(end.requested).toBe(total)
+    expect(end.shippedUnits).toBe(total)
+    expect(frame(run, 0).requested).toBe(0)
   })
 })

@@ -83,12 +83,14 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
   const inFactory = now.arrived - now.shipped - now.held.length
   const waitingNow = now.waiting.reduce((sum, w) => sum + w.length, 0)
   const finished = clock >= end
+  const totalRequested = useMemo(() => run.sizes.reduce((sum, n) => sum + n, 0), [run])
+  const perDay = watched.demand / meanSize(watched)
 
   return (
     <section className="card watch" aria-label="Watch it run">
       <h2 className="card-title">Watch it run</h2>
       <p className="hint">
-        Orders arrive as your numbers say, wait in front of each workgroup, are worked on, and ship. Each order is a numbered block, and its color is how long it has been in the factory against the {hours(factory.target)} hours you want: green is well inside, amber is getting close, red is over.
+        {Math.round(watched.demand).toLocaleString('en-US')} good units a day is an order about every {hours(meanGap)} hours, {perDay.toFixed(1)} a day, since an order averages {Math.round(meanSize(watched)).toLocaleString('en-US')} good units. This run follows {ORDERS} orders: {totalRequested.toLocaleString('en-US')} good units asked for in all. Orders arrive as your numbers say, wait in front of each workgroup, are worked on, and ship. Each order is a numbered block, and its color is how long it has been in the factory against the {hours(factory.target)} hours you want: green is well inside, amber is getting close, red is over.
       </p>
       <div className="watch-controls">
         <button className="btn small" onClick={() => (finished ? (setClock(0), setPlaying(true)) : setPlaying(!playing))}>
@@ -120,6 +122,18 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
           <strong>{clockText(clock)}</strong>
         </span>
         <span>
+          <small>Orders arrived</small>
+          <strong>
+            {now.arrived} of {ORDERS}
+          </strong>
+        </span>
+        <span>
+          <small>Good units asked for</small>
+          <strong>
+            {now.requested.toLocaleString('en-US')} of {totalRequested.toLocaleString('en-US')}
+          </strong>
+        </span>
+        <span>
           <small>In the factory</small>
           <strong>{inFactory}</strong>
         </span>
@@ -129,7 +143,9 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
         </span>
         <span>
           <small>Shipped</small>
-          <strong>{now.shipped}</strong>
+          <strong>
+            {now.shipped} orders, {now.shippedUnits.toLocaleString('en-US')} units
+          </strong>
         </span>
         <span className={now.cycle !== null && now.cycle > factory.target ? 'over' : ''}>
           <small>Cycle time so far</small>
@@ -176,6 +192,7 @@ export function FactoryWatch({ factory, analysis }: WatchProps) {
         <div className="watch-step done">
           <h3>Shipped</h3>
           <strong className="watch-count">{now.shipped}</strong>
+          <small>{now.shippedUnits.toLocaleString('en-US')} good units</small>
           <small>{now.cycle === null ? 'nothing yet' : `${hours(now.cycle)} h on average`}</small>
         </div>
       </div>

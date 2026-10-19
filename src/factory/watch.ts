@@ -18,6 +18,9 @@ export interface Frame {
   held: Placed[]
   arrived: number
   shipped: number
+  // Good units asked for by the orders arrived so far, and by those shipped.
+  requested: number
+  shippedUnits: number
   // Average hours from arrival to leaving the last step, over the orders shipped so far; null before any.
   cycle: number | null
 }
@@ -28,14 +31,18 @@ export function frame(run: Schedule, t: number): Frame {
   const working: Placed[][] = Array.from({ length: steps }, () => [])
   const held: Placed[] = []
   let arrived = 0
+  let requested = 0
+  let shippedUnits = 0
   let shipped = 0
   let total = 0
   run.arrive.forEach((arrival, k) => {
     if (arrival > t) return
     arrived++
+    requested += run.sizes[k]
     const last = run.done[steps - 1][k]
     if (last <= t) {
       shipped++
+      shippedUnits += run.sizes[k]
       total += last - arrival
       return
     }
@@ -48,7 +55,7 @@ export function frame(run: Schedule, t: number): Frame {
       break
     }
   })
-  return { clock: t, waiting, working, held, arrived, shipped, cycle: shipped > 0 ? total / shipped : null }
+  return { clock: t, waiting, working, held, arrived, shipped, requested, shippedUnits, cycle: shipped > 0 ? total / shipped : null }
 }
 
 // When the last order of the run ships.

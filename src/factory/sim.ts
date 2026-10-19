@@ -95,6 +95,8 @@ const WARM = 80
 // hours each order was held back at the rope's workgroup, which is part of its wait there.
 export interface Schedule {
   arrive: number[]
+  // Good units each order asks for, and the units started to get them at the yield (a few more).
+  sizes: number[]
   units: number[]
   ready: number[][]
   start: number[][]
@@ -124,14 +126,17 @@ export function schedule(f: Factory, demand: number, seed: number, orders = ORDE
   const meanGap = meanSize(f) / (demand / 24)
   const arrive: number[] = []
   const units: number[] = []
+  const sizes: number[] = []
   let t = 0
   for (let k = 0; k < orders; k++) {
     t += meanGap * (1 - spread.arrival + 2 * spread.arrival * gapDraws())
     arrive.push(t)
-    units.push(startsFor(Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin)), f.yieldPct))
+    const size = Math.round(f.sizeMin + sizeDraws() * (f.sizeMax - f.sizeMin))
+    sizes.push(size)
+    units.push(startsFor(size, f.yieldPct))
   }
   const tie = rope ? ropeOf({ ...f, rope: { ...f.rope, on: true } }) : null
-  const out: Schedule = { arrive, units, ready: [], start: [], done: [], tool: [], held: new Array<number>(orders).fill(0), ropeAt: tie?.at ?? null }
+  const out: Schedule = { arrive, sizes, units, ready: [], start: [], done: [], tool: [], held: new Array<number>(orders).fill(0), ropeAt: tie?.at ?? null }
   const grid = () => f.steps.map(() => new Array<number>(orders).fill(0))
   if (tie) {
     // Order by order, since the rope ties an order to ones ahead of it at a later step.
