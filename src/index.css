@@ -5149,14 +5149,13 @@ p.exam-taught,
   font-weight: 700;
 }
 .watch-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr));
   gap: 12px;
-  overflow-x: auto;
   padding: 4px 2px 10px;
 }
 .watch-step {
-  flex: 1 0 150px;
-  min-width: 150px;
+  min-width: 0;
   min-height: 260px;
   display: flex;
   flex-direction: column;
@@ -5285,4 +5284,9 @@ p.exam-taught,
   background: var(--card);
   color: var(--ink);
   max-width: 320px;
+}
+
+/* On a big screen My factory uses all of it: the watched line grows to the full width and wraps to another row when it has more workgroups than fit. */
+.screen.my-factory {
+  max-width: none;
 }

@@ -490,3 +490,5 @@ What if: for the bottleneck (or any workgroup picked), the units an hour per too
 Availability: each workgroup has an availability, the percent of the time its tools are up (default 100, the example's are made up). It stretches the time an order takes there by 1/availability, so it lowers the workgroup's capacity, can move the bottleneck, and lengthens the cycle time, in the numbers, the curve, the watched run, and the what-ifs. The What if card also says the availability a workgroup needs, at today's speed, to keep up and to meet the cycle time, or that even always being up would not be enough. Downtime is averaged into the time, not played as random breakdowns, so it does not add variation of its own.
 
 The What if card's try box takes an availability as well as a speed, shows the result of both together, has a button to try the availability that is needed, and applies both to the workgroup.
+
+On a large screen My factory expands to the full width, and the watched line wraps its workgroups (and the shipped box) onto further rows when there are more than fit, instead of scrolling sideways.
