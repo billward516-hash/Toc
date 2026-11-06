@@ -530,8 +530,12 @@ button {
 
 .dashboard dd {
   margin: 0;
+  min-width: 4ch;
   font-size: 22px;
   font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {
@@ -3426,7 +3430,7 @@ button {
   list-style: none;
 }
 
-.step {
+.steps .step {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   align-items: start;
@@ -3434,7 +3438,7 @@ button {
 }
 
 @media (max-width: 600px) {
-  .step {
+  .steps .step {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
@@ -3728,7 +3732,7 @@ button {
     margin-bottom: 12px;
   }
 
-  .step {
+  .steps .step {
     break-inside: avoid;
   }
 }
@@ -4265,6 +4269,56 @@ p.exam-taught,
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* Printing a certificate: the certificate alone, on a landscape sheet. */
+@page certificate {
+  size: landscape;
+  margin: 0;
+}
+
+@media print {
+  body:has(.certificate-page) {
+    page: certificate;
+  }
+
+  body:has(.certificate-page) #root > :not(.certificate-page) {
+    display: none !important;
+  }
+
+  .certificate-page {
+    page: certificate;
+  }
+
+  .certificate-page .level-header,
+  .certificate-page .certificate-card > :not(.certificate-preview) {
+    display: none !important;
+  }
+
+  .certificate-page .certificate-card {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .certificate-page .certificate-preview {
+    width: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .certificate-page .certificate-preview img {
+    width: 100%;
+    height: auto;
+  }
 }
 
 .exam-problem {

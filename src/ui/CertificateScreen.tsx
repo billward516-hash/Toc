@@ -6,7 +6,7 @@ import { NAME_MAX, type CertificateRecord } from '../exam/record.ts'
 import { percentOf } from '../exam/rules.ts'
 import { Icon } from './icons.tsx'
 import { ScreenHeader } from './parts.tsx'
-import { shareOrSave } from './share.ts'
+import { downloadFile, shareOrSave } from './share.ts'
 
 interface CertificateScreenProps {
   // The certificate already made, if there is one.
@@ -97,8 +97,13 @@ export function CertificateScreen({ certificate, result, name, onSave, onBack }:
     setNote(how === 'saved' ? 'Saved. On an iPad, look in the Downloads list in Safari, or in the Files app.' : '')
   }
 
+  const save = (file: File) => {
+    downloadFile(file.name, file)
+    setNote('Saved. On an iPad, look in the Downloads list in Safari, or in the Files app.')
+  }
+
   return (
-    <div className="screen exam">
+    <div className="screen exam certificate-page">
       <ScreenHeader
         chip="Certificate"
         title="Your certificate"
@@ -170,7 +175,7 @@ export function CertificateScreen({ certificate, result, name, onSave, onBack }:
               <button className="btn primary big" disabled={!ready} onClick={() => ready && void keep(ready.pdf)}>
                 <Icon name="award" /> Save or share the PDF
               </button>
-              <button className="btn" disabled={!ready} onClick={() => ready && void keep(ready.png)}>
+              <button className="btn" disabled={!ready} onClick={() => ready && save(ready.png)}>
                 Save as a picture
               </button>
               <button className="btn" onClick={() => setEditing(true)}>
