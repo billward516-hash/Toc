@@ -17,10 +17,12 @@
     try { localStorage.setItem(KEY, JSON.stringify(store)) } catch { /* ignore */ }
   }
   const emptyHints = () => ({ requested: 0, offered: 0, accepted: 0, declined: 0 })
-  function record(cath, phase) {
+  const priorIds = (cath, idx) => cath.phases.slice(0, idx).flatMap((p) => p.pieces.map((q) => q.id))
+  function record(cath, idx) {
+    const phase = cath.phases[idx]
     const c = (store.c[cath.id] = store.c[cath.id] || {})
     const r = (c[phase.id] = c[phase.id] || {})
-    r.placed = R.cleanPlaced(phase, r.placed)
+    r.placed = R.cleanPlaced(phase, r.placed, priorIds(cath, idx))
     r.hints = Object.assign(emptyHints(), r.hints)
     r.done = R.isComplete(phase, r.placed)
     return r
@@ -66,12 +68,20 @@
   function syncMute() { $('mute').innerHTML = store.muted ? '&#128263;' : '&#128266;' }
 
   // ---------- drawing ----------
-  const pieceMarkup = (p, cls = '') =>
-    `<g class="piece ${cls} ${p.tone === '#6f8fb0' ? 'glass' : 'warm'}" style="--tone:${p.tone}">` +
-    `<path class="body" fill-rule="evenodd" d="${p.d}"/><g class="marks">${p.marks || ''}</g></g>`
+  const GLASS = '#6f8fb0'
+  const pieceMarkup = (p, cls = '', tex = 'stoneTex') => {
+    const glass = p.tone === GLASS
+    const sil = cls.includes('sil')
+    const rule = `fill-rule="evenodd" d="${p.d}"`
+    return `<g class="piece ${cls} ${glass ? 'glass' : 'warm'}" style="--tone:${p.tone}">` +
+      `<path class="body" ${rule}${glass || sil ? '' : ` filter="url(#${tex})"`}/>` +
+      (glass || sil ? '' : `<path class="courses" ${rule} fill="url(#ashlar)"/><path class="shade" ${rule} fill="url(#shade)"/>`) +
+      (sil ? '' : `<path class="edge" ${rule}/>`) +
+      `<g class="marks">${p.marks || ''}</g></g>`
+  }
   function thumb(p) {
     const [x, y, w, h] = p.box
-    return `<svg viewBox="${x - 6} ${y - 6} ${w + 12} ${h + 12}" preserveAspectRatio="xMidYMid meet">${pieceMarkup(p)}</svg>`
+    return `<svg viewBox="${x - 6} ${y - 6} ${w + 12} ${h + 12}" preserveAspectRatio="xMidYMid meet">${pieceMarkup(p, '', 'stoneTexTray')}</svg>`
   }
   function el(name, attrs = {}) {
     const e = document.createElementNS(NS, name)
@@ -79,6 +89,52 @@
     return e
   }
   const center = (b) => [b[0] + b[2] / 2, b[1] + b[3] / 2]
+
+  // Shared drawing resources: stone grain and relief, mortar courses, light and shade, glass, sky.
+  document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <filter id="stoneTex" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="4" seed="11" result="noise"/>
+      <feDiffuseLighting in="noise" lighting-color="#fff" surfaceScale="2.4" diffuseConstant="1.15" result="light"><feDistantLight azimuth="235" elevation="58"/></feDiffuseLighting>
+      <feComponentTransfer in="light" result="light2"><feFuncR type="linear" slope="1.35"/><feFuncG type="linear" slope="1.35"/><feFuncB type="linear" slope="1.35"/></feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="light2" mode="multiply" result="mix"/>
+      <feComposite in="mix" in2="SourceGraphic" operator="in"/>
+    </filter>
+    <filter id="stoneTexTray" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="3" seed="11" result="noise"/>
+      <feDiffuseLighting in="noise" lighting-color="#fff" surfaceScale="1.2" diffuseConstant="1.15" result="light"><feDistantLight azimuth="235" elevation="62"/></feDiffuseLighting>
+      <feComponentTransfer in="light" result="light2"><feFuncR type="linear" slope="1.3"/><feFuncG type="linear" slope="1.3"/><feFuncB type="linear" slope="1.3"/></feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="light2" mode="multiply" result="mix"/>
+      <feComposite in="mix" in2="SourceGraphic" operator="in"/>
+    </filter>
+    <filter id="grassTex" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9 0.25" numOctaves="3" seed="5" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.16  0 0 0 0 0.08  0 0 0 0.9 -0.15" result="blades"/>
+      <feComposite in="blades" in2="SourceGraphic" operator="in" result="b2"/>
+      <feBlend in="b2" in2="SourceGraphic" mode="screen"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="castShadow" x="-10%" y="-10%" width="125%" height="125%"><feDropShadow dx="2.5" dy="3" stdDeviation="2.4" flood-color="#000" flood-opacity=".55"/></filter>
+    <pattern id="ashlar" width="34" height="18" patternUnits="userSpaceOnUse">
+      <path d="M0 .4H34M0 9.4H34M.4 0V9M17.4 9V18" fill="none" stroke="rgba(20,16,10,.38)" stroke-width=".7"/>
+      <path d="M0 1.2H34M0 10.2H34" fill="none" stroke="rgba(255,255,255,.13)" stroke-width=".6"/>
+    </pattern>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2=".35"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9fc0e0"/><stop offset=".5" stop-color="#5d7fa6"/><stop offset="1" stop-color="#34496b"/></linearGradient>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1120"/><stop offset=".55" stop-color="#27314f"/><stop offset=".85" stop-color="#7a5a66"/><stop offset="1" stop-color="#d49b6b"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d3a26"/><stop offset="1" stop-color="#121710"/></linearGradient>
+  </defs></svg>`)
+
+  function backdrop(vb, ground) {
+    const [vx, vy, vw, vh] = vb
+    let seed = 3
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296)
+    const stars = Array.from({ length: 34 }, () => `<circle cx="${vx + rnd() * vw}" cy="${vy + rnd() * (ground - vy) * 0.55}" r="${0.4 + rnd() * 0.8}" fill="#fff" opacity="${0.25 + rnd() * 0.5}"/>`).join('')
+    const clouds = [0.3, 0.55, 0.78].map((k, i) => `<ellipse cx="${vx + vw * (0.2 + i * 0.3)}" cy="${ground - (ground - vy) * k}" rx="${60 + i * 18}" ry="9" fill="#e9c9a8" opacity=".1" filter="url(#soft)"/>`).join('')
+    const g = ground
+    return `<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="12" fill="url(#skyGrad)"/>${stars}${clouds}` +
+      `<path d="M${vx} ${g - 38}Q${vx + 70} ${g - 74} ${vx + 150} ${g - 44}T${vx + vw} ${g - 52}V${g}H${vx}Z" fill="#1a2032" opacity=".85"/>` +
+      `<path d="M${vx} ${g - 22}Q${vx + 100} ${g - 52} ${vx + 190} ${g - 26}T${vx + vw} ${g - 30}V${g}H${vx}Z" fill="#141a28"/>`
+  }
 
   // ---------- home: the cathedral gallery ----------
   function showHome() {
@@ -89,59 +145,65 @@
     for (const id of ['back', 'about', 'hint']) $(id).classList.add('hidden')
     $('title').innerHTML = 'Cathedral Builder<small>Working title</small>'
     const cards = CATHEDRALS.map((c, i) => {
-      const phase = c.phases[0]
-      const r = record(c, phase)
-      const tag = r.done
-        ? `<span class="tag done">${R.hintSummary(r.hints) ? 'Built' : 'Built, no hints'}</span>`
-        : r.placed.length
-          ? `<span class="tag">${r.placed.length} of ${phase.pieces.length} placed</span>`
-          : '<span class="tag">New</span>'
-      const mini = phase.pieces.map((p) => pieceMarkup(p, r.placed.includes(p.id) ? '' : 'sil')).join('')
-      const vb = phase.viewBox.join(' ')
-      return `<button class="card" data-i="${i}"><svg viewBox="${vb}">${mini}</svg>` +
-        `<span><div class="t">${i + 1}. ${c.name}</div><div class="s">${c.period} · ${c.blurb}</div>${tag}</span></button>`
+      const recs = c.phases.map((_, k) => record(c, k))
+      const doneCount = recs.filter((r) => r.done).length
+      const all = doneCount === c.phases.length
+      const unaided = all && recs.every((r) => !R.hintSummary(r.hints))
+      const shown = c.phases.slice(0, Math.min(doneCount + 1, c.phases.length))
+      const mini = shown.map((ph, k) => ph.pieces.map((p) => pieceMarkup(p, recs[k].placed.includes(p.id) ? '' : 'sil')).join('')).join('')
+      const last = shown[shown.length - 1]
+      const vb = last.viewBox.join(' ')
+      const chips = c.phases.map((ph, k) => {
+        const open = k === 0 || recs[k - 1].done
+        const mark = recs[k].done ? (R.hintSummary(recs[k].hints) ? ' ✓' : ' ✓ no hints') : recs[k].placed.length ? ` ${recs[k].placed.length}/${ph.pieces.length}` : ''
+        return `<button class="chip ${recs[k].done ? 'done' : ''}" data-i="${i}" data-k="${k}" ${open ? '' : 'disabled'}>${open ? '' : '&#128274; '}Phase ${k + 1}${mark}</button>`
+      }).join('')
+      return `<div class="card"><svg viewBox="${vb}" preserveAspectRatio="xMidYMax meet" style="background:#1f2533">${backdrop(last.viewBox, last.ground)}${mini}</svg>` +
+        `<div><div class="t">${i + 1}. ${c.name}</div><div class="s">${c.period} · ${c.blurb}</div>` +
+        `<div class="chips">${chips}</div>${unaided ? '<span class="tag done">Built with no hints</span>' : ''}</div></div>`
     }).join('')
-    $('home').innerHTML = '<h1>Cathedral Builder</h1><p class="lead">Choose a cathedral. Pick each piece from the tray and place it.</p>' + cards
-    $('home').querySelectorAll('.card').forEach((b) => b.addEventListener('click', () => start(CATHEDRALS[+b.dataset.i])))
+    $('home').innerHTML = '<h1>Cathedral Builder</h1><p class="lead">Choose a cathedral. Pick each piece from the tray and place it where it belongs. Not every piece does.</p>' + cards
+    $('home').querySelectorAll('.chip').forEach((b) => b.addEventListener('click', () => start(CATHEDRALS[+b.dataset.i], +b.dataset.k)))
   }
 
   // ---------- a game in progress ----------
   let game = null
   let idleTimer = 0
 
-  function start(cath) {
-    const phase = cath.phases[0]
-    const rec = record(cath, phase)
-    game = { cath, phase, rec, selected: null, hinted: null, tips: {}, slots: {}, placedEls: {} }
+  function start(cath, idx = 0) {
+    const phase = cath.phases[idx]
+    const rec = record(cath, idx)
+    game = { cath, idx, phase, rec, prior: priorIds(cath, idx), selected: null, hinted: null, slots: {}, placedEls: {} }
     $('home').classList.add('hidden')
     $('play').classList.remove('hidden')
     for (const id of ['back', 'about', 'hint']) $(id).classList.remove('hidden')
-    $('title').innerHTML = `${cath.name}<small>${cath.period} · ${phase.name}</small>`
+    $('title').innerHTML = `${cath.name}<small>${cath.period} · Phase ${idx + 1}: ${phase.name}</small>`
     buildStage()
     buildTray()
-    updateStatus()
     if (rec.done) { lightUp(false); setTimeout(showComplete, 300) } else {
-      say('Choose a piece from the tray.')
-      if (!rec.introSeen && !rec.placed.length) showIntro(true)
+      say(phase.blurb)
+      const first = record(cath, 0)
+      if (idx === 0 && !first.introSeen && !rec.placed.length) showIntro(true)
       scheduleIdle()
     }
   }
+  const allPlaced = () => game.prior.concat(game.rec.placed)
 
   function buildStage() {
-    const { phase } = game
+    const { phase, cath, idx } = game
     const silhouette = params.has('silhouette') ? params.get('silhouette') !== '0' : phase.silhouette !== false
     const slotStyle = params.get('slots') || phase.slotStyle
-    const [vx, vy, vw, vh] = phase.viewBox
     const svg = el('svg', { viewBox: phase.viewBox.join(' '), preserveAspectRatio: 'xMidYMax meet' })
-    const [gx, gy, gw, gh] = phase.glow
-    svg.innerHTML =
-      '<defs><linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232a3d"/><stop offset="1" stop-color="#3b3a4a"/></linearGradient></defs>' +
-      `<rect id="sky" x="${vx}" y="${vy}" width="${vw}" height="${vh}" rx="12"/>` +
-      `<rect class="glowrect" x="${gx}" y="${gy}" width="${gw}" height="${gh}"/>` +
+    const glows = cath.phases.slice(0, idx + 1).flatMap((p) => p.glow || [])
+    const [vx, , vw, vh] = phase.viewBox
+    const vy = phase.viewBox[1]
+    svg.innerHTML = backdrop(phase.viewBox, phase.ground) +
+      glows.map(([x, y, w, h]) => `<rect class="glowrect" x="${x}" y="${y}" width="${w}" height="${h}"/>`).join('') +
       `<g id="sil">${silhouette ? phase.pieces.map((p) => pieceMarkup(p, 'sil')).join('') : ''}</g>` +
       `<g id="hit" fill="#000" opacity="0" pointer-events="none">${phase.pieces.map((p) => `<path data-id="${p.id}" fill-rule="evenodd" d="${p.d}"/>`).join('')}</g>` +
-      `<g id="boxes"></g><g id="placed"></g><g id="fx"></g>` +
-      `<rect class="groundline" x="${vx}" y="${phase.ground}" width="${vw}" height="${vh - phase.ground}"/>`
+      `<g id="boxes"></g><g id="placed" filter="url(#castShadow)"></g><g id="fx"></g>` +
+      `<rect x="${vx}" y="${phase.ground}" width="${vw}" height="${vy + vh - phase.ground}" fill="url(#grass)" filter="url(#grassTex)"/>` +
+      `<rect x="${vx}" y="${phase.ground}" width="${vw}" height="3" fill="#0a0d12" opacity=".6"/>`
     $('stage').replaceChildren(svg)
     game.svg = svg
     if (slotStyle !== 'none') {
@@ -152,12 +214,14 @@
         game.slots[p.id] = r
       }
     }
+    for (const id of game.prior) addPlaced(id, false)
     for (const id of game.rec.placed) addPlaced(id, false)
     svg.addEventListener('click', onStageTap)
   }
 
+  const pieceById = (id) => game.cath.phases.flatMap((ph) => ph.pieces).find((q) => q.id === id)
   function addPlaced(id, animate) {
-    const p = game.phase.pieces.find((q) => q.id === id)
+    const p = pieceById(id)
     const g = el('g', { 'data-id': id, class: animate ? 'placed' : '' })
     g.innerHTML = pieceMarkup(p)
     game.svg.querySelector('#placed').append(g)
@@ -168,9 +232,10 @@
   function buildTray() {
     const { phase } = game
     const all = [...phase.pieces, ...phase.decoys]
+    trayLabels(phase)
     // Fixed shuffle (seeded by the cathedral) so the tray never shows the build order.
-    let s = 7
-    for (const ch of game.cath.id) s = (s * 31 + ch.charCodeAt(0)) >>> 0
+    let s = 7 + (game.rec.runs || 0) * 97
+    for (const ch of game.cath.id + game.phase.id) s = (s * 31 + ch.charCodeAt(0)) >>> 0
     const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
     for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [all[i], all[j]] = [all[j], all[i]] }
     const tray = $('tray')
@@ -180,18 +245,15 @@
       const b = document.createElement('button')
       b.className = 'item'
       b.dataset.id = p.id
-      b.innerHTML = `${thumb(p)}<span class="n">${p.name}</span>`
+      b.setAttribute('aria-label', p.name)
+      b.innerHTML = thumb(p) + (game.phase.labels === false ? '' : `<span class="n">${p.name}</span>`)
       b.addEventListener('click', () => select(p.id))
       tray.append(b)
     }
   }
+  const trayLabels = (phase) => $('tray').classList.toggle('nolabels', phase.labels === false)
   const trayItem = (id) => $('tray').querySelector(`[data-id="${id}"]`)
 
-  function updateStatus() {
-    const n = game.rec.placed.length
-    $('hint').textContent = 'Hint'
-    $('stage').dataset.placed = n
-  }
 
   // ---------- messages and coaching ----------
   let sayTimer = 0
@@ -221,7 +283,7 @@
     if (game.selected) {
       trayItem(id).classList.add('sel')
       if (game.hinted === id) { trayItem(id).classList.remove('hinted'); game.hinted = null }
-      if (!tip('select', 'Now tap where it belongs. Dashed boxes show the places still open.')) say('Where does it go?')
+      if (!tip('select', 'Now tap where it belongs in the structure.')) say('Where does it go?')
     } else say('Choose a piece from the tray.')
   }
 
@@ -258,13 +320,13 @@
       return
     }
     const slot = pickSlot(pt)
-    if (!slot) { say('Tap close to an open place in the structure.'); return }
+    if (!slot) { say('Nothing there to build on yet.'); return }
     attempt(game.selected, slot.id)
   }
 
   function attempt(pieceId, slotId) {
-    const { phase, rec } = game
-    const res = R.canPlace(phase, rec.placed, pieceId, slotId)
+    const { phase } = game
+    const res = R.canPlace(phase, allPlaced(), pieceId, slotId)
     const item = trayItem(pieceId)
     const replay = (cls) => { item.classList.remove('shake', 'wobble'); void item.offsetWidth; item.classList.add(cls) }
     if (res.ok) return place(pieceId)
@@ -274,8 +336,10 @@
       if (!tip('decoy', `${d.reaction} The tray holds decoys that do not belong. No harm done.`)) say(d.reaction)
     } else if (res.reason === 'unsupported') {
       sfx.bounce(); replay('shake')
-      const names = res.missing.map((m) => phase.pieces.find((p) => p.id === m).name.toLowerCase())
-      const msg = `That is the right piece, but it rests on the ${names.join(' and the ')}, which ${names.length > 1 ? 'are' : 'is'} not in place yet.`
+      const names = res.missing.map((m) => pieceById(m).name.toLowerCase())
+      const msg = phase.labels === false
+        ? 'That piece rests on something that is not in place yet.'
+        : `That is the right piece, but it rests on the ${names.join(' and the ')}, which ${names.length > 1 ? 'are' : 'is'} not in place yet.`
       if (!tip('order', msg + ' Order matters.')) say(msg)
       bounceSlot(slotId)
     } else {
@@ -303,7 +367,6 @@
     game.svg.classList.remove('has-sel')
     if (game.hinted) { trayItem(game.hinted)?.classList.remove('hinted'); game.hinted = null }
     save()
-    updateStatus()
     if (R.isComplete(phase, rec.placed)) return finish()
     showSupports(id, false)
     scheduleIdle()
@@ -312,7 +375,7 @@
   // A correct placement briefly shows what the piece now carries, and what it rests on.
   function showSupports(id, tapped) {
     const { phase } = game
-    const p = phase.pieces.find((q) => q.id === id)
+    const p = pieceById(id)
     const up = R.supportsOf(phase, id)
     const fx = game.svg.querySelector('#fx')
     const [cx, cy] = center(p.box)
@@ -324,7 +387,7 @@
       fx.append(r)
     }
     setTimeout(() => fx.replaceChildren(), 1900)
-    const rests = p.needs.map((n) => phase.pieces.find((q) => q.id === n).name)
+    const rests = p.needs.map((n) => pieceById(n).name)
     const carries = up.map((u) => u.name)
     let msg = p.name
     if (rests.length) msg += ` rests on ${rests.join(' and ')}`
@@ -336,7 +399,7 @@
 
   // ---------- hints: requested and offered, recorded and never penalized ----------
   function showHint() {
-    const next = R.nextPiece(game.phase, game.rec.placed)
+    const next = R.nextPiece(game.phase, allPlaced())
     if (!next) return false
     if (game.hinted !== next.id) {
       if (game.hinted) trayItem(game.hinted)?.classList.remove('hinted')
@@ -390,7 +453,7 @@
   function showIntro(first) {
     modal.innerHTML = `<div class="sheet">${introHtml(game.cath)}<div class="row"><button class="btn primary" id="go">${first ? 'Start building' : 'Close'}</button></div></div>`
     modal.classList.remove('hidden')
-    $('go').addEventListener('click', () => { closeModal(); if (first) { game.rec.introSeen = true; save() } })
+    $('go').addEventListener('click', () => { closeModal(); if (first) { record(game.cath, 0).introSeen = true; save() } })
   }
   $('about').addEventListener('click', () => game && showIntro(false))
 
@@ -414,19 +477,20 @@
     const { cath, phase, rec } = game
     const summary = R.hintSummary(rec.hints)
     const badge = summary ? `<div class="badge plain">${summary}</div>` : '<div class="badge">No hints</div>'
-    const nextIdx = CATHEDRALS.indexOf(cath) + 1
-    const next = CATHEDRALS[nextIdx]
-    modal.innerHTML = `<div class="sheet"><h2>${phase.name} complete</h2><div class="kick">${cath.name}</div>${badge}` +
-      `<p style="color:var(--dim)">More phases of ${cath.name} are coming.</p>${introHtml(cath)}` +
+    const nextPhase = cath.phases[game.idx + 1]
+    const nextCath = CATHEDRALS[CATHEDRALS.indexOf(cath) + 1]
+    const nextLabel = nextPhase ? `Next: Phase ${game.idx + 2}, ${nextPhase.name}` : nextCath ? `Next: ${nextCath.name}` : ''
+    modal.innerHTML = `<div class="sheet"><h2>${phase.name} complete</h2><div class="kick">${cath.name} · Phase ${game.idx + 1} of ${cath.phases.length}</div>${badge}` +
+      (nextPhase || !nextCath ? '' : `<p style="color:var(--dim)">${cath.name} is finished.</p>`) + introHtml(cath) +
       `<div class="row"><button class="btn" id="again">Build again</button>` +
-      `<button class="btn ${next ? '' : 'primary'}" id="home2">All cathedrals</button>` +
-      (next ? `<button class="btn primary" id="nxt">Next: ${next.name}</button>` : '') + '</div></div>'
+      `<button class="btn ${nextLabel ? '' : 'primary'}" id="home2">All cathedrals</button>` +
+      (nextLabel ? `<button class="btn primary" id="nxt">${nextLabel}</button>` : '') + '</div></div>'
     modal.classList.remove('hidden')
     $('again').addEventListener('click', () => {
-      rec.placed = []; rec.done = false; rec.hints = emptyHints(); save(); closeModal(); start(cath)
+      rec.placed = []; rec.done = false; rec.hints = emptyHints(); rec.runs = (rec.runs || 0) + 1; save(); closeModal(); start(cath, game.idx)
     })
     $('home2').addEventListener('click', () => { closeModal(); showHome() })
-    if (next) $('nxt').addEventListener('click', () => { closeModal(); start(next) })
+    if (nextLabel) $('nxt').addEventListener('click', () => { closeModal(); if (nextPhase) start(cath, game.idx + 1); else start(nextCath, 0) })
   }
 
   $('back').addEventListener('click', showHome)

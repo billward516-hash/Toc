@@ -25,11 +25,12 @@ function isComplete(phase, placed) {
   return phase.pieces.every((p) => placed.includes(p.id))
 }
 
+// `prior` lists pieces of earlier phases, which are always in place.
 // Drop unknown ids and any piece whose supports are missing (a stale or hand-edited save).
-function cleanPlaced(phase, saved) {
+function cleanPlaced(phase, saved, prior = []) {
   const ids = new Set(Array.isArray(saved) ? saved : [])
   const out = []
-  for (const p of phase.pieces) if (ids.has(p.id) && p.needs.every((n) => out.includes(n))) out.push(p.id)
+  for (const p of phase.pieces) if (ids.has(p.id) && p.needs.every((n) => out.includes(n) || prior.includes(n))) out.push(p.id)
   return out
 }
 

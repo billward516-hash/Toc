@@ -1,7 +1,16 @@
-// Durham Cathedral: a Romanesque nave bay (round arches, incised columns).
+// Durham Cathedral: Romanesque. Phase 1 a nave bay; phase 2 the central tower.
 // Facts in `intro` are from memory and NOT yet checked against sources (verified: false).
+{
+const { halfCircle, archStones } = globalThis.CBShapes
 const chevrons = [216, 240, 264].map((y) => `M258 ${y} l9 10 l9 -10 l9 10 l9 -10`).join(' ')
 const corbels = Array.from({ length: 13 }, (_, i) => `M${72 + i * 18} 12V20`).join('')
+const stones = archStones(halfCircle(183, 192, 87), halfCircle(183, 192, 69))
+const steep = archStones(halfCircle(183, 192, 96), halfCircle(183, 192, 78))
+const wide = archStones(halfCircle(183, 192, 84), halfCircle(183, 192, 60))
+const arcade = [117, 150, 183, 216, 249].map((c) => `M${c - 12} 12V-12A12 12 0 0 1 ${c + 12} -12V12`).join('')
+const belfry = [150, 216].map((c) => `M${c - 12} -34V-56A12 12 0 0 1 ${c + 12} -56V-34Z`).join('')
+const slats = [150, 216].map((c) => [-52, -46, -40].map((y) => `M${c - 12} ${y}H${c + 12}`).join('')).join('')
+const merlons = Array.from({ length: 8 }, (_, i) => `M${122 + i * 16} -92h9v-7h-9Z`).join('')
 
 ;(globalThis.CATHEDRALS = globalThis.CATHEDRALS || []).push({
   id: 'durham',
@@ -25,11 +34,12 @@ const corbels = Array.from({ length: 13 }, (_, i) => `M${72 + i * 18} 12V20`).jo
     {
       id: 'bay',
       name: 'A nave bay',
-      viewBox: [44, 0, 278, 312],
+      blurb: 'Build one bay of the nave, from the ground up.',
+      viewBox: [44, 0, 278, 330],
       ground: 300,
-      glow: [66, 20, 234, 85],
+      glow: [[66, 20, 234, 85]],
       silhouette: true,
-      slotStyle: 'box',
+      slotStyle: 'none',
       idleOfferMs: 35000,
       pieces: [
         { id: 'baseL', name: 'Square base', tone: '#8d857a', box: [62, 288, 56, 12], needs: [],
@@ -44,16 +54,19 @@ const corbels = Array.from({ length: 13 }, (_, i) => `M${72 + i * 18} 12V20`).jo
           d: 'M72 208L66 192H114L108 208Z' },
         { id: 'capR', name: 'Cushion capital', tone: '#c2b69f', box: [252, 192, 48, 16], needs: ['columnR'],
           d: 'M258 208Q252 200 252 192H300Q300 200 294 208Z' },
-        { id: 'arch', name: 'Round arch', tone: '#cdbfa0', box: [96, 105, 174, 87], needs: ['capL', 'capR'],
-          d: 'M96 192A87 87 0 0 1 270 192L252 192A69 69 0 0 0 114 192Z' },
-        { id: 'spandrel', name: 'Wall above the arch', tone: '#9c9486', box: [66, 105, 234, 87], needs: ['arch'],
+        { id: 'a1', name: 'Left springer', tone: '#cdbfa0', ...stones[0], needs: ['capL'] },
+        { id: 'a5', name: 'Right springer', tone: '#cdbfa0', ...stones[4], needs: ['capR'] },
+        { id: 'a2', name: 'Left arch stone', tone: '#cdbfa0', ...stones[1], needs: ['a1'] },
+        { id: 'a4', name: 'Right arch stone', tone: '#cdbfa0', ...stones[3], needs: ['a5'] },
+        { id: 'key', name: 'Keystone', tone: '#d8cba9', ...stones[2], needs: ['a2', 'a4'] },
+        { id: 'spandrel', name: 'Wall above the arch', tone: '#9c9486', box: [66, 105, 234, 87], needs: ['key'],
           d: 'M66 192L66 105L300 105L300 192L270 192A87 87 0 0 0 96 192Z' },
         { id: 'gallery', name: 'Gallery tier', tone: '#b0a794', box: [66, 62, 234, 43], needs: ['spandrel'],
           d: 'M66 62H300V105H66ZM102 105V90A16 16 0 0 1 134 90V105ZM167 105V90A16 16 0 0 1 199 90V105ZM232 105V90A16 16 0 0 1 264 90V105Z' },
         { id: 'clerestory', name: 'Clerestory wall', tone: '#a39a89', box: [66, 20, 234, 42], needs: ['gallery'],
           d: 'M66 62V20H300V62ZM166 62V46A17 17 0 0 1 200 46V62Z' },
         { id: 'window', name: 'Window', tone: '#6f8fb0', box: [166, 29, 34, 33], needs: ['clerestory'],
-          d: 'M166 62V46A17 17 0 0 1 200 46V62Z' },
+          d: 'M166 62V46A17 17 0 0 1 200 46V62Z', marks: '<path class="mark" d="M183 29V62"/>' },
         { id: 'cornice', name: 'Corbel cornice', tone: '#8d857a', box: [60, 12, 246, 8], needs: ['clerestory'],
           d: 'M60 20V12H306V20Z', marks: `<path class="mark" d="${corbels}"/>` },
       ],
@@ -65,9 +78,75 @@ const corbels = Array.from({ length: 13 }, (_, i) => `M${72 + i * 18} 12V20`).jo
           d: 'M258 208H294V288H258Z', marks: '<path class="mark" d="M264 208V288M270 208V288M276 208V288M282 208V288M288 208V288"/>',
           reaction: 'Fluting is classical. Durham carves zigzags instead.' },
         { id: 'xLancet', name: 'Lancet window', tone: '#6f8fb0', box: [166, 18, 34, 44],
-          d: 'M166 62V44Q166 30 183 18Q200 30 200 44V62Z',
+          d: 'M166 62V44Q166 30 183 18Q200 30 200 44V62Z', marks: '<path class="mark" d="M183 18V62"/>',
           reaction: 'A slim pointed window. This wall wants a rounder head.' },
+        { id: 'xCorinth', name: 'Leafy capital', tone: '#c2b69f', box: [248, 188, 56, 20],
+          d: 'M258 208Q250 200 248 190Q256 192 262 188H290Q296 192 304 190Q302 200 294 208Z',
+          marks: '<path class="mark" d="M262 200Q268 192 274 200Q280 192 286 200"/>',
+          reaction: 'Handsome, but too ornate for these plain, heavy piers.' },
+        { id: 'xRose', name: 'Rose window', tone: '#6f8fb0', box: [150, 24, 34, 34],
+          d: 'M167 24A17 17 0 1 1 167 58A17 17 0 1 1 167 24Z', marks: '<path class="mark" d="M167 24V58M150 41H184M155 29L179 53M179 29L155 53"/>',
+          reaction: 'A rose window belongs to a later age.' },
+        { id: 'xPlain', name: 'Plain column', tone: '#b2a793', box: [258, 208, 36, 80],
+          d: 'M258 208H294V288H258Z', reaction: 'Smooth and sensible, but this column is carved.' },
+        { id: 'xSteep', name: 'Steep springer', tone: '#cdbfa0', ...steep[0],
+          reaction: 'Close, but cut for a taller arch than this one.' },
+        { id: 'xWide', name: 'Wide keystone', tone: '#d8cba9', ...wide[2],
+          reaction: 'Close, but this one is cut too wide to lock the arch.' },
+      ],
+    },
+    {
+      id: 'tower',
+      name: 'The central tower',
+      blurb: 'Raise the tower above the nave.',
+      viewBox: [44, -130, 278, 460],
+      ground: 300,
+      glow: [[126, -76, 116, 42]],
+      silhouette: false,
+      labels: false,
+      slotStyle: 'none',
+      idleOfferMs: 35000,
+      pieces: [
+        { id: 'towerLow', name: 'Tower, lower stage', tone: '#a39a89', box: [100, -34, 166, 46], needs: ['cornice'],
+          d: 'M100 12V-34H266V12Z', marks: `<path class="mark" d="${arcade}"/>` },
+        { id: 'towerUp', name: 'Tower, belfry stage', tone: '#ada492', box: [100, -76, 166, 42], needs: ['towerLow'],
+          d: `M100 -34V-76H266V-34Z${belfry}` },
+        { id: 'louvres', name: 'Belfry louvres', tone: '#6f8fb0', box: [138, -68, 90, 34], needs: ['towerUp'],
+          d: belfry, marks: `<path class="mark" d="${slats}"/>` },
+        { id: 'string', name: 'String course', tone: '#8d857a', box: [96, -84, 174, 8], needs: ['towerUp'],
+          d: 'M96 -76V-84H270V-76Z' },
+        { id: 'parapet', name: 'Battlements', tone: '#a39a89', box: [120, -99, 126, 15], needs: ['string'],
+          d: `M120 -84V-92H246V-84Z${merlons}` },
+        { id: 'turretL', name: 'Square turret', tone: '#b0a794', box: [96, -112, 24, 28], needs: ['string'],
+          d: 'M96 -84V-112H120V-84Z' },
+        { id: 'turretR', name: 'Octagonal turret', tone: '#b0a794', box: [246, -112, 24, 28], needs: ['string'],
+          d: 'M246 -84V-104L251 -112H265L270 -104V-84Z' },
+        { id: 'capTL', name: 'Pyramid cap', tone: '#6d6a72', box: [94, -130, 28, 18], needs: ['turretL'],
+          d: 'M94 -112L108 -130L122 -112Z' },
+        { id: 'capTR', name: 'Conical cap', tone: '#6d6a72', box: [244, -132, 28, 20], needs: ['turretR'],
+          d: 'M244 -112Q256 -118 258 -132Q260 -118 272 -112Z' },
+        { id: 'vane', name: 'Weathervane', tone: '#8a7a55', box: [178, -122, 16, 23], needs: ['parapet'],
+          d: 'M182 -99V-118H184V-99ZM178 -113L184 -122L194 -116L184 -112Z' },
+      ],
+      decoys: [
+        { id: 'xOnion', name: 'Onion dome', tone: '#6d6a72', box: [92, -134, 32, 24],
+          d: 'M94 -112Q86 -124 108 -134Q130 -124 122 -112Z', reaction: 'Far from home: onion domes are not for an English tower.' },
+        { id: 'xSpire', name: 'Tall spire', tone: '#6d6a72', box: [168, -134, 30, 36],
+          d: 'M168 -98L183 -134L198 -98Z', reaction: 'A spire is a later idea. This tower is topped flat.' },
+        { id: 'xTrace', name: 'Traceried window', tone: '#6f8fb0', box: [164, -76, 38, 42],
+          d: 'M164 -34V-60Q164 -76 183 -76Q202 -60 202 -34Z', marks: '<path class="mark" d="M183 -76V-34M164 -52H202"/>',
+          reaction: 'Gothic tracery. Lovely, though an age too early.' },
+        { id: 'xSlab', name: 'Plain parapet', tone: '#a39a89', box: [96, -92, 174, 8],
+          d: 'M96 -84V-92H270V-84Z', reaction: 'Too plain for this tower top.' },
+        { id: 'xRoundT', name: 'Round turret', tone: '#b0a794', box: [246, -112, 24, 28],
+          d: 'M246 -84V-104Q246 -112 258 -112Q270 -112 270 -104V-84Z', reaction: 'Close, but the corner here is cut with flat faces.' },
+        { id: 'xOneLouvre', name: 'Single louvre', tone: '#6f8fb0', box: [204, -68, 24, 34],
+          d: 'M204 -34V-56A12 12 0 0 1 228 -56V-34Z', marks: '<path class="mark" d="M204 -52H228M204 -46H228M204 -40H228"/>',
+          reaction: 'One opening is not enough: the belfry has a pair.' },
+        { id: 'xFlatCap', name: 'Flat cap', tone: '#6d6a72', box: [94, -122, 28, 10],
+          d: 'M94 -112V-120H122V-112Z', reaction: 'Turrets here wear pointed caps.' },
       ],
     },
   ],
 })
+}

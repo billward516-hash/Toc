@@ -33,8 +33,12 @@ header h1 small { display: block; font-weight: 400; font-size: .78rem; color: va
 #home p.lead { color: var(--dim); margin: 0 0 16px; }
 .card { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; margin: 0 0 12px;
   background: var(--panel); border: 1px solid #343c52; border-radius: 16px; padding: 12px; }
-.card:active { transform: scale(.99); }
-.card svg { flex: none; width: 76px; height: 86px; background: var(--bg2); border-radius: 10px; }
+.card svg { flex: none; width: 92px; height: 112px; border-radius: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { background: #333b50; border: 1px solid #45506c; border-radius: 99px; padding: 6px 12px; min-height: 36px; font-size: .82rem; }
+.chip.done { background: #27412f; border-color: #3b6a49; color: var(--good); }
+.chip:disabled { opacity: .5; cursor: default; }
+#tray.nolabels { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); grid-auto-rows: 70px; }
 .card .t { font-weight: 600; }
 .card .s { color: var(--dim); font-size: .85rem; }
 .tag { display: inline-block; margin-top: 4px; font-size: .78rem; padding: 2px 8px; border-radius: 99px; background: #333b50; color: var(--dim); }
@@ -51,7 +55,7 @@ header h1 small { display: block; font-weight: 400; font-size: .78rem; color: va
   border: 1px solid #343c52; border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
 #offer span { flex: 1; font-size: .92rem; }
 #offer .btn { min-height: 38px; padding: 4px 12px; }
-#tray { height: 34dvh; max-height: 300px; min-height: 150px; overflow-y: auto; margin-top: 4px; padding: 6px;
+#tray { height: 30dvh; max-height: 280px; min-height: 140px; overflow-y: auto; margin-top: 4px; padding: 6px;
   background: var(--bg2); border-radius: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   grid-auto-rows: 82px; gap: 6px; align-content: start; }
 .item { position: relative; background: var(--panel); border: 2px solid transparent; border-radius: 12px; padding: 4px 2px 0;
@@ -69,13 +73,16 @@ header h1 small { display: block; font-weight: 400; font-size: .78rem; color: va
 @keyframes gone { to { opacity: 0; transform: scale(.7); } }
 
 /* stone drawing */
-.body { fill: var(--tone); stroke: rgba(0,0,0,.35); stroke-width: 1; }
+.body { fill: var(--tone); }
+.edge { fill: none; stroke: rgba(15,12,8,.55); stroke-width: .8; stroke-linejoin: round; pointer-events: none; }
+.courses, .shade { pointer-events: none; }
+.glass .body { fill: url(#glass); }
+.glass .edge { stroke: rgba(10,10,20,.8); stroke-width: 1.2; }
 .mark { fill: none; stroke: rgba(255,255,255,.28); stroke-width: 1.4; }
 .mark.dark { stroke: rgba(20,22,30,.7); stroke-width: 2.6; }
 .sil .body { fill: #fff; opacity: .06; stroke: none; }
 .sil .marks { display: none; }
-#sky { fill: url(#skyGrad); }
-.groundline { fill: #11141b; }
+.tray-dummy {}
 .slotbox { fill: rgba(224,184,102,.05); stroke: rgba(224,184,102,.55); stroke-width: 1.2; stroke-dasharray: 4 3; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .has-sel .slotbox { opacity: 1; }
 .placed { animation: drop .28s ease-out; }
@@ -131,6 +138,7 @@ header h1 small { display: block; font-weight: 400; font-size: .78rem; color: va
 <div id="modal" class="modal hidden"></div>
 
 <script src="rules.js"></script>
+<script src="data/shapes.js"></script>
 <script src="data/durham.js"></script>
 <script src="data/salisbury.js"></script>
 <script src="data/notredame.js"></script>

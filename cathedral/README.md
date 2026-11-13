@@ -10,11 +10,12 @@ in the browser. Useful URL options for testing:
 
 - `?idle=3000` offers a hint after 3 seconds without a placement (the default is 35 seconds)
 - `?silhouette=0` hides the faint silhouette of the finished section (the "mystery" layer)
-- `?slots=none` hides the dashed boxes that mark open places, so placement is by recognition alone
+- `?slots=box` shows dashed boxes marking the open places (an easier mode; the default is none)
 
 ## How it is built
 
 - `rules.js`: the dependency rule, hint order, save cleaning, hint wording. No DOM, no randomness.
+- `data/shapes.js`: helpers that cut arches and flying arches into stones
 - `data/*.js`: one file per cathedral (pieces, shapes, order, decoys, history card). Add a file and a
   `<script>` tag in `index.html` to add a cathedral. A piece is `{ id, name, tone, box, needs, d, marks }`;
   `needs` lists what it rests on, and the order of `pieces` is the build order the hint follows.
@@ -24,10 +25,20 @@ in the browser. Useful URL options for testing:
 
 ## Trial build
 
-Three cathedrals, phase 1 only: Durham (Romanesque), Salisbury (Early English Gothic), Notre-Dame de
-Paris (Gothic, a wall and flying buttress). Phase 1 is the whole prototype scope: tap to select, tap to
-place, bounce on a wrong choice, support links on a correct one, hints counted as requested or offered
-(never penalized), and a completion card with the counts.
+Three cathedrals, two phases each, and phase 2 builds on phase 1 (it starts with phase 1 standing):
+
+- Durham (Romanesque): a nave bay, then the central tower
+- Salisbury (Early English Gothic): a nave bay, then the tower and spire
+- Notre-Dame de Paris (Gothic): a wall and flying buttress, then the roof and spire
+
+Difficulty is deliberately up: 16-piece first phases, with arches cut stone by stone and a flying arch in
+three stones; decoys are about half the tray, many of them near-copies cut slightly wrong; no dashed boxes
+mark the open places; and phase 2 also drops the faint silhouette and the piece labels, so a piece is
+known by its shape alone. Hints stay unlimited and unpenalized. Each build-again reshuffles the tray.
+
+Look: stone is drawn procedurally (grain and relief from SVG lighting filters, mortar courses, light and
+shade, cast shadows) over a dusk sky. It is not photographic. A real photographic look needs photo or
+generated stone textures; the `ashlar` pattern and `stoneTex` filter in `game.js` are where they would plug in.
 
 ## Before release
 
