@@ -1,0 +1,73 @@
+// Durham Cathedral: a Romanesque nave bay (round arches, incised columns).
+// Facts in `intro` are from memory and NOT yet checked against sources (verified: false).
+const chevrons = [216, 240, 264].map((y) => `M258 ${y} l9 10 l9 -10 l9 10 l9 -10`).join(' ')
+const corbels = Array.from({ length: 13 }, (_, i) => `M${72 + i * 18} 12V20`).join('')
+
+;(globalThis.CATHEDRALS = globalThis.CATHEDRALS || []).push({
+  id: 'durham',
+  name: 'Durham Cathedral',
+  place: 'Durham, England',
+  period: 'Romanesque',
+  blurb: 'Round arches and carved columns',
+  intro: {
+    verified: false,
+    title: 'Durham Cathedral',
+    kicker: 'Romanesque · begun 1093',
+    lines: [
+      'Work began in 1093, and the great church was largely built within about forty years.',
+      'Its nave alternates clustered piers with massive round columns carved with zigzags, spirals and diamonds.',
+      'The nave rises in three tiers: arcade, gallery, and clerestory windows.',
+      'It holds the shrine of St Cuthbert and the tomb of the Venerable Bede.',
+      'With Durham Castle, it became a UNESCO World Heritage Site in 1986.',
+    ],
+  },
+  phases: [
+    {
+      id: 'bay',
+      name: 'A nave bay',
+      viewBox: [44, 0, 278, 312],
+      ground: 300,
+      glow: [66, 20, 234, 85],
+      silhouette: true,
+      slotStyle: 'box',
+      idleOfferMs: 35000,
+      pieces: [
+        { id: 'baseL', name: 'Square base', tone: '#8d857a', box: [62, 288, 56, 12], needs: [],
+          d: 'M62 288H118V300H62Z' },
+        { id: 'baseR', name: 'Round base', tone: '#8d857a', box: [250, 288, 52, 12], needs: [],
+          d: 'M250 300V292Q250 288 256 288H296Q302 288 302 292V300Z' },
+        { id: 'pierL', name: 'Compound pier', tone: '#a79e8d', box: [72, 208, 36, 80], needs: ['baseL'],
+          d: 'M72 208H108V288H72Z', marks: '<path class="mark" d="M83 208V288M97 208V288"/>' },
+        { id: 'columnR', name: 'Incised column', tone: '#b2a793', box: [258, 208, 36, 80], needs: ['baseR'],
+          d: 'M258 208H294V288H258Z', marks: `<path class="mark" d="${chevrons}"/>` },
+        { id: 'capL', name: 'Block capital', tone: '#c2b69f', box: [66, 192, 48, 16], needs: ['pierL'],
+          d: 'M72 208L66 192H114L108 208Z' },
+        { id: 'capR', name: 'Cushion capital', tone: '#c2b69f', box: [252, 192, 48, 16], needs: ['columnR'],
+          d: 'M258 208Q252 200 252 192H300Q300 200 294 208Z' },
+        { id: 'arch', name: 'Round arch', tone: '#cdbfa0', box: [96, 105, 174, 87], needs: ['capL', 'capR'],
+          d: 'M96 192A87 87 0 0 1 270 192L252 192A69 69 0 0 0 114 192Z' },
+        { id: 'spandrel', name: 'Wall above the arch', tone: '#9c9486', box: [66, 105, 234, 87], needs: ['arch'],
+          d: 'M66 192L66 105L300 105L300 192L270 192A87 87 0 0 0 96 192Z' },
+        { id: 'gallery', name: 'Gallery tier', tone: '#b0a794', box: [66, 62, 234, 43], needs: ['spandrel'],
+          d: 'M66 62H300V105H66ZM102 105V90A16 16 0 0 1 134 90V105ZM167 105V90A16 16 0 0 1 199 90V105ZM232 105V90A16 16 0 0 1 264 90V105Z' },
+        { id: 'clerestory', name: 'Clerestory wall', tone: '#a39a89', box: [66, 20, 234, 42], needs: ['gallery'],
+          d: 'M66 62V20H300V62ZM166 62V46A17 17 0 0 1 200 46V62Z' },
+        { id: 'window', name: 'Window', tone: '#6f8fb0', box: [166, 29, 34, 33], needs: ['clerestory'],
+          d: 'M166 62V46A17 17 0 0 1 200 46V62Z' },
+        { id: 'cornice', name: 'Corbel cornice', tone: '#8d857a', box: [60, 12, 246, 8], needs: ['clerestory'],
+          d: 'M60 20V12H306V20Z', marks: `<path class="mark" d="${corbels}"/>` },
+      ],
+      decoys: [
+        { id: 'xPointed', name: 'Pointed arch', tone: '#cdbfa0', box: [96, 96, 174, 96],
+          d: 'M96 192Q100 120 183 96Q266 120 270 192L252 192Q250 132 183 116Q116 132 114 192Z',
+          reaction: 'Too pointed for this bay, where the arches are round.' },
+        { id: 'xFluted', name: 'Fluted column', tone: '#b2a793', box: [258, 208, 36, 80],
+          d: 'M258 208H294V288H258Z', marks: '<path class="mark" d="M264 208V288M270 208V288M276 208V288M282 208V288M288 208V288"/>',
+          reaction: 'Fluting is classical. Durham carves zigzags instead.' },
+        { id: 'xLancet', name: 'Lancet window', tone: '#6f8fb0', box: [166, 18, 34, 44],
+          d: 'M166 62V44Q166 30 183 18Q200 30 200 44V62Z',
+          reaction: 'A slim pointed window. This wall wants a rounder head.' },
+      ],
+    },
+  ],
+})
