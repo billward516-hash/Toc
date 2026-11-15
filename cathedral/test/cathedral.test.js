@@ -108,6 +108,9 @@ describe('difficulty ramp', () => {
       expect(p.previewMs).toBeLessThanOrEqual(sequence[i - 1].previewMs)
     })
   })
+  it('keeps the faint silhouette everywhere except the final, hardest phase', () => {
+    sequence.forEach((p, i) => expect(p.subtle !== false, p.name).toBe(i < sequence.length - 1))
+  })
   it('ends hard: every extra, a short look, no labels', () => {
     const last = sequence[sequence.length - 1]
     expect(last.previewMs).toBeLessThanOrEqual(2500)

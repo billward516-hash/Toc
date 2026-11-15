@@ -32,7 +32,8 @@ Three cathedrals, two phases each, and phase 2 builds on phase 1 (it starts with
 
 Difficulty ramps up across the six phases in play order (`previewMs`, `decoyCount`, `labels` on each phase):
 
-- The outline of the finished structure shows up front for `previewMs` (7 s in Durham 1, down to 2 s in
+- A faint silhouette of the finished structure is always there (`subtle`, on in every phase except the last).
+- A bold dashed outline of it shows up front for `previewMs` (7 s in Durham 1, down to 2 s in
   Notre-Dame 2), then fades. The Outline button brings it back for 3.5 s, as often as asked. Peeks are counted
   and shown on the completion card, never penalized. Nothing marks where a piece goes, so it is not painting by numbers.
 - Decoys rise from 3 (Durham 1) to 4, 5, 6, 7 and 7. They are listed easiest first, and a phase shows the first `decoyCount`.

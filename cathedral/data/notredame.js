@@ -100,6 +100,7 @@ const lancet = 'M88 150V108Q88 94 100 84Q112 94 112 108V150Z'
       ground: 300,
       glow: [],
       previewMs: 2000,
+      subtle: false,
       decoyCount: 7,
       labels: false,
       slotStyle: 'none',

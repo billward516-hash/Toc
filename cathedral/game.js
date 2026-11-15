@@ -212,12 +212,14 @@
     const { phase, cath, idx } = game
     const slotStyle = params.get('slots') || phase.slotStyle
     const svg = el('svg', { viewBox: phase.viewBox.join(' '), preserveAspectRatio: 'xMidYMax meet' })
+    const ghosts = (cls) => phase.pieces.filter((p) => !game.rec.placed.includes(p.id)).map((p) => `<g class="ghost" data-id="${p.id}">${pieceMarkup(p, 'sil ' + cls)}</g>`).join('')
     const glows = cath.phases.slice(0, idx + 1).flatMap((p) => p.glow || [])
     const [vx, , vw, vh] = phase.viewBox
     const vy = phase.viewBox[1]
     svg.innerHTML = backdrop(phase.viewBox, phase.ground) +
       glows.map(([x, y, w, h]) => `<rect class="glowrect" x="${x}" y="${y}" width="${w}" height="${h}"/>`).join('') +
-      `<g id="sil">${phase.pieces.filter((p) => !game.rec.placed.includes(p.id)).map((p) => `<g class="ghost" data-id="${p.id}">${pieceMarkup(p, 'sil sil-bold')}</g>`).join('')}</g>` +
+      `<g id="subtle">${phase.subtle === false ? '' : ghosts('sil-faint')}</g>` +
+      `<g id="sil">${ghosts('sil-bold')}</g>` +
       `<g id="hit" fill="#000" opacity="0" pointer-events="none">${phase.pieces.map((p) => `<path data-id="${p.id}" fill-rule="evenodd" d="${p.d}"/>`).join('')}</g>` +
       `<g id="boxes"></g><g id="placed" filter="url(#castShadow)"></g><g id="fx"></g>` +
       `<rect x="${vx}" y="${phase.ground}" width="${vw}" height="${vy + vh - phase.ground}" fill="url(#grass)" filter="url(#grassTex)"/>` +
@@ -387,7 +389,7 @@
     if (item) { item.classList.add('gone'); setTimeout(() => item.remove(), 240) }
     game.selected = null
     game.svg.classList.remove('has-sel')
-    game.svg.querySelector(`.ghost[data-id="${id}"]`)?.remove()
+    game.svg.querySelectorAll(`.ghost[data-id="${id}"]`).forEach((n) => n.remove())
     if (game.hinted) { trayItem(game.hinted)?.classList.remove('hinted'); game.hinted = null }
     save()
     if (R.isComplete(phase, rec.placed)) return finish()
