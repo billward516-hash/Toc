@@ -9,7 +9,7 @@ Open `index.html` in a browser (no build, no server needed), or serve the folder
 in the browser. Useful URL options for testing:
 
 - `?idle=3000` offers a hint after 3 seconds without a placement (the default is 35 seconds)
-- `?silhouette=0` hides the faint silhouette of the finished section (the "mystery" layer)
+- `?silhouette=bold|normal|faint|0` overrides the outline of the finished section (0 hides it, the "mystery" layer)
 - `?slots=box` shows dashed boxes marking the open places (an easier mode; the default is none)
 
 ## How it is built
@@ -31,10 +31,14 @@ Three cathedrals, two phases each, and phase 2 builds on phase 1 (it starts with
 - Salisbury (Early English Gothic): a nave bay, then the tower and spire
 - Notre-Dame de Paris (Gothic): a wall and flying buttress, then the roof and spire
 
-Difficulty is deliberately up: 16-piece first phases, with arches cut stone by stone and a flying arch in
-three stones; decoys are about half the tray, many of them near-copies cut slightly wrong; no dashed boxes
-mark the open places; and phase 2 also drops the faint silhouette and the piece labels, so a piece is
-known by its shape alone. Hints stay unlimited and unpenalized. Each build-again reshuffles the tray.
+Difficulty ramps up across the six phases in play order (`silhouette`, `decoyCount`, `labels` on each phase):
+
+- Durham 1 and 2: a bold dashed outline of the finished structure, and picking a piece makes its place glow, so it is about fitting; only 3 then 4 decoys
+- Salisbury 1: a normal outline, 5 decoys. Salisbury 2: a faint outline, 6 decoys
+- Notre-Dame 1: faint outline, 7 decoys. Notre-Dame 2: no outline, no labels, all 7 decoys
+
+Arches are cut stone by stone, so order matters throughout. Decoys are listed easiest first, and a phase shows
+the first `decoyCount` of them. Hints stay unlimited and unpenalized. Each build-again reshuffles the tray.
 
 Look: stone is drawn procedurally (grain and relief from SVG lighting filters, mortar courses, light and
 shade, cast shadows) over a dusk sky. It is not photographic. A real photographic look needs photo or

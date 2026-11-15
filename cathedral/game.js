@@ -76,7 +76,7 @@
     return `<g class="piece ${cls} ${glass ? 'glass' : 'warm'}" style="--tone:${p.tone}">` +
       `<path class="body" ${rule}${glass || sil ? '' : ` filter="url(#${tex})"`}/>` +
       (glass || sil ? '' : `<path class="courses" ${rule} fill="url(#ashlar)"/><path class="shade" ${rule} fill="url(#shade)"/>`) +
-      (sil ? '' : `<path class="edge" ${rule}/>`) +
+      `<path class="edge" ${rule}/>` +
       `<g class="marks">${p.marks || ''}</g></g>`
   }
   function thumb(p) {
@@ -150,7 +150,7 @@
       const all = doneCount === c.phases.length
       const unaided = all && recs.every((r) => !R.hintSummary(r.hints))
       const shown = c.phases.slice(0, Math.min(doneCount + 1, c.phases.length))
-      const mini = shown.map((ph, k) => ph.pieces.map((p) => pieceMarkup(p, recs[k].placed.includes(p.id) ? '' : 'sil')).join('')).join('')
+      const mini = shown.map((ph, k) => ph.pieces.map((p) => pieceMarkup(p, recs[k].placed.includes(p.id) ? '' : 'sil sil-normal')).join('')).join('')
       const last = shown[shown.length - 1]
       const vb = last.viewBox.join(' ')
       const chips = c.phases.map((ph, k) => {
@@ -181,7 +181,7 @@
     buildStage()
     buildTray()
     if (rec.done) { lightUp(false); setTimeout(showComplete, 300) } else {
-      say(phase.blurb)
+      say(silLevel() === 'off' ? phase.blurb : 'The outline shows what you are building. Pick a piece and fit it in.')
       const first = record(cath, 0)
       if (idx === 0 && !first.introSeen && !rec.placed.length) showIntro(true)
       scheduleIdle()
@@ -189,9 +189,17 @@
   }
   const allPlaced = () => game.prior.concat(game.rec.placed)
 
+  // How clearly the finished structure shows: bold, normal, faint, or off.
+  function silLevel() {
+    const q = params.get('silhouette')
+    if (q === '0') return 'off'
+    if (['bold', 'normal', 'faint'].includes(q)) return q
+    return game.phase.silhouette || 'normal'
+  }
+
   function buildStage() {
     const { phase, cath, idx } = game
-    const silhouette = params.has('silhouette') ? params.get('silhouette') !== '0' : phase.silhouette !== false
+    const level = silLevel()
     const slotStyle = params.get('slots') || phase.slotStyle
     const svg = el('svg', { viewBox: phase.viewBox.join(' '), preserveAspectRatio: 'xMidYMax meet' })
     const glows = cath.phases.slice(0, idx + 1).flatMap((p) => p.glow || [])
@@ -199,7 +207,7 @@
     const vy = phase.viewBox[1]
     svg.innerHTML = backdrop(phase.viewBox, phase.ground) +
       glows.map(([x, y, w, h]) => `<rect class="glowrect" x="${x}" y="${y}" width="${w}" height="${h}"/>`).join('') +
-      `<g id="sil">${silhouette ? phase.pieces.map((p) => pieceMarkup(p, 'sil')).join('') : ''}</g>` +
+      `<g id="sil" class="level-${level}">${level === 'off' ? '' : phase.pieces.filter((p) => !game.rec.placed.includes(p.id)).map((p) => `<g class="ghost" data-id="${p.id}">${pieceMarkup(p, 'sil sil-' + level)}</g>`).join('')}</g>` +
       `<g id="hit" fill="#000" opacity="0" pointer-events="none">${phase.pieces.map((p) => `<path data-id="${p.id}" fill-rule="evenodd" d="${p.d}"/>`).join('')}</g>` +
       `<g id="boxes"></g><g id="placed" filter="url(#castShadow)"></g><g id="fx"></g>` +
       `<rect x="${vx}" y="${phase.ground}" width="${vw}" height="${vy + vh - phase.ground}" fill="url(#grass)" filter="url(#grassTex)"/>` +
@@ -231,7 +239,7 @@
 
   function buildTray() {
     const { phase } = game
-    const all = [...phase.pieces, ...phase.decoys]
+    const all = [...phase.pieces, ...phase.decoys.slice(0, phase.decoyCount ?? phase.decoys.length)]
     trayLabels(phase)
     // Fixed shuffle (seeded by the cathedral) so the tray never shows the build order.
     let s = 7 + (game.rec.runs || 0) * 97
@@ -278,12 +286,16 @@
     if (!game || game.rec.done) return
     const prev = game.selected
     if (prev) trayItem(prev)?.classList.remove('sel')
+    game.svg.querySelectorAll('.ghost.target').forEach((n) => n.classList.remove('target'))
     game.selected = prev === id ? null : id
     game.svg.classList.toggle('has-sel', !!game.selected)
     if (game.selected) {
       trayItem(id).classList.add('sel')
       if (game.hinted === id) { trayItem(id).classList.remove('hinted'); game.hinted = null }
-      if (!tip('select', 'Now tap where it belongs in the structure.')) say('Where does it go?')
+      const bold = silLevel() === 'bold'
+      if (bold) game.svg.querySelector(`.ghost[data-id="${id}"]`)?.classList.add('target')
+      const msg = bold ? 'Its place is glowing in the outline. Tap there to fit it.' : 'Now tap where it belongs in the structure.'
+      if (!tip('select', msg)) say(bold ? 'Tap the glowing place to fit it.' : 'Where does it go?')
     } else say('Choose a piece from the tray.')
   }
 
@@ -365,6 +377,8 @@
     if (item) { item.classList.add('gone'); setTimeout(() => item.remove(), 240) }
     game.selected = null
     game.svg.classList.remove('has-sel')
+    game.svg.querySelectorAll('.ghost.target').forEach((n) => n.classList.remove('target'))
+    game.svg.querySelector(`.ghost[data-id="${id}"]`)?.remove()
     if (game.hinted) { trayItem(game.hinted)?.classList.remove('hinted'); game.hinted = null }
     save()
     if (R.isComplete(phase, rec.placed)) return finish()

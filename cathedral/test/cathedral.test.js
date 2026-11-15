@@ -25,18 +25,14 @@ describe('cathedral data', () => {
         const prior = c.phases.slice(0, idx).flatMap((p) => p.pieces.map((q) => q.id))
 
         describe(phase.name, () => {
-          it('is complex: many pieces, and decoys that are about half the tray', () => {
-            expect(phase.pieces.length).toBeGreaterThanOrEqual(9)
-            expect(phase.decoys.length).toBeGreaterThanOrEqual(7)
-            expect(phase.decoys.length / (phase.pieces.length + phase.decoys.length)).toBeGreaterThan(0.3)
+          it('shows only decoyCount of the decoys, and has that many to choose from', () => {
+            expect(phase.decoyCount).toBeGreaterThanOrEqual(3)
+            expect(phase.decoyCount).toBeLessThanOrEqual(phase.decoys.length)
           })
 
-          it('is hard: no boxes marking the open places, and later phases have no silhouette or labels', () => {
+          it('uses a known silhouette level and no placement boxes', () => {
+            expect(['bold', 'normal', 'faint', 'off']).toContain(phase.silhouette)
             expect(phase.slotStyle).toBe('none')
-            if (idx > 0) {
-              expect(phase.silhouette).toBe(false)
-              expect(phase.labels).toBe(false)
-            }
           })
 
           it('lists supports that exist earlier, in this phase or a previous one', () => {
@@ -96,6 +92,28 @@ describe('cathedral data', () => {
       })
     })
   }
+})
+
+describe('difficulty ramp', () => {
+  const sequence = cathedrals.flatMap((c) => c.phases)
+  const prominence = { bold: 3, normal: 2, faint: 1, off: 0 }
+  it('opens gently: few extras and a bold outline', () => {
+    expect(sequence[0].decoyCount).toBeLessThanOrEqual(3)
+    expect(sequence[0].silhouette).toBe('bold')
+  })
+  it('never gets easier as the player advances', () => {
+    sequence.forEach((p, i) => {
+      if (i === 0) return
+      expect(p.decoyCount).toBeGreaterThanOrEqual(sequence[i - 1].decoyCount)
+      expect(prominence[p.silhouette]).toBeLessThanOrEqual(prominence[sequence[i - 1].silhouette])
+    })
+  })
+  it('ends hard: every extra, no outline, no labels', () => {
+    const last = sequence[sequence.length - 1]
+    expect(last.silhouette).toBe('off')
+    expect(last.labels).toBe(false)
+    expect(last.decoyCount).toBe(last.decoys.length)
+  })
 })
 
 describe('rules helpers', () => {
