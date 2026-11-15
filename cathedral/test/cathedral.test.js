@@ -30,8 +30,9 @@ describe('cathedral data', () => {
             expect(phase.decoyCount).toBeLessThanOrEqual(phase.decoys.length)
           })
 
-          it('uses a known silhouette level and no placement boxes', () => {
-            expect(['bold', 'normal', 'faint', 'off']).toContain(phase.silhouette)
+          it('previews the outline for a few seconds, and has no placement boxes', () => {
+            expect(phase.previewMs).toBeGreaterThanOrEqual(2000)
+            expect(phase.previewMs).toBeLessThanOrEqual(8000)
             expect(phase.slotStyle).toBe('none')
           })
 
@@ -96,21 +97,20 @@ describe('cathedral data', () => {
 
 describe('difficulty ramp', () => {
   const sequence = cathedrals.flatMap((c) => c.phases)
-  const prominence = { bold: 3, normal: 2, faint: 1, off: 0 }
-  it('opens gently: few extras and a bold outline', () => {
+  it('opens gently: few extras and a long first look at the outline', () => {
     expect(sequence[0].decoyCount).toBeLessThanOrEqual(3)
-    expect(sequence[0].silhouette).toBe('bold')
+    expect(sequence[0].previewMs).toBeGreaterThanOrEqual(6000)
   })
   it('never gets easier as the player advances', () => {
     sequence.forEach((p, i) => {
       if (i === 0) return
       expect(p.decoyCount).toBeGreaterThanOrEqual(sequence[i - 1].decoyCount)
-      expect(prominence[p.silhouette]).toBeLessThanOrEqual(prominence[sequence[i - 1].silhouette])
+      expect(p.previewMs).toBeLessThanOrEqual(sequence[i - 1].previewMs)
     })
   })
-  it('ends hard: every extra, no outline, no labels', () => {
+  it('ends hard: every extra, a short look, no labels', () => {
     const last = sequence[sequence.length - 1]
-    expect(last.silhouette).toBe('off')
+    expect(last.previewMs).toBeLessThanOrEqual(2500)
     expect(last.labels).toBe(false)
     expect(last.decoyCount).toBe(last.decoys.length)
   })

@@ -9,7 +9,6 @@ Open `index.html` in a browser (no build, no server needed), or serve the folder
 in the browser. Useful URL options for testing:
 
 - `?idle=3000` offers a hint after 3 seconds without a placement (the default is 35 seconds)
-- `?silhouette=bold|normal|faint|0` overrides the outline of the finished section (0 hides it, the "mystery" layer)
 - `?slots=box` shows dashed boxes marking the open places (an easier mode; the default is none)
 
 ## How it is built
@@ -31,14 +30,15 @@ Three cathedrals, two phases each, and phase 2 builds on phase 1 (it starts with
 - Salisbury (Early English Gothic): a nave bay, then the tower and spire
 - Notre-Dame de Paris (Gothic): a wall and flying buttress, then the roof and spire
 
-Difficulty ramps up across the six phases in play order (`silhouette`, `decoyCount`, `labels` on each phase):
+Difficulty ramps up across the six phases in play order (`previewMs`, `decoyCount`, `labels` on each phase):
 
-- Durham 1 and 2: a bold dashed outline of the finished structure, and picking a piece makes its place glow, so it is about fitting; only 3 then 4 decoys
-- Salisbury 1: a normal outline, 5 decoys. Salisbury 2: a faint outline, 6 decoys
-- Notre-Dame 1: faint outline, 7 decoys. Notre-Dame 2: no outline, no labels, all 7 decoys
-
-Arches are cut stone by stone, so order matters throughout. Decoys are listed easiest first, and a phase shows
-the first `decoyCount` of them. Hints stay unlimited and unpenalized. Each build-again reshuffles the tray.
+- The outline of the finished structure shows up front for `previewMs` (7 s in Durham 1, down to 2 s in
+  Notre-Dame 2), then fades. The Outline button brings it back for 3.5 s, as often as asked. Peeks are counted
+  and shown on the completion card, never penalized. Nothing marks where a piece goes, so it is not painting by numbers.
+- Decoys rise from 3 (Durham 1) to 4, 5, 6, 7 and 7. They are listed easiest first, and a phase shows the first `decoyCount`.
+- The last phase also drops the piece labels, so a piece is known by its shape alone.
+- Arches are cut stone by stone, so order matters throughout. Hints stay unlimited and unpenalized.
+  Each build-again reshuffles the tray.
 
 Look: stone is drawn procedurally (grain and relief from SVG lighting filters, mortar courses, light and
 shade, cast shadows) over a dusk sky. It is not photographic. A real photographic look needs photo or

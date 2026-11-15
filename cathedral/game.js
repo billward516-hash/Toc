@@ -139,10 +139,11 @@
   // ---------- home: the cathedral gallery ----------
   function showHome() {
     clearTimeout(idleTimer)
+    clearTimeout(outlineTimer)
     game = null
     $('home').classList.remove('hidden')
     $('play').classList.add('hidden')
-    for (const id of ['back', 'about', 'hint']) $(id).classList.add('hidden')
+    for (const id of ['back', 'about', 'hint', 'peek']) $(id).classList.add('hidden')
     $('title').innerHTML = 'Cathedral Builder<small>Working title</small>'
     const cards = CATHEDRALS.map((c, i) => {
       const recs = c.phases.map((_, k) => record(c, k))
@@ -150,7 +151,7 @@
       const all = doneCount === c.phases.length
       const unaided = all && recs.every((r) => !R.hintSummary(r.hints))
       const shown = c.phases.slice(0, Math.min(doneCount + 1, c.phases.length))
-      const mini = shown.map((ph, k) => ph.pieces.map((p) => pieceMarkup(p, recs[k].placed.includes(p.id) ? '' : 'sil sil-normal')).join('')).join('')
+      const mini = shown.map((ph, k) => ph.pieces.map((p) => pieceMarkup(p, recs[k].placed.includes(p.id) ? '' : 'sil sil-bold')).join('')).join('')
       const last = shown[shown.length - 1]
       const vb = last.viewBox.join(' ')
       const chips = c.phases.map((ph, k) => {
@@ -176,12 +177,15 @@
     game = { cath, idx, phase, rec, prior: priorIds(cath, idx), selected: null, hinted: null, slots: {}, placedEls: {} }
     $('home').classList.add('hidden')
     $('play').classList.remove('hidden')
-    for (const id of ['back', 'about', 'hint']) $(id).classList.remove('hidden')
-    $('title').innerHTML = `${cath.name}<small>${cath.period} · Phase ${idx + 1}: ${phase.name}</small>`
+    for (const id of ['back', 'about', 'hint', 'peek']) $(id).classList.remove('hidden')
+    $('title').innerHTML = `${cath.name}<small>Phase ${idx + 1}: ${phase.name}</small>`
     buildStage()
     buildTray()
     if (rec.done) { lightUp(false); setTimeout(showComplete, 300) } else {
-      say(silLevel() === 'off' ? phase.blurb : 'The outline shows what you are building. Pick a piece and fit it in.')
+      if (!rec.placed.length) {
+        showOutline(phase.previewMs)
+        say('Study the outline. It fades soon, and the Outline button brings it back.')
+      } else say(phase.blurb)
       const first = record(cath, 0)
       if (idx === 0 && !first.introSeen && !rec.placed.length) showIntro(true)
       scheduleIdle()
@@ -189,17 +193,23 @@
   }
   const allPlaced = () => game.prior.concat(game.rec.placed)
 
-  // How clearly the finished structure shows: bold, normal, faint, or off.
-  function silLevel() {
-    const q = params.get('silhouette')
-    if (q === '0') return 'off'
-    if (['bold', 'normal', 'faint'].includes(q)) return q
-    return game.phase.silhouette || 'normal'
+  // The outline of the finished structure: shown up front, then only when asked for.
+  const PEEK_MS = 3500
+  let outlineTimer = 0
+  function showOutline(ms) {
+    if (!game) return
+    clearTimeout(outlineTimer)
+    game.svg.classList.add('show-outline')
+    outlineTimer = setTimeout(() => {
+      if (!game) return
+      game.svg.classList.remove('show-outline')
+      if (!game.selected && !game.rec.done) say('Choose a piece from the tray.')
+    }, ms)
   }
+  const outlineShown = () => game.svg.classList.contains('show-outline')
 
   function buildStage() {
     const { phase, cath, idx } = game
-    const level = silLevel()
     const slotStyle = params.get('slots') || phase.slotStyle
     const svg = el('svg', { viewBox: phase.viewBox.join(' '), preserveAspectRatio: 'xMidYMax meet' })
     const glows = cath.phases.slice(0, idx + 1).flatMap((p) => p.glow || [])
@@ -207,7 +217,7 @@
     const vy = phase.viewBox[1]
     svg.innerHTML = backdrop(phase.viewBox, phase.ground) +
       glows.map(([x, y, w, h]) => `<rect class="glowrect" x="${x}" y="${y}" width="${w}" height="${h}"/>`).join('') +
-      `<g id="sil" class="level-${level}">${level === 'off' ? '' : phase.pieces.filter((p) => !game.rec.placed.includes(p.id)).map((p) => `<g class="ghost" data-id="${p.id}">${pieceMarkup(p, 'sil sil-' + level)}</g>`).join('')}</g>` +
+      `<g id="sil">${phase.pieces.filter((p) => !game.rec.placed.includes(p.id)).map((p) => `<g class="ghost" data-id="${p.id}">${pieceMarkup(p, 'sil sil-bold')}</g>`).join('')}</g>` +
       `<g id="hit" fill="#000" opacity="0" pointer-events="none">${phase.pieces.map((p) => `<path data-id="${p.id}" fill-rule="evenodd" d="${p.d}"/>`).join('')}</g>` +
       `<g id="boxes"></g><g id="placed" filter="url(#castShadow)"></g><g id="fx"></g>` +
       `<rect x="${vx}" y="${phase.ground}" width="${vw}" height="${vy + vh - phase.ground}" fill="url(#grass)" filter="url(#grassTex)"/>` +
@@ -286,16 +296,12 @@
     if (!game || game.rec.done) return
     const prev = game.selected
     if (prev) trayItem(prev)?.classList.remove('sel')
-    game.svg.querySelectorAll('.ghost.target').forEach((n) => n.classList.remove('target'))
     game.selected = prev === id ? null : id
     game.svg.classList.toggle('has-sel', !!game.selected)
     if (game.selected) {
       trayItem(id).classList.add('sel')
       if (game.hinted === id) { trayItem(id).classList.remove('hinted'); game.hinted = null }
-      const bold = silLevel() === 'bold'
-      if (bold) game.svg.querySelector(`.ghost[data-id="${id}"]`)?.classList.add('target')
-      const msg = bold ? 'Its place is glowing in the outline. Tap there to fit it.' : 'Now tap where it belongs in the structure.'
-      if (!tip('select', msg)) say(bold ? 'Tap the glowing place to fit it.' : 'Where does it go?')
+      if (!tip('select', 'Now tap where it belongs in the structure.')) say('Where does it go?')
     } else say('Choose a piece from the tray.')
   }
 
@@ -377,7 +383,6 @@
     if (item) { item.classList.add('gone'); setTimeout(() => item.remove(), 240) }
     game.selected = null
     game.svg.classList.remove('has-sel')
-    game.svg.querySelectorAll('.ghost.target').forEach((n) => n.classList.remove('target'))
     game.svg.querySelector(`.ghost[data-id="${id}"]`)?.remove()
     if (game.hinted) { trayItem(game.hinted)?.classList.remove('hinted'); game.hinted = null }
     save()
@@ -426,6 +431,13 @@
     say('Try this one next. The hint never says where it goes.')
     return true
   }
+  $('peek').addEventListener('click', () => {
+    if (!game || game.rec.done || outlineShown()) return
+    game.rec.peeks = (game.rec.peeks || 0) + 1
+    save()
+    showOutline(PEEK_MS)
+    say('Here is the outline again. It fades soon.')
+  })
   $('hint').addEventListener('click', () => {
     if (!game || game.rec.done) return
     if (!game.hinted) { game.rec.hints.requested++; save() }
@@ -491,17 +503,18 @@
     const { cath, phase, rec } = game
     const summary = R.hintSummary(rec.hints)
     const badge = summary ? `<div class="badge plain">${summary}</div>` : '<div class="badge">No hints</div>'
+    const peeks = rec.peeks ? `<div class="badge plain">Outline viewed ${rec.peeks} ${rec.peeks === 1 ? 'time' : 'times'}</div>` : ''
     const nextPhase = cath.phases[game.idx + 1]
     const nextCath = CATHEDRALS[CATHEDRALS.indexOf(cath) + 1]
     const nextLabel = nextPhase ? `Next: Phase ${game.idx + 2}, ${nextPhase.name}` : nextCath ? `Next: ${nextCath.name}` : ''
-    modal.innerHTML = `<div class="sheet"><h2>${phase.name} complete</h2><div class="kick">${cath.name} · Phase ${game.idx + 1} of ${cath.phases.length}</div>${badge}` +
+    modal.innerHTML = `<div class="sheet"><h2>${phase.name} complete</h2><div class="kick">${cath.name} · Phase ${game.idx + 1} of ${cath.phases.length}</div>${badge}${peeks}` +
       (nextPhase || !nextCath ? '' : `<p style="color:var(--dim)">${cath.name} is finished.</p>`) + introHtml(cath) +
       `<div class="row"><button class="btn" id="again">Build again</button>` +
       `<button class="btn ${nextLabel ? '' : 'primary'}" id="home2">All cathedrals</button>` +
       (nextLabel ? `<button class="btn primary" id="nxt">${nextLabel}</button>` : '') + '</div></div>'
     modal.classList.remove('hidden')
     $('again').addEventListener('click', () => {
-      rec.placed = []; rec.done = false; rec.hints = emptyHints(); rec.runs = (rec.runs || 0) + 1; save(); closeModal(); start(cath, game.idx)
+      rec.placed = []; rec.done = false; rec.hints = emptyHints(); rec.peeks = 0; rec.runs = (rec.runs || 0) + 1; save(); closeModal(); start(cath, game.idx)
     })
     $('home2').addEventListener('click', () => { closeModal(); showHome() })
     if (nextLabel) $('nxt').addEventListener('click', () => { closeModal(); if (nextPhase) start(cath, game.idx + 1); else start(nextCath, 0) })
