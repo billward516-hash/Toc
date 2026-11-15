@@ -318,6 +318,10 @@
   function pickSlot(pt) {
     const open = game.phase.pieces.filter((p) => !game.rec.placed.includes(p.id))
     const area = (p) => p.box[2] * p.box[3]
+    // A tap within a few units of the selected piece's own place counts as a tap on it, so a tap
+    // near the seam between two thin stacked pieces is not lost to the neighbour.
+    const mine = open.find((p) => p.id === game.selected)
+    if (mine && distToBox(pt, mine.box) <= 5) return mine
     const hitPt = new DOMPoint(pt.x, pt.y)
     const exact = open.filter((p) => {
       try { return game.svg.querySelector(`#hit [data-id="${p.id}"]`).isPointInFill(hitPt) } catch { return false }

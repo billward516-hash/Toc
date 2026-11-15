@@ -45,14 +45,15 @@ header h1 small { display: block; font-weight: 400; font-size: .78rem; color: va
 .tag.done { background: #27412f; color: var(--good); }
 
 /* play */
-#play { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#play { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 #coach { min-height: 44px; display: flex; align-items: center; justify-content: center; text-align: center;
   color: var(--ink); padding: 2px 4px; transition: opacity .25s; }
 #coach.fade { opacity: 0; }
 #stage { flex: 1; min-height: 0; position: relative; }
 #stage svg { width: 100%; height: 100%; display: block; }
-#offer { display: flex; gap: 8px; align-items: center; justify-content: space-between; background: var(--panel);
-  border: 1px solid #343c52; border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+#offer { position: absolute; left: 0; right: 0; top: 50px; z-index: 5; display: flex; gap: 8px; align-items: center;
+  justify-content: space-between; background: var(--panel); border: 1px solid #343c52; border-radius: 12px;
+  padding: 8px 10px; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 #offer span { flex: 1; font-size: .92rem; }
 #offer .btn { min-height: 38px; padding: 4px 12px; }
 #tray { height: 30dvh; max-height: 280px; min-height: 140px; overflow-y: auto; margin-top: 4px; padding: 6px;
