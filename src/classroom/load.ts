@@ -1,3 +1,4 @@
+import { PLAY } from '../edition.ts'
 import type { ClassBackend } from './backend.ts'
 import { emulatorHost, firebaseSettings } from './settings.ts'
 
@@ -6,7 +7,8 @@ let loading: Promise<ClassBackend> | null = null
 // Firebase's code loads the first time someone hosts or joins a class, so the game itself stays small.
 export function classBackend(): Promise<ClassBackend> {
   const settings = firebaseSettings
-  if (!settings) return Promise.reject(new Error('Class mode is not set up.'))
+  // The Play edition has no class mode, and Firebase's code is left out of it.
+  if (PLAY || !settings) return Promise.reject(new Error('Class mode is not set up.'))
   loading ??= import('./firebase.ts')
     .then(({ firebaseBackend }) => firebaseBackend(settings, emulatorHost))
     .catch((error: unknown) => {

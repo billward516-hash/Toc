@@ -175,7 +175,6 @@ export function PlanTheShift({ level, goal, nextLevel, onRecord, history, onExit
           glide={playback.gliding ? speed : 0}
         />
       </div>
-      <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 
       <div className="dock">
         <PlaybackPanel

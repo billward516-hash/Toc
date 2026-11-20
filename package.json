@@ -6,12 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:play": "tsc -b && vite build --mode play --outDir dist-play",
+    "dev:play": "vite --mode play",
+    "android:sync": "npm run build:play && cap sync android",
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
     "test:class": "firebase emulators:exec --only auth,database --project demo-toc \"VITE_FIREBASE_EMULATOR=127.0.0.1 vitest run src/classroom\""
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/splash-screen": "^8.0.2",
     "firebase": "^12.19.0",
     "pptxgenjs": "^4.0.1",
     "react": "^19.2.8",
@@ -19,6 +28,8 @@
     "uqr": "^0.1.3"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

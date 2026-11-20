@@ -33,6 +33,8 @@ jobs:
       - run: npm run build
         env:
           VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+      # The Play Store edition (to wrap as an Android app) has to keep building too. It is checked, not published.
+      - run: npm run build:play
       # Publish the default branch once the repository has Pages turned on (Settings, Pages, Source:
       # GitHub Actions). Until then the build still gets checked, and the run says why nothing went out.
       - id: pages

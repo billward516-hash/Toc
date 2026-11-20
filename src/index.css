@@ -16,6 +16,7 @@
   color: var(--ink);
   background: var(--paper);
   -webkit-text-size-adjust: 100%;
+  --mobile-size: 600px;
 }
 
 * {
@@ -94,10 +95,21 @@ button {
   color: #fff;
 }
 
+
+
 .btn.small {
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 14px;
   font-size: 16px;
+}
+
+@media(max-width: 600px){
+.header-buttons .btn.small, .dashboard .stat{
+  font-size: 12px;
+  /* height: 1ch; */
+  width: auto;
+}
+
 }
 
 .btn.big {
@@ -128,6 +140,8 @@ button {
   font-weight: 800;
   padding: 4px 10px;
   border-radius: 999px;
+  text-align: center;
+  min-width: 7ch
 }
 
 /* Shown instead of the game by a browser too old to run it (index.html). */
@@ -193,6 +207,24 @@ button {
   font-size: 19px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.home-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 12px 4px;
+  border-top: 2px solid var(--ink);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.home-footer a {
+  color: var(--ink);
+  text-underline-offset: 3px;
 }
 
 .player-bar {
@@ -504,7 +536,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 0;
+  margin: 0; 
 }
 
 .dashboard .stat {
@@ -517,6 +549,8 @@ button {
   border-radius: 16px;
   box-shadow: 0 4px 0 var(--ink);
 }
+
+
 
 .dashboard .stat:first-child {
   color: #fff;
@@ -532,6 +566,8 @@ button {
   margin: 0;
   font-size: 22px;
   font-weight: 900;
+  width: 4ch;
+  text-align: right;
 }
 
 @media (max-width: 600px) {
@@ -547,6 +583,20 @@ button {
   .dashboard dd {
     font-size: 19px;
   }
+
+  .level-title h1 {
+  font-size: clamp(15px, 3.4vw, 30px);
+  font-weight: 900;
+}
+
+.level-title {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
 }
 
 .viewing {
@@ -581,6 +631,23 @@ button {
   height: auto;
   max-height: 62dvh;
   font-family: inherit;
+}
+
+.factory-frame {
+  width: 100%;
+}
+
+.factory.mobile {
+  min-width: 0;
+  max-height: none;
+}
+
+.factory .conveyor-turn {
+  fill: none;
+  stroke: #e6ddca;
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .dock {
@@ -1109,6 +1176,13 @@ button {
   gap: 7px;
 }
 
+@media (max-width: 600px) {
+  .legend {
+    display:none;
+  }
+
+}
+
 .swatch {
   width: 15px;
   height: 15px;
@@ -1167,6 +1241,18 @@ button {
   color: var(--ink);
 }
 
+/* controls section (replay/play speed, restart, end */
+
+@media(max-width: 600px){
+
+
+  .controls button{
+    gap: 1px;
+    margin: 0px 0px;
+    font-size: 12px;
+  }
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -1178,6 +1264,8 @@ button {
   display: inline-flex;
   gap: 6px;
 }
+
+
 
 .clock {
   display: flex;
@@ -3426,12 +3514,12 @@ button {
   list-style: none;
 }
 
-.step {
+/* .step {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   align-items: start;
   gap: 12px;
-}
+} */
 
 @media (max-width: 600px) {
   .step {
@@ -5289,4 +5377,23 @@ p.exam-taught,
 /* On a big screen My factory uses all of it: the watched line grows to the full width and wraps to another row when it has more workgroups than fit. */
 .screen.my-factory {
   max-width: none;
+}
+
+/* The Play edition's first-visit card on the home screen. */
+.start-here {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+.start-here h2,
+.start-here p {
+  margin: 0;
+}
+
+/* A slider is a touch target too: tall enough for a finger on a phone (Google Play's accessibility check
+   flags anything under 48dp). Layout only, on touch screens only. */
+@media (pointer: coarse) {
+  input[type='range'] {
+    min-height: 48px;
+  }
 }

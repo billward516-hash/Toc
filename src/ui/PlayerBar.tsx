@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { PLAY } from '../edition.ts'
 import { cleanNickname, NICKNAME_MAX, type Learner } from '../progress/store.ts'
 
 interface PlayerBarProps {
@@ -31,9 +32,11 @@ export function PlayerBar({ learner, players, onChoose }: PlayerBarProps) {
         <span>
           Playing as <strong>{learner.nickname}</strong>
         </span>
-        <button className="btn small" onClick={() => setSwitching(true)}>
-          Switch player
-        </button>
+        {!PLAY && (
+          <button className="btn small" onClick={() => setSwitching(true)}>
+            Switch player
+          </button>
+        )}
       </div>
     )
   }

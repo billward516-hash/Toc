@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+
 // Saving, sharing, and copying: the trainer's script, and a learner's certificate.
 export function downloadFile(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
@@ -18,6 +20,15 @@ export function downloadText(name: string, text: string) {
 // and saves it as a download where there is not. A closed share sheet is not an error. Call it straight
 // from a tap, with the file already made: some browsers refuse to share after a wait.
 export async function shareOrSave(file: File): Promise<'shared' | 'cancelled' | 'saved'> {
+  // In the Android app a download link does nothing, and the browser's share sheet isn't there. The file is
+  // written to the app's cache and handed to Android's own share sheet, which also offers Save to Drive.
+  if (Capacitor.isNativePlatform()) {
+    try {
+      return await shareNative(file)
+    } catch {
+      // Falls through to what a browser would do, which at least doesn't leave the tap without an answer.
+    }
+  }
   try {
     if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], title: file.name })
@@ -38,4 +49,25 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// Plugins load when the Android app first needs one, so the web game doesn't carry them.
+async function shareNative(file: File): Promise<'shared' | 'cancelled'> {
+  const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')])
+  const written = await Filesystem.writeFile({ path: file.name, data: await toBase64(file), directory: Directory.Cache })
+  try {
+    await Share.share({ title: file.name, files: [written.uri] })
+    return 'shared'
+  } catch (error) {
+    // Closing the share sheet without choosing anything is not an error.
+    if (error instanceof Error && /cancel/i.test(error.message)) return 'cancelled'
+    throw error
+  }
+}
+
+async function toBase64(file: Blob): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
 }

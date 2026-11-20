@@ -3,6 +3,8 @@ import { levelState, maxStars, tierParents } from '../levels/graph.ts'
 import { principleNames } from '../levels/principles.ts'
 import type { Level } from '../levels/types.ts'
 import type { Preferences } from '../progress/store.ts'
+import { levelNumber } from '../course/numbering.ts'
+import { GAME_NAME, PLAY } from '../edition.ts'
 import { FullScreenButton } from './FullScreen.tsx'
 import { Icon } from './icons.tsx'
 import { Stars } from './parts.tsx'
@@ -24,7 +26,8 @@ interface LevelListProps {
   onFreePlay: () => void
   // Opens the loading lab, a short game about load and cycle time.
   onLab: () => void
-  onMine: () => void
+  // Absent in the Play edition, which has no My factory.
+  onMine?: () => void
   // Opens the course guide for learners, the trainer's guide, or the exam.
   onGuide: (guide: Guide) => void
 }
@@ -39,10 +42,11 @@ export function LevelList(props: LevelListProps) {
     <div className="screen home">
       <header className="hero">
         <div className="hero-top">
-          <h1>TOC Factory</h1>
-          <FullScreenButton />
+          <h1>{GAME_NAME}</h1>
+          {!PLAY && <FullScreenButton />}
         </div>
         <p>
+          {PLAY && <strong>Learn the Theory of Constraints by running a factory. </strong>}
           Run a toy robot factory, a candle workshop, a print shop, and a bakery with its own shop. Find the step that holds
           everything back, make the whole line flow, and keep it flowing through breakdowns, late trucks, rush orders, and
           forecasts that are always wrong.
@@ -52,15 +56,29 @@ export function LevelList(props: LevelListProps) {
         <button className="btn small" onClick={() => onGuide('course')}>
           <Icon name="book" /> Course guide
         </button>
-        <button className="btn small" onClick={() => onGuide('trainer')}>
-          <Icon name="clipboard" /> Trainer guide
-        </button>
+        {!PLAY && (
+          <button className="btn small" onClick={() => onGuide('trainer')}>
+            <Icon name="clipboard" /> Trainer guide
+          </button>
+        )}
         <button className="btn small" onClick={() => onGuide('exam')}>
           <Icon name="award" /> Exam and certificate
         </button>
       </nav>
       {player}
       {classCards}
+      {PLAY && completed.size === 0 && (
+        <section className="card start-here" aria-labelledby="start-here-title">
+          <h2 id="start-here-title">New here? Start here</h2>
+          <p>
+            Every factory has one step that holds everything back. In the first level you find it, then make the whole line flow.
+            It takes a few minutes, and you can't lose: every run is explained, and you can try again as often as you like.
+          </p>
+          <button className="btn primary big" onClick={() => onOpen(levels[0])}>
+            Start level {levelNumber(levels[0])} <Icon name="next" />
+          </button>
+        </section>
+      )}
       <ProgressMap levels={levels} tierNames={tierNames} completed={completed} stars={stars} />
       <button className="level-card free lab" onClick={onLab}>
         <span className="level-number">
@@ -74,18 +92,20 @@ export function LevelList(props: LevelListProps) {
           Play <Icon name="next" />
         </span>
       </button>
-      <button className="level-card free" onClick={onMine}>
-        <span className="level-number">
-          <Icon name="build" />
-        </span>
-        <span className="level-text">
-          <strong>My factory</strong>
-          <span className="principle">Type in your own workgroups, tools, speeds and order sizes. See the bottleneck and the cycle time as you change them.</span>
-        </span>
-        <span className="level-state">
-          Open <Icon name="next" />
-        </span>
-      </button>
+      {onMine && (
+        <button className="level-card free" onClick={onMine}>
+          <span className="level-number">
+            <Icon name="build" />
+          </span>
+          <span className="level-text">
+            <strong>My factory</strong>
+            <span className="principle">Type in your own workgroups, tools, speeds and order sizes. See the bottleneck and the cycle time as you change them.</span>
+          </span>
+          <span className="level-state">
+            Open <Icon name="next" />
+          </span>
+        </button>
+      )}
       <button className="level-card free" onClick={onFreePlay}>
         <span className="level-number">
           <Icon name="build" />
@@ -171,6 +191,12 @@ export function LevelList(props: LevelListProps) {
           </ol>
         </section>
       ))}
+      {!PLAY && (
+        <footer className="home-footer">
+          <a href="./privacy.html">Privacy policy</a>
+          <span>© 2026 William Ward. All rights reserved.</span>
+        </footer>
+      )}
     </div>
   )
 }

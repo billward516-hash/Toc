@@ -4,6 +4,7 @@ import { classBackend, withTimeout } from './classroom/load.ts'
 import { loadHosting, saveHosting } from './classroom/membership.ts'
 import { classModeReady } from './classroom/settings.ts'
 import { useClassMember } from './classroom/useClassMember.ts'
+import { PLAY } from './edition.ts'
 import { levels, tierNames } from './levels/index.ts'
 import type { Level } from './levels/types.ts'
 import { cleanSetup, DEFAULT_SETUP } from './sandbox/setup.ts'
@@ -32,15 +33,16 @@ import { FreePlay } from './ui/FreePlay.tsx'
 import { LevelList } from './ui/LevelList.tsx'
 import { LevelScreen } from './ui/LevelScreen.tsx'
 import { LoadingLab } from './ui/LoadingLab.tsx'
-import { MyFactory } from './ui/MyFactory.tsx'
 import { PlayerBar } from './ui/PlayerBar.tsx'
 import type { Guide } from './ui/types.ts'
+import { useAndroidBack } from './ui/useAndroidBack.ts'
 
 // The instructor's screen loads only on a device that hosts a class, and the guides and the exam (with
 // its bank of questions) only when opened.
-const HostClass = lazy(() => import('./ui/HostClass.tsx').then((module) => ({ default: module.HostClass })))
+const HostClass = PLAY ? null : lazy(() => import('./ui/HostClass.tsx').then((module) => ({ default: module.HostClass })))
 const CourseGuide = lazy(() => import('./ui/CourseGuide.tsx').then((module) => ({ default: module.CourseGuide })))
-const TrainerGuide = lazy(() => import('./ui/TrainerGuide.tsx').then((module) => ({ default: module.TrainerGuide })))
+const TrainerGuide = PLAY ? null : lazy(() => import('./ui/TrainerGuide.tsx').then((module) => ({ default: module.TrainerGuide })))
+const MyFactory = PLAY ? null : lazy(() => import('./ui/MyFactory.tsx').then((module) => ({ default: module.MyFactory })))
 const Exam = lazy(() => import('./ui/Exam.tsx').then((module) => ({ default: module.Exam })))
 
 export default function App() {
@@ -132,8 +134,20 @@ export default function App() {
     setHostView(false)
   }
 
+  // The Android app's back button steps out of whichever screen is open, and closes the app from home.
+  useAndroidBack(() => {
+    if (hosting && hostView) setHostView(false)
+    else if (guide) setGuide(null)
+    else if (lab) setLab(false)
+    else if (mine) setMine(false)
+    else if (free) setFree(false)
+    else if (open) setOpen(null)
+    else return false
+    return true
+  })
+
   let screen: ReactNode
-  if (hosting && hostView) {
+  if (HostClass && hosting && hostView) {
     screen = (
       <Suspense
         fallback={
@@ -154,7 +168,7 @@ export default function App() {
           </div>
         }
       >
-        {guide === 'trainer' ? (
+        {guide === 'trainer' && TrainerGuide ? (
           <TrainerGuide onExit={() => setGuide(null)} />
         ) : guide === 'exam' ? (
           <Exam key={learner.id} learnerId={learner.id} onExit={() => setGuide(null)} onStudy={() => setGuide('course')} />
@@ -182,14 +196,22 @@ export default function App() {
     )
   } else if (lab) {
     screen = <LoadingLab onExit={() => setLab(false)} />
-  } else if (mine) {
+  } else if (MyFactory && mine) {
     screen = (
-      <MyFactory
-        key={learner.id}
-        initial={cleanFactory(loadFactory(learner.id)) ?? EXAMPLE}
-        onSave={(factory) => saveFactory(learner.id, factory)}
-        onExit={() => setMine(false)}
-      />
+      <Suspense
+        fallback={
+          <div className="screen">
+            <p className="hint">Opening My factory…</p>
+          </div>
+        }
+      >
+        <MyFactory
+          key={learner.id}
+          initial={cleanFactory(loadFactory(learner.id)) ?? EXAMPLE}
+          onSave={(factory) => saveFactory(learner.id, factory)}
+          onExit={() => setMine(false)}
+        />
+      </Suspense>
     )
   } else if (free) {
     screen = (
@@ -242,7 +264,7 @@ export default function App() {
         onOpen={setOpen}
         onFreePlay={() => setFree(true)}
         onLab={() => setLab(true)}
-        onMine={() => setMine(true)}
+        onMine={PLAY ? undefined : () => setMine(true)}
         onGuide={setGuide}
       />
     )

@@ -3,6 +3,8 @@ import { glossary } from '../course/glossary.ts'
 import { gettingStarted } from '../course/learner.ts'
 import { LAB_NAME, labGettingStarted, labTerms } from '../course/lab.ts'
 import { labIdeas, labInfo } from '../course/labInfo.ts'
+import { PLAY } from '../edition.ts'
+import { forPlay } from '../course/play.ts'
 import { levelNumber } from '../course/numbering.ts'
 import { tierInfoFor } from '../course/tiers.ts'
 import { levelState, maxStars } from '../levels/graph.ts'
@@ -63,7 +65,7 @@ export function CourseGuide(props: CourseGuideProps) {
 function GetStarted() {
   return (
     <div className="guide-columns">
-      {[...gettingStarted, ...labGettingStarted].map((section) => (
+      {(PLAY ? forPlay([...gettingStarted, ...labGettingStarted]) : [...gettingStarted, ...labGettingStarted]).map((section) => (
         <section key={section.id} className="card guide-card">
           <h2>{section.title}</h2>
           <Blocks blocks={section.blocks} />
@@ -284,11 +286,13 @@ function MyNotes({ tiers, tierNames, initial, onSave }: NotesProps) {
     <section className="card guide-card notes">
       <div className="notes-top">
         <h2>My notes</h2>
-        <button className="btn small print-hide" onClick={() => window.print()}>
-          Print my notes
-        </button>
+        {!PLAY && (
+          <button className="btn small print-hide" onClick={() => window.print()}>
+            Print my notes
+          </button>
+        )}
       </div>
-      <p className="hint">Your notes are saved on this device. Only you can see them. Your instructor's screen never shows them.</p>
+      <p className="hint">Your notes are saved on this device. Only you can see them.{PLAY ? '' : " Your instructor's screen never shows them."}</p>
       {tiers.map((tier) => {
         const info = tierInfoFor(tier)
         const text = notes[tier] ?? ''

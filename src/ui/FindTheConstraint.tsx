@@ -89,7 +89,6 @@ export function FindTheConstraint({ level, goal, nextLevel, onRecord, onExit, on
           glide={playback.gliding ? speed : 0}
         />
       </div>
-      <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 
       <div className="dock">
         <PlaybackPanel

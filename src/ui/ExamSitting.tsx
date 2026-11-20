@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { GAME_NAME } from '../edition.ts'
 import { EXAM } from '../exam/config.ts'
 import { correctInARow, correctToPass, next, percentOf, risk } from '../exam/rules.ts'
 import { riskLine, topics, weakest } from '../exam/summary.ts'
@@ -80,7 +81,7 @@ export function ExamSitting({ items, initial, onAnswer, onFinish, onLeave }: Sit
     <div className="screen exam">
       <ScreenHeader
         chip="Exam"
-        title="TOC Factory exam"
+        title={`${GAME_NAME} exam`}
         stats={[
           { label: extra ? 'Extra' : 'Question', value: extra ? String(index - EXAM.length + 1) : `${index + 1} of ${EXAM.length}` },
           { label: 'Right', value: String(correct) },

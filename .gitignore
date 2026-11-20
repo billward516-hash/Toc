@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-play
 dist-ssr
 *.local
 
@@ -22,3 +23,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Release signing: never commit a keystore or its passwords.
+*.jks
+*.keystore
+keystore.properties

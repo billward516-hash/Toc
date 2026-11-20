@@ -1,3 +1,4 @@
+import { GAME_NAME } from '../edition.ts'
 // A one-page PDF holding one JPEG picture that fills the page. The certificate is drawn on a canvas, so
 // it looks the same on every device and any name prints, whatever script it is written in. This wraps
 // that picture as a PDF to save, share, or print.
@@ -54,7 +55,7 @@ export function jpegToPdf(jpeg: Uint8Array, pixelWidth: number, pixelHeight: num
   )
   const content = `q\n${width} 0 0 ${height} 0 0 cm\n/Im0 Do\nQ\n`
   object(5, `<< /Length ${encoder.encode(content).length} >>\nstream\n${content}endstream\n`)
-  object(6, `<< /Title ${pdfText(options.title)} /Producer (TOC Factory) /CreationDate (${pdfDate(options.created ?? new Date())}) >>\n`)
+  object(6, `<< /Title ${pdfText(options.title)} /Producer (${GAME_NAME}) /CreationDate (${pdfDate(options.created ?? new Date())}) >>\n`)
 
   const xref = size
   let table = `xref\n0 7\n0000000000 65535 f \n`

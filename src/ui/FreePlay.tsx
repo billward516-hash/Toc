@@ -167,7 +167,6 @@ export function FreePlay({ initial, onSave, onExit }: FreePlayProps) {
       <div className="floor">
         <FactoryView model={model} snapshot={snapshot} selected={open === null ? null : STEPS[open].id} selectedTag="Editing" onSelect={openStation} glide={playback.gliding ? speed : 0} />
       </div>
-      <p className="rotate-hint">Turn your phone sideways to see the whole line.</p>
 
       <div className="dock">
         <PlaybackPanel

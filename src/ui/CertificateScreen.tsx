@@ -6,6 +6,7 @@ import { NAME_MAX, type CertificateRecord } from '../exam/record.ts'
 import { percentOf } from '../exam/rules.ts'
 import { Icon } from './icons.tsx'
 import { ScreenHeader } from './parts.tsx'
+import { PLAY } from '../edition.ts'
 import { shareOrSave } from './share.ts'
 
 interface CertificateScreenProps {
@@ -65,7 +66,7 @@ export function CertificateScreen({ certificate, result, name, onSave, onBack }:
         url = URL.createObjectURL(png)
         setMade({ key: keyOf(current), url, png: new File([png], `${base}.png`, { type: 'image/png' }), pdf: new File([pdf], `${base}.pdf`, { type: 'application/pdf' }) })
       } catch {
-        if (!cancelled) setProblem('This browser could not draw the certificate. Try again, or use a different browser.')
+        if (!cancelled) setProblem(PLAY ? 'Could not draw the certificate. Try again.' : 'This browser could not draw the certificate. Try again, or use a different browser.')
       }
     })()
     return () => {
@@ -94,7 +95,7 @@ export function CertificateScreen({ certificate, result, name, onSave, onBack }:
 
   const keep = async (file: File) => {
     const how = await shareOrSave(file)
-    setNote(how === 'saved' ? 'Saved. On an iPad, look in the Downloads list in Safari, or in the Files app.' : '')
+    setNote(how === 'saved' ? (PLAY ? 'Saved. Look in your Downloads.' : 'Saved. On an iPad, look in the Downloads list in Safari, or in the Files app.') : '')
   }
 
   return (
